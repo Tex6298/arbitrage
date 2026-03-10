@@ -2,3 +2,5 @@
 __pycache__/
 *.py[cod]
 inline_arbitrage_live_output.csv
+curtailment_history/
+bmu_history/

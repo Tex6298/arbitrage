@@ -34,6 +34,12 @@ from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
+from asset_mapping import cluster_frame, parent_region_frame, signal_source_frame, weather_anchor_frame
+from bmu_generation import materialize_bmu_generation_history, parse_iso_date as parse_bmu_iso_date
+from curtailment_signals import materialize_curtailed_history, parse_iso_date
+from exploration_plan import backtest_plan_frame, dataset_plan_frame, drift_monitor_plan_frame, map_layer_plan_frame
+from gb_topology import cluster_hub_matrix, interconnector_hub_frame, reachability_frame, route_hub_frame
+from physical_constraints import assumption_frame, compute_netbacks
 
 # Optional: .env support
 try:
@@ -67,28 +73,6 @@ CONTINENTAL_ZONES: Dict[str, ZoneSpec] = {
     "PL": ZoneSpec("PL", "10YPL-AREA-----S", "Europe/Warsaw"),
     "CZ": ZoneSpec("CZ", "10YCZ-CEPS-----N", "Europe/Prague"),
 }
-
-# Simple route heuristics. The model scores each border leg independently and treats
-# a route as blocked if any leg is underwater for that hour.
-ROUTES = {
-    "R1_netback_GB_FR_DE_PL": {
-        "label": "GB->FR->DE->PL",
-        "legs": (
-            {"from": "GB", "to": "FR", "loss": 0.020, "fee": 0.60},
-            {"from": "FR", "to": "DE", "loss": 0.010, "fee": 0.20},
-            {"from": "DE", "to": "PL", "loss": 0.010, "fee": 0.30},
-        ),
-    },
-    "R2_netback_GB_NL_DE_PL": {
-        "label": "GB->NL->DE->PL",
-        "legs": (
-            {"from": "GB", "to": "NL", "loss": 0.020, "fee": 0.65},
-            {"from": "NL", "to": "DE", "loss": 0.010, "fee": 0.15},
-            {"from": "DE", "to": "PL", "loss": 0.010, "fee": 0.30},
-        ),
-    },
-}
-
 
 def parse_market_day(value: str) -> dt.date:
     try:
@@ -432,59 +416,6 @@ def fetch_prices(
     continental = fetch_prices_entsoe(CONTINENTAL_ZONES, market_days, entsoe_token)
     return gb_prices.join(continental, how="outer"), provider_used
 
-
-def compute_route_metrics(df: pd.DataFrame, route_name: str, route_spec: Dict[str, object]) -> None:
-    leg_margin_cols = []
-    leg_labels = []
-
-    for leg in route_spec["legs"]:
-        source = leg["from"]
-        sink = leg["to"]
-        loss = float(leg["loss"])
-        fee = float(leg["fee"])
-        col = f"{route_name}_leg_{source}_{sink}"
-        df[col] = (df[sink] * (1 - loss)) - df[source] - fee
-        leg_margin_cols.append(col)
-        leg_labels.append(f"{source}->{sink}")
-
-    gross_col = f"{route_name}_gross"
-    feasible_col = f"{route_name}_feasible"
-    bottleneck_col = f"{route_name}_bottleneck"
-
-    leg_margins = df[leg_margin_cols]
-    df[gross_col] = leg_margins.sum(axis=1)
-    df[feasible_col] = leg_margins.gt(0).all(axis=1)
-    df[bottleneck_col] = leg_margins.idxmin(axis=1).map(dict(zip(leg_margin_cols, leg_labels)))
-    df[route_name] = np.where(df[feasible_col], df[gross_col], leg_margins.min(axis=1))
-
-
-def compute_netbacks(prices: pd.DataFrame) -> pd.DataFrame:
-    """
-    prices: index=UTC hour, columns ['GB', 'FR', 'NL', 'DE', 'PL', 'CZ'] in EUR/MWh.
-    Returns prices plus route metrics and a simple route signal.
-    """
-    required = {"GB", "FR", "NL", "DE", "PL", "CZ"}
-    missing = sorted(required.difference(prices.columns))
-    if missing:
-        raise RuntimeError(f"missing price columns: {', '.join(missing)}")
-
-    df = prices.copy().sort_index().interpolate(limit_direction="both")
-    for route_name, route_spec in ROUTES.items():
-        compute_route_metrics(df, route_name, route_spec)
-
-    route_cols = list(ROUTES)
-    route_label_map = {route_name: route_spec["label"] for route_name, route_spec in ROUTES.items()}
-
-    df["best_netback"] = df[route_cols].max(axis=1)
-    df["best_route"] = np.where(
-        df["R1_netback_GB_FR_DE_PL"] >= df["R2_netback_GB_NL_DE_PL"],
-        route_label_map["R1_netback_GB_FR_DE_PL"],
-        route_label_map["R2_netback_GB_NL_DE_PL"],
-    )
-    df["export_signal"] = np.where(df["best_netback"] > 0, "EXPORT", "HOLD")
-    return df
-
-
 def synthetic_prices(market_days: List[dt.date]) -> pd.DataFrame:
     start_day = market_days[0]
     periods = 24 * len(market_days)
@@ -519,7 +450,161 @@ def main() -> int:
     parser.add_argument("--dry", action="store_true", help="Use synthetic data explicitly")
     parser.add_argument("--gbp-eur", type=float, help="GBP->EUR conversion rate for GB prices")
     parser.add_argument("--gb-provider", default=None, help="GB Elexon MID data provider (default: APXMIDP)")
+    parser.add_argument(
+        "--materialize-curtailment-history",
+        action="store_true",
+        help="Fetch and save the first three historical curtailment tables, then exit",
+    )
+    parser.add_argument("--history-year", help="Constraint breakdown scheme year label, for example 2024-2025")
+    parser.add_argument("--history-start", help="Historical materialization start date, inclusive (YYYY-MM-DD)")
+    parser.add_argument("--history-end", help="Historical materialization end date, inclusive (YYYY-MM-DD)")
+    parser.add_argument(
+        "--history-output-dir",
+        default="curtailment_history",
+        help="Output directory for materialized historical tables",
+    )
+    parser.add_argument(
+        "--materialize-bmu-generation",
+        action="store_true",
+        help="Fetch and save BMU standing data plus first-pass B1610 generation history, then exit",
+    )
+    parser.add_argument("--bmu-start", help="BMU generation materialization start date, inclusive (YYYY-MM-DD)")
+    parser.add_argument("--bmu-end", help="BMU generation materialization end date, inclusive (YYYY-MM-DD)")
+    parser.add_argument(
+        "--bmu-output-dir",
+        default="bmu_history",
+        help="Output directory for BMU standing data and generation history",
+    )
+    parser.add_argument(
+        "--show-constraint-assumptions",
+        action="store_true",
+        help="Print the physical-network assumptions register and exit",
+    )
+    parser.add_argument(
+        "--show-asset-mapping",
+        action="store_true",
+        help="Print the first-pass GB asset and signal registry and exit",
+    )
+    parser.add_argument(
+        "--show-gb-topology",
+        action="store_true",
+        help="Print the first-pass GB cluster-to-hub reachability scaffold and exit",
+    )
+    parser.add_argument(
+        "--show-exploration-plan",
+        action="store_true",
+        help="Print the historical-data, map, backtest, and drift plan and exit",
+    )
     args = parser.parse_args()
+
+    if (
+        args.show_constraint_assumptions
+        or args.show_asset_mapping
+        or args.show_gb_topology
+        or args.show_exploration_plan
+    ):
+        if args.show_constraint_assumptions:
+            print("Constraint assumptions")
+            print(assumption_frame().to_string(index=False))
+
+        if args.show_asset_mapping:
+            if args.show_constraint_assumptions:
+                print()
+            print("Parent regions")
+            print(parent_region_frame().to_string(index=False))
+            print()
+            print("Asset clusters")
+            print(cluster_frame().to_string(index=False))
+            print()
+            print("Weather anchors")
+            print(weather_anchor_frame().to_string(index=False))
+            print()
+            print("Signal sources")
+            print(signal_source_frame().to_string(index=False))
+
+        if args.show_gb_topology:
+            if args.show_constraint_assumptions or args.show_asset_mapping:
+                print()
+            print("Interconnector hubs")
+            print(interconnector_hub_frame().to_string(index=False))
+            print()
+            print("Route hub options")
+            print(route_hub_frame().to_string(index=False))
+            print()
+            print("Cluster reachability")
+            print(reachability_frame().to_string(index=False))
+            print()
+            print("Cluster-hub matrix")
+            print(cluster_hub_matrix().to_string(index=False))
+
+        if args.show_exploration_plan:
+            if args.show_constraint_assumptions or args.show_asset_mapping or args.show_gb_topology:
+                print()
+            print("Dataset plan")
+            print(dataset_plan_frame().to_string(index=False))
+            print()
+            print("Map layer plan")
+            print(map_layer_plan_frame().to_string(index=False))
+            print()
+            print("Backtest plan")
+            print(backtest_plan_frame().to_string(index=False))
+            print()
+            print("Drift monitor plan")
+            print(drift_monitor_plan_frame().to_string(index=False))
+        return 0
+
+    if args.materialize_curtailment_history:
+        if not args.history_year or not args.history_start or not args.history_end:
+            raise SystemExit(
+                "--materialize-curtailment-history requires --history-year, --history-start, and --history-end"
+            )
+
+        history_start = parse_iso_date(args.history_start)
+        history_end = parse_iso_date(args.history_end)
+        if history_end < history_start:
+            raise SystemExit("--history-end must be on or after --history-start")
+
+        try:
+            frames = materialize_curtailed_history(
+                year_label=args.history_year,
+                start_date=history_start,
+                end_date=history_end,
+                output_dir=args.history_output_dir,
+            )
+            print(
+                f"[source=neso] Materialized {len(frames)} tables for {history_start} to {history_end} (inclusive)"
+            )
+            for table_name, frame in frames.items():
+                output_path = os.path.join(args.history_output_dir, f"{table_name}.csv")
+                print(f"{table_name}: rows={len(frame)} path={output_path}")
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
+    if args.materialize_bmu_generation:
+        if not args.bmu_start or not args.bmu_end:
+            raise SystemExit("--materialize-bmu-generation requires --bmu-start and --bmu-end")
+
+        bmu_start = parse_bmu_iso_date(args.bmu_start)
+        bmu_end = parse_bmu_iso_date(args.bmu_end)
+        if bmu_end < bmu_start:
+            raise SystemExit("--bmu-end must be on or after --bmu-start")
+
+        try:
+            frames = materialize_bmu_generation_history(
+                start_date=bmu_start,
+                end_date=bmu_end,
+                output_dir=args.bmu_output_dir,
+            )
+            print(f"[source=elexon] Materialized {len(frames)} tables for {bmu_start} to {bmu_end} (inclusive)")
+            for table_name, frame in frames.items():
+                output_path = os.path.join(args.bmu_output_dir, f"{table_name}.csv")
+                print(f"{table_name}: rows={len(frame)} path={output_path}")
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
 
     market_days = resolve_market_days(args)
     entsoe_token = os.environ.get("ENTOS_E_TOKEN") or os.environ.get("ENTSOE_TOKEN") or ""
