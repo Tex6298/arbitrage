@@ -151,7 +151,7 @@ SIGNAL_SOURCES: Tuple[SignalSource, ...] = (
         granularity="daily",
         coverage="GB-wide",
         role="Curtailment cost and volume labels for training or backtesting.",
-        status="planned",
+        status="implemented",
         note="Good daily truth set, but not locational and not intraday.",
     ),
     SignalSource(
@@ -160,7 +160,7 @@ SIGNAL_SOURCES: Tuple[SignalSource, ...] = (
         granularity="half-hourly",
         coverage="Scotland vs England/Wales",
         role="Regional allocation weights for decomposing GB-wide signals.",
-        status="planned",
+        status="implemented",
         note="Useful bridge signal before asset-level curtailment is available.",
     ),
     SignalSource(
@@ -169,8 +169,8 @@ SIGNAL_SOURCES: Tuple[SignalSource, ...] = (
         granularity="hourly",
         coverage="Cluster and region level",
         role="Forecast and actual weather features for the physical side of the model.",
-        status="scaffolded",
-        note="Seeded from approximate offshore/onshore anchors and intended for later refinement.",
+        status="implemented_first_pass",
+        note="Observed history now materializes from anchor points; forecast surfaces and richer offshore refinement still come later.",
     ),
     SignalSource(
         key="connector_capacity",

@@ -170,6 +170,7 @@ def build_dim_bmu_asset(reference_frame: pd.DataFrame) -> pd.DataFrame:
         wind.loc[match_mask, "cluster_label"] = cluster.label
         wind.loc[match_mask, "parent_region"] = cluster.parent_region
 
+    wind = wind.drop_duplicates(subset=["elexon_bm_unit"], keep="first")
     wind = wind.sort_values(["mapping_status", "cluster_key", "national_grid_bm_unit", "elexon_bm_unit"], na_position="last")
     return wind.reset_index(drop=True)
 

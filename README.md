@@ -18,6 +18,8 @@ Key behavior:
 - Adds `curtailment_signals.py` to materialize the first three historical tables for backtesting
 - Adds `bmu_generation.py` to materialize BMU standing data and first-pass B1610 generation history
 - Adds `bmu_dispatch.py` to materialize BOALF dispatch acceptances for BMU-level dispatch truth
+- Adds `weather_history.py` to materialize observed anchor, cluster, and parent-region weather history
+- Adds `bmu_physical.py`, `bmu_availability.py`, and `curtailment_truth.py` to materialize a first-pass BMU lost-energy truth layer
 - Scores routes leg-by-leg and blocks a route when any border leg is underwater
 - Uses synthetic data only when you ask for it with `--dry`
 
@@ -103,6 +105,27 @@ Key behavior:
      --dispatch-output-dir bmu_dispatch_history
    ```
 
+11. Materialize BMU physical positions, availability gates, and the tiered curtailment-truth table:
+
+   ```bash
+   python inline_arbitrage_live.py ^
+     --materialize-bmu-curtailment-truth ^
+     --truth-start 2024-10-01 ^
+     --truth-end 2024-10-03 ^
+     --truth-output-dir bmu_truth_history ^
+     --truth-profile all
+   ```
+
+12. Materialize observed weather history for anchors, clusters, and parent regions:
+
+   ```bash
+   python inline_arbitrage_live.py ^
+     --materialize-weather-history ^
+     --weather-start 2024-10-01 ^
+     --weather-end 2024-10-03 ^
+     --weather-output-dir weather_history
+   ```
+
 ## Notes
 
 - GB prices come from the Elexon market-index feed and are published in GBP, so an FX rate
@@ -144,12 +167,28 @@ Key behavior:
   because BOALF gives accepted levels, not the full no-constraint counterfactual.
 - On March 10, 2026, the Elexon v1 endpoint returned data for `BOALF` while the plain `BOAL`
   path returned `404`, so the dispatch materializer is standardized on `BOALF`.
+- `curtailment_truth.py` now materializes:
+  - `fact_bmu_physical_position_half_hourly`
+  - `fact_bmu_availability_half_hourly`
+  - `fact_bmu_curtailment_truth_half_hourly`
+- `weather_history.py` now materializes:
+  - `fact_weather_hourly`
+- `fact_weather_hourly` carries observed anchor weather plus capacity-weighted cluster and parent-region aggregates.
+- `fact_bmu_curtailment_truth_half_hourly` is tiered, not flattened. It keeps:
+  - `dispatch_only` rows when dispatch truth exists but a lost-energy estimate is not valid
+  - `physical_baseline` rows when PN or QPN provides a valid half-hour counterfactual
+  - `weather_calibrated` rows only when BMU, cluster, or parent-region weather power curves can upgrade an otherwise invalid row
+- The weather-calibrated tier now uses observed weather history from capacity-weighted anchor points.
+  It still does not replace a valid physical-baseline row, and it is still a first pass rather than
+  a final turbine-level power model.
+- `fact_bmu_availability_half_hourly` uses REMIT as the primary outage gate. If REMIT is missing
+  for a run, rows degrade to `availability_state=unknown` instead of silently becoming available.
 
 ## Next steps
 
 - Replace the seed asset registry with confirmed wind farm, node, and owner metadata
 - Turn the topology scaffold into actual transfer gates between clusters and hubs
-- Join dispatch acceptances to generation, availability, and weather so lost-energy truth can be estimated cleanly
+- Add forecast weather history and feature versioning so weather forecast error can be backtested
 - Start with a cluster-point time-slider map, then add hub arcs and error/drift layers
 - Add physical flow and ATC checks
 - Calibrate fee and capacity costs with auction history

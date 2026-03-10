@@ -38,10 +38,12 @@ import pandas as pd
 from asset_mapping import cluster_frame, parent_region_frame, signal_source_frame, weather_anchor_frame
 from bmu_dispatch import materialize_bmu_dispatch_history, parse_iso_date as parse_dispatch_iso_date
 from bmu_generation import materialize_bmu_generation_history, parse_iso_date as parse_bmu_iso_date
+from curtailment_truth import materialize_bmu_curtailment_truth
 from curtailment_signals import materialize_curtailed_history, parse_iso_date
 from exploration_plan import backtest_plan_frame, dataset_plan_frame, drift_monitor_plan_frame, map_layer_plan_frame
 from gb_topology import cluster_hub_matrix, interconnector_hub_frame, reachability_frame, route_hub_frame
 from physical_constraints import assumption_frame, compute_netbacks
+from weather_history import materialize_weather_history
 
 # Optional: .env support
 try:
@@ -492,6 +494,36 @@ def main() -> int:
         help="Output directory for BMU dispatch acceptance history",
     )
     parser.add_argument(
+        "--materialize-bmu-curtailment-truth",
+        action="store_true",
+        help="Fetch and save BMU physical, availability, and curtailment-truth history, then exit",
+    )
+    parser.add_argument("--truth-start", help="BMU curtailment-truth materialization start date, inclusive (YYYY-MM-DD)")
+    parser.add_argument("--truth-end", help="BMU curtailment-truth materialization end date, inclusive (YYYY-MM-DD)")
+    parser.add_argument(
+        "--truth-output-dir",
+        default="bmu_truth_history",
+        help="Output directory for BMU physical, availability, and curtailment-truth history",
+    )
+    parser.add_argument(
+        "--truth-profile",
+        default="all",
+        choices=("all", "precision", "research"),
+        help="Export profile for the truth table: all, precision, or research",
+    )
+    parser.add_argument(
+        "--materialize-weather-history",
+        action="store_true",
+        help="Fetch and save anchor, cluster, and parent-region weather history, then exit",
+    )
+    parser.add_argument("--weather-start", help="Weather materialization start date, inclusive (YYYY-MM-DD)")
+    parser.add_argument("--weather-end", help="Weather materialization end date, inclusive (YYYY-MM-DD)")
+    parser.add_argument(
+        "--weather-output-dir",
+        default="weather_history",
+        help="Output directory for weather history",
+    )
+    parser.add_argument(
         "--show-constraint-assumptions",
         action="store_true",
         help="Print the physical-network assumptions register and exit",
@@ -642,6 +674,60 @@ def main() -> int:
             )
             for table_name, frame in frames.items():
                 output_path = os.path.join(args.dispatch_output_dir, f"{table_name}.csv")
+                print(f"{table_name}: rows={len(frame)} path={output_path}")
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
+    if args.materialize_bmu_curtailment_truth:
+        if not args.truth_start or not args.truth_end:
+            raise SystemExit("--materialize-bmu-curtailment-truth requires --truth-start and --truth-end")
+
+        truth_start = parse_bmu_iso_date(args.truth_start)
+        truth_end = parse_bmu_iso_date(args.truth_end)
+        if truth_end < truth_start:
+            raise SystemExit("--truth-end must be on or after --truth-start")
+
+        try:
+            frames = materialize_bmu_curtailment_truth(
+                start_date=truth_start,
+                end_date=truth_end,
+                output_dir=args.truth_output_dir,
+                truth_profile=args.truth_profile,
+            )
+            print(
+                f"[source=elexon+neso] Materialized {len(frames)} tables for {truth_start} to {truth_end} "
+                f"(inclusive), profile={args.truth_profile}"
+            )
+            for table_name, frame in frames.items():
+                output_path = os.path.join(args.truth_output_dir, f"{table_name}.csv")
+                print(f"{table_name}: rows={len(frame)} path={output_path}")
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
+    if args.materialize_weather_history:
+        if not args.weather_start or not args.weather_end:
+            raise SystemExit("--materialize-weather-history requires --weather-start and --weather-end")
+
+        weather_start = parse_bmu_iso_date(args.weather_start)
+        weather_end = parse_bmu_iso_date(args.weather_end)
+        if weather_end < weather_start:
+            raise SystemExit("--weather-end must be on or after --weather-start")
+
+        try:
+            frames = materialize_weather_history(
+                start_date=weather_start,
+                end_date=weather_end,
+                output_dir=args.weather_output_dir,
+            )
+            print(
+                f"[source=open_meteo] Materialized {len(frames)} tables for {weather_start} to {weather_end} (inclusive)"
+            )
+            for table_name, frame in frames.items():
+                output_path = os.path.join(args.weather_output_dir, f"{table_name}.csv")
                 print(f"{table_name}: rows={len(frame)} path={output_path}")
             return 0
         except Exception as exc:

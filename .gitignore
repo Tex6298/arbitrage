@@ -1,4 +1,5 @@
 .env
+.tmp_elexon/
 __pycache__/
 *.py[cod]
 inline_arbitrage_live_output.csv
@@ -6,3 +7,7 @@ curtailment_history/
 bmu_history/
 bmu_dispatch_history/
 bmu_dispatch_history_test/
+bmu_truth_history/
+bmu_truth_history_test/
+weather_history/
+weather_history_test/
