@@ -218,7 +218,9 @@ def build_fact_bmu_physical_position_half_hourly(
         "counterfactual_method",
         "counterfactual_valid_flag",
     ]
-    return frame[keep_columns].sort_values(["interval_start_utc", "elexon_bm_unit"]).reset_index(drop=True)
+    frame = frame[keep_columns].sort_values(["interval_start_utc", "elexon_bm_unit"])
+    frame = frame.drop_duplicates(subset=["settlement_date", "settlement_period", "elexon_bm_unit"], keep="last")
+    return frame.reset_index(drop=True)
 
 
 def materialize_bmu_physical_history(

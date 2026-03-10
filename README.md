@@ -116,6 +116,8 @@ Key behavior:
      --truth-profile all
    ```
 
+   That same run now also writes daily QA tables that explain the reconciliation gap against GB truth.
+
 12. Materialize observed weather history for anchors, clusters, and parent regions:
 
    ```bash
@@ -171,6 +173,9 @@ Key behavior:
   - `fact_bmu_physical_position_half_hourly`
   - `fact_bmu_availability_half_hourly`
   - `fact_bmu_curtailment_truth_half_hourly`
+  - `fact_curtailment_reconciliation_daily`
+  - `fact_curtailment_gap_reason_daily`
+  - `fact_bmu_curtailment_gap_bmu_daily`
 - `weather_history.py` now materializes:
   - `fact_weather_hourly`
 - `fact_weather_hourly` carries observed anchor weather plus capacity-weighted cluster and parent-region aggregates.
@@ -178,6 +183,11 @@ Key behavior:
   - `dispatch_only` rows when dispatch truth exists but a lost-energy estimate is not valid
   - `physical_baseline` rows when PN or QPN provides a valid half-hour counterfactual
   - `weather_calibrated` rows only when BMU, cluster, or parent-region weather power curves can upgrade an otherwise invalid row
+- The truth table now also carries explicit `counterfactual_invalid_reason` and `lost_energy_block_reason` fields so failed capture is diagnosable instead of just silent.
+- The three reconciliation QA tables are the main debugging surface for target completeness:
+  - `fact_curtailment_reconciliation_daily` shows daily GB miss, dispatch coverage, and the dominant block reason
+  - `fact_curtailment_gap_reason_daily` breaks each day down by loss-estimate failure reason
+  - `fact_bmu_curtailment_gap_bmu_daily` shows which BMUs account for the biggest dispatch-to-lost-energy gap
 - The weather-calibrated tier now uses observed weather history from capacity-weighted anchor points.
   It still does not replace a valid physical-baseline row, and it is still a first pass rather than
   a final turbine-level power model.
@@ -189,6 +199,7 @@ Key behavior:
 - Replace the seed asset registry with confirmed wind farm, node, and owner metadata
 - Turn the topology scaffold into actual transfer gates between clusters and hubs
 - Add forecast weather history and feature versioning so weather forecast error can be backtested
+- Improve dispatch-to-lost-energy capture using the new reconciliation QA tables before relying on the precision profile
 - Start with a cluster-point time-slider map, then add hub arcs and error/drift layers
 - Add physical flow and ATC checks
 - Calibrate fee and capacity costs with auction history

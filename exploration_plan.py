@@ -138,7 +138,16 @@ DATASET_SPECS: Tuple[DatasetSpec, ...] = (
         role="Tiered BMU curtailment truth surface for precision-first and research-friendly backtests.",
         source_plan="Join B1610 generation, BOALF dispatch, balancing physical, REMIT availability, and GB daily reconciliation.",
         status="implemented_first_pass",
-        note="Carries dispatch-only, physical-baseline, and first-pass weather-calibrated tiers without relabeling proxy data as truth.",
+        note="Carries dispatch-only, physical-baseline, and first-pass weather-calibrated tiers plus row-level block reasons without relabeling proxy data as truth.",
+    ),
+    DatasetSpec(
+        key="fact_curtailment_reconciliation_daily",
+        grain="daily",
+        spatial_scope="GB-wide with BMU diagnostics",
+        role="Target-quality QA surface that explains why BMU truth does or does not reconcile to GB daily curtailment labels.",
+        source_plan="Aggregate fact_bmu_curtailment_truth_half_hourly against fact_constraint_daily, plus block-reason and BMU-day gap summaries.",
+        status="implemented_first_pass",
+        note="Use this before trusting the precision profile or starting serious backtests.",
     ),
     DatasetSpec(
         key="fact_weather_hourly",

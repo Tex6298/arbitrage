@@ -8,7 +8,13 @@ from bmu_availability import build_fact_bmu_availability_half_hourly
 from bmu_dispatch import build_fact_bmu_dispatch_acceptance_half_hourly
 from bmu_physical import build_fact_bmu_physical_position_half_hourly
 from bmu_truth_utils import build_half_hour_interval_frame
-from curtailment_truth import build_fact_bmu_curtailment_truth_half_hourly, filter_truth_profile
+from curtailment_truth import (
+    build_fact_bmu_curtailment_gap_bmu_daily,
+    build_fact_bmu_curtailment_truth_half_hourly,
+    build_fact_curtailment_gap_reason_daily,
+    build_fact_curtailment_reconciliation_daily,
+    filter_truth_profile,
+)
 from weather_history import build_fact_weather_hourly_from_anchor_weather
 
 
@@ -539,6 +545,191 @@ class CurtailmentTruthTests(unittest.TestCase):
         research = filter_truth_profile(fact, "research")
         self.assertEqual(set(precision["settlement_period"]), {1, 2})
         self.assertEqual(set(research["settlement_period"]), {1})
+
+    def test_reconciliation_diagnostics_explain_dispatch_gap(self) -> None:
+        dim = sample_dim_bmu_asset()
+        base_day = dt.date(2024, 10, 1)
+        generation = pd.DataFrame(
+            [
+                {"settlement_date": base_day, "settlement_period": 1, "elexon_bm_unit": "T_TEST-1", "generation_mwh": 4.0},
+                {"settlement_date": base_day, "settlement_period": 2, "elexon_bm_unit": "T_TEST-1", "generation_mwh": 5.0},
+                {"settlement_date": base_day, "settlement_period": 3, "elexon_bm_unit": "T_TEST-1", "generation_mwh": 5.5},
+                {"settlement_date": base_day, "settlement_period": 4, "elexon_bm_unit": "T_TEST-1", "generation_mwh": 6.0},
+            ]
+        )
+        dispatch = pd.DataFrame(
+            [
+                {
+                    "settlement_date": base_day,
+                    "settlement_period": 1,
+                    "elexon_bm_unit": "T_TEST-1",
+                    "accepted_down_delta_mwh_lower_bound": 2.0,
+                    "accepted_up_delta_mwh_lower_bound": 0.0,
+                    "dispatch_down_flag": True,
+                    "dispatch_up_flag": False,
+                    "acceptance_event_count": 1,
+                    "distinct_acceptance_number_count": 1,
+                },
+                {
+                    "settlement_date": base_day,
+                    "settlement_period": 2,
+                    "elexon_bm_unit": "T_TEST-1",
+                    "accepted_down_delta_mwh_lower_bound": 3.0,
+                    "accepted_up_delta_mwh_lower_bound": 0.0,
+                    "dispatch_down_flag": True,
+                    "dispatch_up_flag": False,
+                    "acceptance_event_count": 1,
+                    "distinct_acceptance_number_count": 1,
+                },
+                {
+                    "settlement_date": base_day,
+                    "settlement_period": 3,
+                    "elexon_bm_unit": "T_TEST-1",
+                    "accepted_down_delta_mwh_lower_bound": 1.5,
+                    "accepted_up_delta_mwh_lower_bound": 0.0,
+                    "dispatch_down_flag": True,
+                    "dispatch_up_flag": False,
+                    "acceptance_event_count": 1,
+                    "distinct_acceptance_number_count": 1,
+                },
+                {
+                    "settlement_date": base_day,
+                    "settlement_period": 4,
+                    "elexon_bm_unit": "T_TEST-1",
+                    "accepted_down_delta_mwh_lower_bound": 1.0,
+                    "accepted_up_delta_mwh_lower_bound": 0.0,
+                    "dispatch_down_flag": True,
+                    "dispatch_up_flag": False,
+                    "acceptance_event_count": 1,
+                    "distinct_acceptance_number_count": 1,
+                },
+            ]
+        )
+        physical = pd.DataFrame(
+            [
+                {
+                    "settlement_date": base_day,
+                    "settlement_period": 1,
+                    "elexon_bm_unit": "T_TEST-1",
+                    "physical_baseline_source_dataset": "PN",
+                    "physical_baseline_mwh": 6.0,
+                    "physical_consistency_flag": True,
+                    "counterfactual_method": "pn_qpn_physical_max",
+                    "counterfactual_valid_flag": True,
+                },
+                {
+                    "settlement_date": base_day,
+                    "settlement_period": 2,
+                    "elexon_bm_unit": "T_TEST-1",
+                    "physical_baseline_source_dataset": "PN",
+                    "physical_baseline_mwh": 7.0,
+                    "physical_consistency_flag": True,
+                    "counterfactual_method": "pn_qpn_physical_max",
+                    "counterfactual_valid_flag": True,
+                },
+                {
+                    "settlement_date": base_day,
+                    "settlement_period": 3,
+                    "elexon_bm_unit": "T_TEST-1",
+                    "physical_baseline_source_dataset": "PN",
+                    "physical_baseline_mwh": 7.5,
+                    "physical_consistency_flag": True,
+                    "counterfactual_method": "pn_qpn_physical_max",
+                    "counterfactual_valid_flag": True,
+                },
+                {
+                    "settlement_date": base_day,
+                    "settlement_period": 4,
+                    "elexon_bm_unit": "T_TEST-1",
+                    "physical_baseline_source_dataset": "PN",
+                    "physical_baseline_mwh": 5.0,
+                    "physical_consistency_flag": True,
+                    "counterfactual_method": "pn_qpn_physical_max",
+                    "counterfactual_valid_flag": False,
+                },
+            ]
+        )
+        availability = pd.DataFrame(
+            [
+                {
+                    "settlement_date": base_day,
+                    "settlement_period": 1,
+                    "elexon_bm_unit": "T_TEST-1",
+                    "remit_active_flag": False,
+                    "availability_state": "available",
+                    "availability_confidence": "high",
+                    "uou_output_usable_mw": 20.0,
+                },
+                {
+                    "settlement_date": base_day,
+                    "settlement_period": 2,
+                    "elexon_bm_unit": "T_TEST-1",
+                    "remit_active_flag": False,
+                    "availability_state": "unknown",
+                    "availability_confidence": "low",
+                    "uou_output_usable_mw": np.nan,
+                },
+                {
+                    "settlement_date": base_day,
+                    "settlement_period": 3,
+                    "elexon_bm_unit": "T_TEST-1",
+                    "remit_active_flag": False,
+                    "availability_state": "unknown",
+                    "availability_confidence": "low",
+                    "uou_output_usable_mw": np.nan,
+                },
+                {
+                    "settlement_date": base_day,
+                    "settlement_period": 4,
+                    "elexon_bm_unit": "T_TEST-1",
+                    "remit_active_flag": False,
+                    "availability_state": "available",
+                    "availability_confidence": "high",
+                    "uou_output_usable_mw": 20.0,
+                },
+            ]
+        )
+        constraints = pd.DataFrame([{"date": base_day, "total_curtailment_mwh": 10.0}])
+
+        fact = build_fact_bmu_curtailment_truth_half_hourly(
+            dim_bmu_asset=dim,
+            fact_bmu_generation_half_hourly=generation,
+            fact_bmu_dispatch_acceptance_half_hourly=dispatch,
+            fact_bmu_physical_position_half_hourly=physical,
+            fact_bmu_availability_half_hourly=availability,
+            fact_constraint_daily=constraints,
+            fact_weather_hourly=pd.DataFrame(),
+            start_date=base_day,
+            end_date=base_day,
+        )
+
+        first_four = fact[fact["settlement_period"].isin([1, 2, 3, 4])].set_index("settlement_period")
+        self.assertEqual(first_four.loc[1, "lost_energy_block_reason"], "estimated")
+        self.assertEqual(first_four.loc[2, "lost_energy_block_reason"], "availability_unknown")
+        self.assertEqual(first_four.loc[3, "lost_energy_block_reason"], "availability_unknown")
+        self.assertEqual(first_four.loc[4, "counterfactual_invalid_reason"], "physical_below_generation")
+        self.assertEqual(first_four.loc[4, "lost_energy_block_reason"], "physical_below_generation")
+
+        daily = build_fact_curtailment_reconciliation_daily(fact)
+        self.assertEqual(len(daily), 1)
+        self.assertEqual(int(daily.iloc[0]["dispatch_half_hour_count"]), 4)
+        self.assertAlmostEqual(float(daily.iloc[0]["dispatch_down_mwh_lower_bound"]), 7.5)
+        self.assertEqual(int(daily.iloc[0]["lost_energy_estimate_half_hour_count"]), 1)
+        self.assertEqual(daily.iloc[0]["primary_dispatch_block_reason"], "availability_unknown")
+
+        reason_daily = build_fact_curtailment_gap_reason_daily(fact)
+        reason_rows = {
+            row["lost_energy_block_reason"]: row
+            for _, row in reason_daily.iterrows()
+        }
+        self.assertEqual(int(reason_rows["availability_unknown"]["dispatch_half_hour_count"]), 2)
+        self.assertAlmostEqual(float(reason_rows["availability_unknown"]["accepted_down_delta_mwh_lower_bound"]), 4.5)
+        self.assertEqual(int(reason_rows["physical_below_generation"]["dispatch_half_hour_count"]), 1)
+
+        bmu_daily = build_fact_bmu_curtailment_gap_bmu_daily(fact)
+        self.assertEqual(len(bmu_daily), 1)
+        self.assertEqual(bmu_daily.iloc[0]["primary_dispatch_block_reason"], "availability_unknown")
+        self.assertAlmostEqual(float(bmu_daily.iloc[0]["dispatch_minus_lost_energy_gap_mwh"]), 5.5)
 
 
 if __name__ == "__main__":

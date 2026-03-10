@@ -259,6 +259,8 @@ def build_fact_bmu_generation_half_hourly(
     frame["generation_mw_equivalent"] = frame["generation_mwh"] * 2.0
     frame["capacity_factor"] = frame["generation_mw_equivalent"] / frame["generation_capacity_mw"]
     frame.loc[frame["generation_capacity_mw"] <= 0, "capacity_factor"] = pd.NA
+    frame = frame.sort_values(["half_hour_start_time_utc", "elexon_bm_unit"])
+    frame = frame.drop_duplicates(subset=["settlement_date", "settlement_period", "elexon_bm_unit"], keep="last")
 
     keep_columns = [
         "settlement_date",

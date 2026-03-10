@@ -140,26 +140,37 @@ def _apply_curve_estimates(
         ],
     ].copy()
     left["_row_index"] = left.index
-    left["weather_wind_bin_ms"] = left["weather_wind_speed_100m_ms"].clip(lower=0.0, upper=40.0).round().astype(float)
-    left = left.sort_values([id_column, "weather_wind_bin_ms", "_row_index"])
+    left["weather_wind_bin_ms"] = left["weather_wind_speed_100m_ms"].clip(lower=0.0, upper=40.0).round().astype(int)
 
-    right = curve_frame[
-        [
-            id_column,
-            "wind_bin_ms",
-            "envelope_capacity_factor",
-            "curve_observation_count",
-        ]
-    ].sort_values([id_column, "wind_bin_ms"])
-    right["wind_bin_ms"] = right["wind_bin_ms"].astype(float)
+    expanded_curve_rows = []
+    for scope_key, group in curve_frame.groupby(id_column, dropna=False):
+        if pd.isna(scope_key):
+            continue
+        base_curve = (
+            group[["wind_bin_ms", "envelope_capacity_factor", "curve_observation_count"]]
+            .drop_duplicates(subset=["wind_bin_ms"], keep="last")
+            .sort_values("wind_bin_ms")
+            .set_index("wind_bin_ms")
+        )
+        expanded_curve = base_curve.reindex(range(41)).ffill()
+        expanded_curve["curve_observation_count"] = int(group["curve_observation_count"].max())
+        expanded_curve[id_column] = scope_key
+        expanded_curve["wind_bin_ms"] = expanded_curve.index.astype(int)
+        expanded_curve_rows.append(
+            expanded_curve.reset_index(drop=True)[
+                [id_column, "wind_bin_ms", "envelope_capacity_factor", "curve_observation_count"]
+            ]
+        )
 
-    estimated = pd.merge_asof(
-        left,
-        right,
-        by=id_column,
-        left_on="weather_wind_bin_ms",
-        right_on="wind_bin_ms",
-        direction="backward",
+    if not expanded_curve_rows:
+        return frame
+
+    expanded_curve_frame = pd.concat(expanded_curve_rows, ignore_index=True)
+    estimated = left.merge(
+        expanded_curve_frame,
+        left_on=[id_column, "weather_wind_bin_ms"],
+        right_on=[id_column, "wind_bin_ms"],
+        how="left",
     )
     estimated["estimated_counterfactual_mwh"] = (
         estimated["envelope_capacity_factor"] * (estimated["generation_capacity_mw"] * 0.5)
@@ -351,6 +362,344 @@ def _apply_reconciliation(frame: pd.DataFrame, fact_constraint_daily: pd.DataFra
     return frame
 
 
+def _first_mode(values: pd.Series) -> object:
+    counts = pd.Series(values).dropna().astype(str).value_counts()
+    if counts.empty:
+        return pd.NA
+    return counts.index[0]
+
+
+def _derive_counterfactual_invalid_reason(frame: pd.DataFrame) -> pd.Series:
+    reason = pd.Series(pd.NA, index=frame.index, dtype="object")
+    invalid_mask = ~frame["counterfactual_valid_flag"]
+    if not bool(invalid_mask.any()):
+        return reason
+
+    physical_mask = frame["counterfactual_method"].eq("pn_qpn_physical_max")
+    physical_consistency_mask = frame["physical_consistency_flag"].astype("boolean").fillna(False).astype(bool)
+    missing_generation_mask = invalid_mask & frame["generation_mwh"].isna()
+    inconsistent_physical_mask = invalid_mask & physical_mask & ~physical_consistency_mask
+    below_generation_mask = (
+        invalid_mask
+        & physical_mask
+        & frame["counterfactual_mwh"].notna()
+        & frame["generation_mwh"].notna()
+        & (frame["counterfactual_mwh"] + 1e-6 < frame["generation_mwh"])
+    )
+    missing_physical_mask = invalid_mask & physical_mask & frame["physical_baseline_source_dataset"].isna()
+    no_weather_scope_mask = invalid_mask & reason.isna() & frame["weather_scope_key"].isna()
+    missing_weather_observation_mask = (
+        invalid_mask
+        & reason.isna()
+        & frame["weather_scope_key"].notna()
+        & frame["weather_wind_speed_100m_ms"].isna()
+    )
+
+    reason.loc[missing_generation_mask] = "missing_generation"
+    reason.loc[inconsistent_physical_mask] = "physical_inconsistent"
+    reason.loc[below_generation_mask] = "physical_below_generation"
+    reason.loc[missing_physical_mask & reason.isna()] = "missing_physical_baseline"
+    reason.loc[no_weather_scope_mask & reason.isna()] = "no_weather_scope"
+    reason.loc[missing_weather_observation_mask & reason.isna()] = "missing_weather_observation"
+    reason.loc[invalid_mask & reason.isna()] = "weather_curve_unavailable"
+    return reason
+
+
+def _derive_lost_energy_block_reason(frame: pd.DataFrame) -> pd.Series:
+    reason = pd.Series(pd.NA, index=frame.index, dtype="object")
+    dispatch_mask = frame["dispatch_truth_flag"]
+    if not bool(dispatch_mask.any()):
+        reason.loc[~dispatch_mask] = "no_dispatch_truth"
+        return reason
+
+    reason.loc[~dispatch_mask] = "no_dispatch_truth"
+    reason.loc[dispatch_mask & frame["lost_energy_estimate_flag"]] = "estimated"
+    reason.loc[dispatch_mask & frame["availability_state"].eq("outage") & reason.ne("estimated")] = "outage"
+    reason.loc[dispatch_mask & frame["availability_state"].eq("unknown") & reason.ne("estimated")] = "availability_unknown"
+    reason.loc[dispatch_mask & frame["generation_mwh"].isna() & reason.ne("estimated")] = "missing_generation"
+    reason.loc[
+        dispatch_mask
+        & ~frame["counterfactual_valid_flag"]
+        & reason.ne("estimated")
+        & reason.ne("outage")
+        & reason.ne("availability_unknown")
+        & reason.ne("missing_generation"),
+    ] = frame.loc[
+        dispatch_mask
+        & ~frame["counterfactual_valid_flag"]
+        & reason.ne("estimated")
+        & reason.ne("outage")
+        & reason.ne("availability_unknown")
+        & reason.ne("missing_generation"),
+        "counterfactual_invalid_reason",
+    ]
+    no_positive_gap_mask = (
+        dispatch_mask
+        & frame["counterfactual_valid_flag"]
+        & frame["generation_mwh"].notna()
+        & frame["counterfactual_mwh"].notna()
+        & ((frame["counterfactual_mwh"] - frame["generation_mwh"]).clip(lower=0.0) <= 1e-6)
+        & reason.isna()
+    )
+    reason.loc[no_positive_gap_mask] = "no_positive_gap"
+    reason.loc[dispatch_mask & reason.isna()] = "dispatch_row_unclassified"
+    return reason
+
+
+def _ensure_truth_diagnostic_columns(frame: pd.DataFrame) -> pd.DataFrame:
+    prepared = frame.copy()
+    defaults = {
+        "mapping_status": "unknown",
+        "availability_state": "unknown",
+        "counterfactual_method": "none",
+        "physical_consistency_flag": True,
+        "lost_energy_mwh": 0.0,
+        "accepted_down_delta_mwh_lower_bound": 0.0,
+        "dispatch_truth_flag": False,
+        "lost_energy_estimate_flag": False,
+        "counterfactual_valid_flag": False,
+    }
+    nullable_columns = [
+        "generation_mwh",
+        "counterfactual_mwh",
+        "physical_baseline_source_dataset",
+        "weather_scope_key",
+        "weather_wind_speed_100m_ms",
+    ]
+    for column, default_value in defaults.items():
+        if column not in prepared.columns:
+            prepared[column] = default_value
+    for column in nullable_columns:
+        if column not in prepared.columns:
+            prepared[column] = np.nan
+    if "counterfactual_invalid_reason" not in prepared.columns:
+        prepared["counterfactual_invalid_reason"] = _derive_counterfactual_invalid_reason(prepared)
+    if "lost_energy_block_reason" not in prepared.columns:
+        prepared["lost_energy_block_reason"] = _derive_lost_energy_block_reason(prepared)
+    return prepared
+
+
+def build_fact_curtailment_reconciliation_daily(frame: pd.DataFrame) -> pd.DataFrame:
+    if frame.empty:
+        return pd.DataFrame(
+            columns=[
+                "settlement_date",
+                "gb_daily_estimated_lost_energy_mwh",
+                "gb_daily_truth_curtailment_mwh",
+                "reconciliation_abs_error_mwh",
+                "reconciliation_relative_error",
+                "reconciliation_status",
+                "dispatch_half_hour_count",
+                "distinct_dispatch_bmu_count",
+                "dispatch_down_mwh_lower_bound",
+                "lost_energy_estimate_half_hour_count",
+                "physical_baseline_row_count",
+                "weather_calibrated_row_count",
+                "dispatch_available_row_count",
+                "dispatch_unknown_availability_row_count",
+                "dispatch_outage_row_count",
+                "mapped_dispatch_row_count",
+                "unmapped_dispatch_row_count",
+                "dispatch_coverage_ratio_vs_gb_truth",
+                "lost_energy_capture_ratio_vs_gb_truth",
+                "lost_energy_to_dispatch_ratio",
+                "primary_dispatch_block_reason",
+            ]
+        )
+
+    frame = _ensure_truth_diagnostic_columns(frame)
+    dispatch_mask = frame["dispatch_truth_flag"]
+    grouped = frame.groupby("settlement_date", as_index=False).agg(
+        gb_daily_estimated_lost_energy_mwh=("gb_daily_estimated_lost_energy_mwh", "max"),
+        gb_daily_truth_curtailment_mwh=("gb_daily_truth_curtailment_mwh", "max"),
+        reconciliation_abs_error_mwh=("reconciliation_abs_error_mwh", "max"),
+        reconciliation_relative_error=("reconciliation_relative_error", "max"),
+        reconciliation_status=("reconciliation_status", _first_mode),
+        dispatch_half_hour_count=("dispatch_truth_flag", lambda values: int(pd.Series(values).fillna(False).astype(bool).sum())),
+        distinct_dispatch_bmu_count=("elexon_bm_unit", lambda values: int(frame.loc[values.index, "elexon_bm_unit"][dispatch_mask.loc[values.index]].nunique())),
+        dispatch_down_mwh_lower_bound=(
+            "accepted_down_delta_mwh_lower_bound",
+            lambda values: float(pd.Series(values)[dispatch_mask.loc[values.index]].fillna(0.0).sum()),
+        ),
+        lost_energy_estimate_half_hour_count=(
+            "lost_energy_estimate_flag",
+            lambda values: int(pd.Series(values).fillna(False).astype(bool).sum()),
+        ),
+        physical_baseline_row_count=("truth_tier", lambda values: int(pd.Series(values).eq("physical_baseline").sum())),
+        weather_calibrated_row_count=("truth_tier", lambda values: int(pd.Series(values).eq("weather_calibrated").sum())),
+        dispatch_available_row_count=(
+            "availability_state",
+            lambda values: int(((pd.Series(values) == "available") & dispatch_mask.loc[values.index]).sum()),
+        ),
+        dispatch_unknown_availability_row_count=(
+            "availability_state",
+            lambda values: int(((pd.Series(values) == "unknown") & dispatch_mask.loc[values.index]).sum()),
+        ),
+        dispatch_outage_row_count=(
+            "availability_state",
+            lambda values: int(((pd.Series(values) == "outage") & dispatch_mask.loc[values.index]).sum()),
+        ),
+        mapped_dispatch_row_count=(
+            "mapping_status",
+            lambda values: int(((pd.Series(values) == "mapped") & dispatch_mask.loc[values.index]).sum()),
+        ),
+        unmapped_dispatch_row_count=(
+            "mapping_status",
+            lambda values: int(((pd.Series(values) != "mapped") & dispatch_mask.loc[values.index]).sum()),
+        ),
+        primary_dispatch_block_reason=(
+            "lost_energy_block_reason",
+            lambda values: _first_mode(pd.Series(values)[dispatch_mask.loc[values.index] & ~frame.loc[values.index, "lost_energy_estimate_flag"]]),
+        ),
+    )
+    grouped["dispatch_coverage_ratio_vs_gb_truth"] = np.where(
+        grouped["gb_daily_truth_curtailment_mwh"] > 0,
+        grouped["dispatch_down_mwh_lower_bound"] / grouped["gb_daily_truth_curtailment_mwh"],
+        np.nan,
+    )
+    grouped["lost_energy_capture_ratio_vs_gb_truth"] = np.where(
+        grouped["gb_daily_truth_curtailment_mwh"] > 0,
+        grouped["gb_daily_estimated_lost_energy_mwh"] / grouped["gb_daily_truth_curtailment_mwh"],
+        np.nan,
+    )
+    grouped["lost_energy_to_dispatch_ratio"] = np.where(
+        grouped["dispatch_down_mwh_lower_bound"] > 0,
+        grouped["gb_daily_estimated_lost_energy_mwh"] / grouped["dispatch_down_mwh_lower_bound"],
+        np.nan,
+    )
+    return grouped.sort_values("settlement_date").reset_index(drop=True)
+
+
+def build_fact_curtailment_gap_reason_daily(frame: pd.DataFrame) -> pd.DataFrame:
+    if frame.empty:
+        return pd.DataFrame(
+            columns=[
+                "settlement_date",
+                "lost_energy_block_reason",
+                "dispatch_half_hour_count",
+                "distinct_bmu_count",
+                "accepted_down_delta_mwh_lower_bound",
+                "lost_energy_mwh",
+                "share_of_dispatch_rows",
+                "share_of_dispatch_down_mwh_lower_bound",
+            ]
+        )
+
+    frame = _ensure_truth_diagnostic_columns(frame)
+    dispatch_frame = frame[frame["dispatch_truth_flag"]].copy()
+    if dispatch_frame.empty:
+        return pd.DataFrame(
+            columns=[
+                "settlement_date",
+                "lost_energy_block_reason",
+                "dispatch_half_hour_count",
+                "distinct_bmu_count",
+                "accepted_down_delta_mwh_lower_bound",
+                "lost_energy_mwh",
+                "share_of_dispatch_rows",
+                "share_of_dispatch_down_mwh_lower_bound",
+            ]
+        )
+
+    grouped = dispatch_frame.groupby(["settlement_date", "lost_energy_block_reason"], as_index=False).agg(
+        dispatch_half_hour_count=("dispatch_truth_flag", lambda values: int(pd.Series(values).fillna(False).astype(bool).sum())),
+        distinct_bmu_count=("elexon_bm_unit", "nunique"),
+        accepted_down_delta_mwh_lower_bound=("accepted_down_delta_mwh_lower_bound", lambda values: float(pd.Series(values).fillna(0.0).sum())),
+        lost_energy_mwh=("lost_energy_mwh", lambda values: float(pd.Series(values).fillna(0.0).sum())),
+    )
+    daily_totals = grouped.groupby("settlement_date", as_index=False).agg(
+        total_dispatch_half_hour_count=("dispatch_half_hour_count", "sum"),
+        total_dispatch_down_mwh_lower_bound=("accepted_down_delta_mwh_lower_bound", "sum"),
+    )
+    grouped = grouped.merge(daily_totals, on="settlement_date", how="left")
+    grouped["share_of_dispatch_rows"] = np.where(
+        grouped["total_dispatch_half_hour_count"] > 0,
+        grouped["dispatch_half_hour_count"] / grouped["total_dispatch_half_hour_count"],
+        np.nan,
+    )
+    grouped["share_of_dispatch_down_mwh_lower_bound"] = np.where(
+        grouped["total_dispatch_down_mwh_lower_bound"] > 0,
+        grouped["accepted_down_delta_mwh_lower_bound"] / grouped["total_dispatch_down_mwh_lower_bound"],
+        np.nan,
+    )
+    return grouped.drop(columns=["total_dispatch_half_hour_count", "total_dispatch_down_mwh_lower_bound"]).sort_values(
+        ["settlement_date", "accepted_down_delta_mwh_lower_bound"],
+        ascending=[True, False],
+    ).reset_index(drop=True)
+
+
+def build_fact_bmu_curtailment_gap_bmu_daily(frame: pd.DataFrame) -> pd.DataFrame:
+    if frame.empty:
+        return pd.DataFrame(
+            columns=[
+                "settlement_date",
+                "elexon_bm_unit",
+                "national_grid_bm_unit",
+                "cluster_key",
+                "cluster_label",
+                "parent_region",
+                "mapping_status",
+                "dispatch_half_hour_count",
+                "lost_energy_estimate_half_hour_count",
+                "accepted_down_delta_mwh_lower_bound",
+                "lost_energy_mwh",
+                "dispatch_minus_lost_energy_gap_mwh",
+                "primary_dispatch_block_reason",
+            ]
+        )
+
+    frame = _ensure_truth_diagnostic_columns(frame)
+    dispatch_frame = frame[frame["dispatch_truth_flag"]].copy()
+    if dispatch_frame.empty:
+        return pd.DataFrame(
+            columns=[
+                "settlement_date",
+                "elexon_bm_unit",
+                "national_grid_bm_unit",
+                "cluster_key",
+                "cluster_label",
+                "parent_region",
+                "mapping_status",
+                "dispatch_half_hour_count",
+                "lost_energy_estimate_half_hour_count",
+                "accepted_down_delta_mwh_lower_bound",
+                "lost_energy_mwh",
+                "dispatch_minus_lost_energy_gap_mwh",
+                "primary_dispatch_block_reason",
+            ]
+        )
+
+    grouped = dispatch_frame.groupby(
+        [
+            "settlement_date",
+            "elexon_bm_unit",
+            "national_grid_bm_unit",
+            "cluster_key",
+            "cluster_label",
+            "parent_region",
+            "mapping_status",
+        ],
+        as_index=False,
+        dropna=False,
+    ).agg(
+        dispatch_half_hour_count=("dispatch_truth_flag", lambda values: int(pd.Series(values).fillna(False).astype(bool).sum())),
+        lost_energy_estimate_half_hour_count=("lost_energy_estimate_flag", lambda values: int(pd.Series(values).fillna(False).astype(bool).sum())),
+        accepted_down_delta_mwh_lower_bound=("accepted_down_delta_mwh_lower_bound", lambda values: float(pd.Series(values).fillna(0.0).sum())),
+        lost_energy_mwh=("lost_energy_mwh", lambda values: float(pd.Series(values).fillna(0.0).sum())),
+        primary_dispatch_block_reason=(
+            "lost_energy_block_reason",
+            lambda values: _first_mode(pd.Series(values)[pd.Series(values).ne("estimated")]),
+        ),
+    )
+    grouped["dispatch_minus_lost_energy_gap_mwh"] = (
+        grouped["accepted_down_delta_mwh_lower_bound"] - grouped["lost_energy_mwh"]
+    )
+    return grouped.sort_values(
+        ["settlement_date", "dispatch_minus_lost_energy_gap_mwh", "accepted_down_delta_mwh_lower_bound"],
+        ascending=[True, False, False],
+    ).reset_index(drop=True)
+
+
 def build_fact_bmu_curtailment_truth_half_hourly(
     dim_bmu_asset: pd.DataFrame,
     fact_bmu_generation_half_hourly: pd.DataFrame,
@@ -462,6 +811,8 @@ def build_fact_bmu_curtailment_truth_half_hourly(
     frame["lost_energy_estimate_flag"] = valid_lost_energy_mask
 
     frame = _apply_reconciliation(frame, fact_constraint_daily)
+    frame["counterfactual_invalid_reason"] = _derive_counterfactual_invalid_reason(frame)
+    frame["lost_energy_block_reason"] = _derive_lost_energy_block_reason(frame)
 
     frame["precision_profile_include"] = (
         frame["truth_tier"].isin({"physical_baseline", "weather_calibrated"})
@@ -495,6 +846,7 @@ def build_fact_bmu_curtailment_truth_half_hourly(
         "cluster_key",
         "cluster_label",
         "parent_region",
+        "mapping_status",
         "generation_mwh",
         "accepted_down_delta_mwh_lower_bound",
         "accepted_up_delta_mwh_lower_bound",
@@ -504,9 +856,11 @@ def build_fact_bmu_curtailment_truth_half_hourly(
         "counterfactual_method",
         "counterfactual_mwh",
         "counterfactual_valid_flag",
+        "counterfactual_invalid_reason",
         "lost_energy_mwh",
         "dispatch_truth_flag",
         "lost_energy_estimate_flag",
+        "lost_energy_block_reason",
         "truth_tier",
         "precision_profile_include",
         "research_profile_include",
@@ -615,7 +969,7 @@ def materialize_bmu_curtailment_truth(
     except Exception:
         fact_constraint_daily = pd.DataFrame()
 
-    fact_bmu_curtailment_truth_half_hourly = build_fact_bmu_curtailment_truth_half_hourly(
+    fact_bmu_curtailment_truth_half_hourly_all = build_fact_bmu_curtailment_truth_half_hourly(
         dim_bmu_asset=dim_bmu_asset,
         fact_bmu_generation_half_hourly=fact_bmu_generation_half_hourly,
         fact_bmu_dispatch_acceptance_half_hourly=fact_bmu_dispatch_acceptance_half_hourly,
@@ -626,8 +980,17 @@ def materialize_bmu_curtailment_truth(
         start_date=start_date,
         end_date=end_date,
     )
+    fact_curtailment_reconciliation_daily = build_fact_curtailment_reconciliation_daily(
+        fact_bmu_curtailment_truth_half_hourly_all
+    )
+    fact_curtailment_gap_reason_daily = build_fact_curtailment_gap_reason_daily(
+        fact_bmu_curtailment_truth_half_hourly_all
+    )
+    fact_bmu_curtailment_gap_bmu_daily = build_fact_bmu_curtailment_gap_bmu_daily(
+        fact_bmu_curtailment_truth_half_hourly_all
+    )
     fact_bmu_curtailment_truth_half_hourly = filter_truth_profile(
-        fact_bmu_curtailment_truth_half_hourly,
+        fact_bmu_curtailment_truth_half_hourly_all,
         truth_profile=truth_profile,
     )
 
@@ -635,6 +998,9 @@ def materialize_bmu_curtailment_truth(
         "fact_bmu_physical_position_half_hourly": fact_bmu_physical_position_half_hourly,
         "fact_bmu_availability_half_hourly": fact_bmu_availability_half_hourly,
         "fact_bmu_curtailment_truth_half_hourly": fact_bmu_curtailment_truth_half_hourly,
+        "fact_curtailment_reconciliation_daily": fact_curtailment_reconciliation_daily,
+        "fact_curtailment_gap_reason_daily": fact_curtailment_gap_reason_daily,
+        "fact_bmu_curtailment_gap_bmu_daily": fact_bmu_curtailment_gap_bmu_daily,
     }
     target_dir = Path(output_dir)
     target_dir.mkdir(parents=True, exist_ok=True)
