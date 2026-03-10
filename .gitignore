@@ -4,3 +4,5 @@ __pycache__/
 inline_arbitrage_live_output.csv
 curtailment_history/
 bmu_history/
+bmu_dispatch_history/
+bmu_dispatch_history_test/

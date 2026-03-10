@@ -17,6 +17,7 @@ Key behavior:
 - Adds a formal exploration plan in `exploration_plan.py` for historical data, map layers, backtests, and drift checks
 - Adds `curtailment_signals.py` to materialize the first three historical tables for backtesting
 - Adds `bmu_generation.py` to materialize BMU standing data and first-pass B1610 generation history
+- Adds `bmu_dispatch.py` to materialize BOALF dispatch acceptances for BMU-level dispatch truth
 - Scores routes leg-by-leg and blocks a route when any border leg is underwater
 - Uses synthetic data only when you ask for it with `--dry`
 
@@ -92,6 +93,16 @@ Key behavior:
      --bmu-output-dir bmu_history
    ```
 
+10. Materialize BMU dispatch acceptances and the first half-hour dispatch-truth layer:
+
+   ```bash
+   python inline_arbitrage_live.py ^
+     --materialize-bmu-dispatch ^
+     --dispatch-start 2024-10-01 ^
+     --dispatch-end 2024-10-03 ^
+     --dispatch-output-dir bmu_dispatch_history
+   ```
+
 ## Notes
 
 - GB prices come from the Elexon market-index feed and are published in GBP, so an FX rate
@@ -125,13 +136,20 @@ Key behavior:
 - The BMU dimension is a first pass. It maps known wind BMUs into the current cluster registry
   using explicit name rules and leaves everything else as `mapping_status=unmapped`.
 - `fact_bmu_generation_half_hourly` is actual generation truth from Elexon B1610, not curtailment truth.
-  The next missing layer is accepted dispatch-down or redispatch truth by BMU and settlement period.
+- `bmu_dispatch.py` now materializes:
+  - `fact_bmu_acceptance_event`
+  - `fact_bmu_dispatch_acceptance_half_hourly`
+- `fact_bmu_dispatch_acceptance_half_hourly` is dispatch truth, not lost-energy truth. Its
+  `accepted_down_delta_mwh_lower_bound` field is intentionally a lower-bound dispatch metric
+  because BOALF gives accepted levels, not the full no-constraint counterfactual.
+- On March 10, 2026, the Elexon v1 endpoint returned data for `BOALF` while the plain `BOAL`
+  path returned `404`, so the dispatch materializer is standardized on `BOALF`.
 
 ## Next steps
 
 - Replace the seed asset registry with confirmed wind farm, node, and owner metadata
 - Turn the topology scaffold into actual transfer gates between clusters and hubs
-- Build the historical curtailment pipeline and persist backtest outputs as first-class tables
+- Join dispatch acceptances to generation, availability, and weather so lost-energy truth can be estimated cleanly
 - Start with a cluster-point time-slider map, then add hub arcs and error/drift layers
 - Add physical flow and ATC checks
 - Calibrate fee and capacity costs with auction history

@@ -34,7 +34,9 @@ from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
+
 from asset_mapping import cluster_frame, parent_region_frame, signal_source_frame, weather_anchor_frame
+from bmu_dispatch import materialize_bmu_dispatch_history, parse_iso_date as parse_dispatch_iso_date
 from bmu_generation import materialize_bmu_generation_history, parse_iso_date as parse_bmu_iso_date
 from curtailment_signals import materialize_curtailed_history, parse_iso_date
 from exploration_plan import backtest_plan_frame, dataset_plan_frame, drift_monitor_plan_frame, map_layer_plan_frame
@@ -73,6 +75,7 @@ CONTINENTAL_ZONES: Dict[str, ZoneSpec] = {
     "PL": ZoneSpec("PL", "10YPL-AREA-----S", "Europe/Warsaw"),
     "CZ": ZoneSpec("CZ", "10YCZ-CEPS-----N", "Europe/Prague"),
 }
+
 
 def parse_market_day(value: str) -> dt.date:
     try:
@@ -416,6 +419,7 @@ def fetch_prices(
     continental = fetch_prices_entsoe(CONTINENTAL_ZONES, market_days, entsoe_token)
     return gb_prices.join(continental, how="outer"), provider_used
 
+
 def synthetic_prices(market_days: List[dt.date]) -> pd.DataFrame:
     start_day = market_days[0]
     periods = 24 * len(market_days)
@@ -474,6 +478,18 @@ def main() -> int:
         "--bmu-output-dir",
         default="bmu_history",
         help="Output directory for BMU standing data and generation history",
+    )
+    parser.add_argument(
+        "--materialize-bmu-dispatch",
+        action="store_true",
+        help="Fetch and save BOALF acceptance history plus half-hour BMU dispatch-acceptance facts, then exit",
+    )
+    parser.add_argument("--dispatch-start", help="BMU dispatch materialization start date, inclusive (YYYY-MM-DD)")
+    parser.add_argument("--dispatch-end", help="BMU dispatch materialization end date, inclusive (YYYY-MM-DD)")
+    parser.add_argument(
+        "--dispatch-output-dir",
+        default="bmu_dispatch_history",
+        help="Output directory for BMU dispatch acceptance history",
     )
     parser.add_argument(
         "--show-constraint-assumptions",
@@ -600,6 +616,32 @@ def main() -> int:
             print(f"[source=elexon] Materialized {len(frames)} tables for {bmu_start} to {bmu_end} (inclusive)")
             for table_name, frame in frames.items():
                 output_path = os.path.join(args.bmu_output_dir, f"{table_name}.csv")
+                print(f"{table_name}: rows={len(frame)} path={output_path}")
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
+    if args.materialize_bmu_dispatch:
+        if not args.dispatch_start or not args.dispatch_end:
+            raise SystemExit("--materialize-bmu-dispatch requires --dispatch-start and --dispatch-end")
+
+        dispatch_start = parse_dispatch_iso_date(args.dispatch_start)
+        dispatch_end = parse_dispatch_iso_date(args.dispatch_end)
+        if dispatch_end < dispatch_start:
+            raise SystemExit("--dispatch-end must be on or after --dispatch-start")
+
+        try:
+            frames = materialize_bmu_dispatch_history(
+                start_date=dispatch_start,
+                end_date=dispatch_end,
+                output_dir=args.dispatch_output_dir,
+            )
+            print(
+                f"[source=elexon] Materialized {len(frames)} tables for {dispatch_start} to {dispatch_end} (inclusive)"
+            )
+            for table_name, frame in frames.items():
+                output_path = os.path.join(args.dispatch_output_dir, f"{table_name}.csv")
                 print(f"{table_name}: rows={len(frame)} path={output_path}")
             return 0
         except Exception as exc:
