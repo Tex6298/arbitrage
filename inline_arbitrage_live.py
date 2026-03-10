@@ -1,217 +1,432 @@
-
 #!/usr/bin/env python3
 """
 inline_arbitrage_live.py
 ------------------------
 Fetches day-ahead electricity prices from ENTSO-E for GB, FR, NL, DE-LU, PL, CZ,
-then computes simple GB->(FR|NL)->DE->PL netbacks per hour, including basic losses & fees.
-If ENTOS_E_TOKEN is missing or network fails, falls back to synthetic demo data.
+then computes simple GB->(FR|NL)->DE->PL netbacks per hour, including basic losses
+and placeholder fees.
 
-Usage:
-  python inline_arbitrage_live.py --date 2025-09-20
-  python inline_arbitrage_live.py --start 2025-09-20 --end 2025-09-21
-  python inline_arbitrage_live.py --save out.csv
-
-Set your ENTSO-E token via ENV var ENTOS_E_TOKEN or a .env file in the same directory.
-
-Notes:
-- This script focuses on DA price spreads; capacity/congestion is approximated by simple heuristics.
-- For production, add physical flow/ATC checks and imbalance/capacity cost models.
+Important behavior:
+- Uses documented ENTSO-E area EIC codes, not UI display labels.
+- Queries per local market day for each zone, then converts timestamps to UTC.
+- Synthetic data is available only with --dry. Missing tokens and API failures are
+  surfaced as errors instead of silently falling back.
+- GB day-ahead prices are published in GBP on ENTSO-E, so you must provide a
+  GBP->EUR conversion rate via --gbp-eur or GBP_EUR / GBP_EUR_RATE.
 """
 
-import os
-import sys
+from __future__ import annotations
+
 import argparse
 import datetime as dt
-from typing import List, Dict
-import pandas as pd
+import os
+import re
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+import xml.etree.ElementTree as ET
+from dataclasses import dataclass
+from typing import Dict, Iterable, List, Tuple
+from zoneinfo import ZoneInfo
+
 import numpy as np
+import pandas as pd
 
 # Optional: .env support
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except Exception:
     pass
 
-import xml.etree.ElementTree as ET
-import urllib.parse
-import urllib.request
-
 
 ENTSOE_ENDPOINT = "https://web-api.tp.entsoe.eu/api"
-# ENTSO-E bidding zone EIC codes
-ZONES = {
-    "GB":   "BZN|GB",
-    "FR":   "BZN|FR",
-    "NL":   "BZN|NL",
-    "DE":   "BZN|DE-LU",
-    "PL":   "BZN|PL",
-    "CZ":   "BZN|CZ",
+FX_ENV_NAMES = ("GBP_EUR", "GBP_EUR_RATE")
+
+
+@dataclass(frozen=True)
+class ZoneSpec:
+    name: str
+    eic: str
+    timezone: str
+
+
+# ENTSO-E bidding zone EIC codes and their local market time zones.
+ZONES: Dict[str, ZoneSpec] = {
+    "GB": ZoneSpec("GB", "10YGB----------A", "Europe/London"),
+    "FR": ZoneSpec("FR", "10YFR-RTE------C", "Europe/Paris"),
+    "NL": ZoneSpec("NL", "10YNL----------L", "Europe/Amsterdam"),
+    "DE": ZoneSpec("DE", "10Y1001A1001A82H", "Europe/Berlin"),
+    "PL": ZoneSpec("PL", "10YPL-AREA-----S", "Europe/Warsaw"),
+    "CZ": ZoneSpec("CZ", "10YCZ-CEPS-----N", "Europe/Prague"),
 }
 
-def iso_interval(start: dt.datetime, end: dt.datetime) -> str:
-    # ENTSO-E expects UTC in YYYYMMDDHHMM format
-    return start.strftime("%Y%m%d%H%M"), end.strftime("%Y%m%d%H%M")
+# Simple route heuristics. The model scores each border leg independently and treats
+# a route as blocked if any leg is underwater for that hour.
+ROUTES = {
+    "R1_netback_GB_FR_DE_PL": {
+        "label": "GB->FR->DE->PL",
+        "legs": (
+            {"from": "GB", "to": "FR", "loss": 0.020, "fee": 0.60},
+            {"from": "FR", "to": "DE", "loss": 0.010, "fee": 0.20},
+            {"from": "DE", "to": "PL", "loss": 0.010, "fee": 0.30},
+        ),
+    },
+    "R2_netback_GB_NL_DE_PL": {
+        "label": "GB->NL->DE->PL",
+        "legs": (
+            {"from": "GB", "to": "NL", "loss": 0.020, "fee": 0.65},
+            {"from": "NL", "to": "DE", "loss": 0.010, "fee": 0.15},
+            {"from": "DE", "to": "PL", "loss": 0.010, "fee": 0.30},
+        ),
+    },
+}
 
-def fetch_entsoe_da_price(zone_code: str, start: dt.datetime, end: dt.datetime, token: str) -> pd.DataFrame:
-    """
-    Fetches day-ahead prices (documentType A44) for a given bidding zone between [start, end).
-    Returns a DataFrame with UTC timestamps and price in EUR/MWh.
-    """
+
+def parse_market_day(value: str) -> dt.date:
+    try:
+        return dt.date.fromisoformat(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"invalid date '{value}', expected YYYY-MM-DD") from exc
+
+
+def iter_market_days(start_day: dt.date, end_day: dt.date) -> Iterable[dt.date]:
+    day = start_day
+    while day < end_day:
+        yield day
+        day += dt.timedelta(days=1)
+
+
+def resolve_market_days(args: argparse.Namespace) -> List[dt.date]:
+    if args.date and (args.start or args.end):
+        raise ValueError("use either --date or --start/--end, not both")
+
+    today_gb = dt.datetime.now(ZoneInfo("Europe/London")).date()
+
+    if args.date:
+        start_day = parse_market_day(args.date)
+        end_day = start_day + dt.timedelta(days=1)
+    else:
+        start_day = parse_market_day(args.start) if args.start else today_gb
+        end_day = parse_market_day(args.end) if args.end else start_day + dt.timedelta(days=1)
+
+    if end_day <= start_day:
+        raise ValueError("--end must be after --start")
+
+    return list(iter_market_days(start_day, end_day))
+
+
+def entsoe_utc_window_for_local_day(day: dt.date, tz_name: str) -> Tuple[dt.datetime, dt.datetime]:
+    tz = ZoneInfo(tz_name)
+    start_local = dt.datetime.combine(day, dt.time.min, tzinfo=tz)
+    end_local = dt.datetime.combine(day + dt.timedelta(days=1), dt.time.min, tzinfo=tz)
+    return start_local.astimezone(dt.timezone.utc), end_local.astimezone(dt.timezone.utc)
+
+
+def iso_interval(start_utc: dt.datetime, end_utc: dt.datetime) -> Tuple[str, str]:
+    return start_utc.strftime("%Y%m%d%H%M"), end_utc.strftime("%Y%m%d%H%M")
+
+
+def parse_resolution_to_timedelta(resolution: str) -> pd.Timedelta:
+    match = re.fullmatch(r"PT(?:(\d+)H)?(?:(\d+)M)?", resolution or "")
+    if not match:
+        raise RuntimeError(f"unsupported ENTSO-E resolution: {resolution}")
+
+    hours = int(match.group(1) or 0)
+    minutes = int(match.group(2) or 0)
+    step = pd.Timedelta(hours=hours, minutes=minutes)
+    if step <= pd.Timedelta(0):
+        raise RuntimeError(f"unsupported ENTSO-E resolution: {resolution}")
+    return step
+
+
+def parse_entsoe_error(xml_bytes: bytes) -> str:
+    try:
+        root = ET.fromstring(xml_bytes)
+    except ET.ParseError:
+        return ""
+
+    namespace = root.tag.split("}")[0].strip("{") if "}" in root.tag else ""
+    ns = {"ns": namespace} if namespace else {}
+    text_xpath = ".//ns:text" if ns else ".//text"
+    code_xpath = ".//ns:code" if ns else ".//code"
+
+    codes = [value.text.strip() for value in root.findall(code_xpath, ns) if value.text]
+    texts = [value.text.strip() for value in root.findall(text_xpath, ns) if value.text]
+
+    if codes and texts:
+        return "; ".join(f"{code}: {text}" for code, text in zip(codes, texts))
+    if texts:
+        return "; ".join(texts)
+    return ""
+
+
+def fetch_entsoe_payload(url: str, zone_name: str) -> bytes:
+    try:
+        with urllib.request.urlopen(url, timeout=30) as response:
+            return response.read()
+    except urllib.error.HTTPError as exc:
+        error_body = exc.read()
+        error_text = parse_entsoe_error(error_body)
+        if error_text:
+            raise RuntimeError(f"{zone_name} request failed ({exc.code}): {error_text}") from exc
+        raise RuntimeError(f"{zone_name} request failed with HTTP {exc.code}: {exc.reason}") from exc
+    except urllib.error.URLError as exc:
+        reason = getattr(exc, "reason", exc)
+        raise RuntimeError(f"{zone_name} request failed: {reason}") from exc
+    except TimeoutError as exc:
+        raise RuntimeError(f"{zone_name} request timed out") from exc
+
+
+def parse_entsoe_price_xml(xml_bytes: bytes) -> Tuple[pd.DataFrame, str, str]:
+    root = ET.fromstring(xml_bytes)
+    namespace = root.tag.split("}")[0].strip("{")
+    ns = {"ns": namespace}
+
+    frames = []
+    currencies = set()
+    resolutions = set()
+
+    for ts in root.findall(".//ns:TimeSeries", ns):
+        currency = (ts.findtext(".//ns:currency_Unit.name", default="", namespaces=ns) or "").strip().upper()
+        if currency:
+            currencies.add(currency)
+
+        for period in ts.findall(".//ns:Period", ns):
+            start_text = period.findtext("ns:timeInterval/ns:start", namespaces=ns)
+            if not start_text:
+                continue
+
+            resolution = (period.findtext("ns:resolution", namespaces=ns) or "PT60M").strip()
+            resolutions.add(resolution)
+            step = parse_resolution_to_timedelta(resolution)
+            start = pd.to_datetime(start_text, utc=True)
+
+            rows = []
+            for point in period.findall("ns:Point", ns):
+                pos_text = point.findtext("ns:position", namespaces=ns)
+                value_text = point.findtext("ns:price.amount", namespaces=ns)
+                if not pos_text or not value_text:
+                    continue
+                timestamp = start + (int(pos_text) - 1) * step
+                rows.append((timestamp, float(value_text)))
+
+            if rows:
+                frames.append(pd.DataFrame(rows, columns=["time_utc", "price_eur_mwh"]))
+
+    if not frames:
+        raise RuntimeError("failed to parse day-ahead prices from ENTSO-E payload")
+
+    if len(currencies) > 1:
+        raise RuntimeError(f"mixed currencies in ENTSO-E payload: {sorted(currencies)}")
+
+    resolution = sorted(resolutions)[0] if len(resolutions) == 1 else "mixed"
+    if resolution == "mixed":
+        raise RuntimeError(f"mixed resolutions in ENTSO-E payload: {sorted(resolutions)}")
+
+    out = pd.concat(frames, ignore_index=True).drop_duplicates(subset=["time_utc"]).sort_values("time_utc")
+    out.set_index("time_utc", inplace=True)
+    return out, (next(iter(currencies)) if currencies else ""), resolution
+
+
+def normalize_currency(df: pd.DataFrame, currency: str, zone_name: str, gbp_eur: float | None) -> pd.DataFrame:
+    if not currency or currency == "EUR":
+        return df
+
+    if currency == "GBP":
+        if gbp_eur is None:
+            raise RuntimeError(
+                f"{zone_name} prices are reported in GBP. Pass --gbp-eur or set GBP_EUR / GBP_EUR_RATE."
+            )
+        converted = df.copy()
+        converted["price_eur_mwh"] = converted["price_eur_mwh"] * gbp_eur
+        return converted
+
+    raise RuntimeError(f"unsupported currency for {zone_name}: {currency}")
+
+
+def normalize_resolution(df: pd.DataFrame, resolution: str) -> pd.DataFrame:
+    if resolution in {"PT60M", "PT1H"}:
+        return df
+
+    step = parse_resolution_to_timedelta(resolution)
+    if step > pd.Timedelta(hours=1):
+        raise RuntimeError(f"cannot normalize resolution larger than 1 hour: {resolution}")
+
+    return df.resample("1h").mean()
+
+
+def fetch_entsoe_da_price(zone: ZoneSpec, market_day: dt.date, token: str, gbp_eur: float | None) -> pd.DataFrame:
+    start_utc, end_utc = entsoe_utc_window_for_local_day(market_day, zone.timezone)
+    period_start, period_end = iso_interval(start_utc, end_utc)
+
     params = {
         "securityToken": token,
         "documentType": "A44",
-        "in_Domain": zone_code,
-        "out_Domain": zone_code,
+        "in_Domain": zone.eic,
+        "out_Domain": zone.eic,
+        "periodStart": period_start,
+        "periodEnd": period_end,
     }
-    periodStart, periodEnd = iso_interval(start, end)
-    params["periodStart"] = periodStart
-    params["periodEnd"] = periodEnd
     url = ENTSOE_ENDPOINT + "?" + urllib.parse.urlencode(params)
-    try:
-        with urllib.request.urlopen(url, timeout=30) as resp:
-            xml_data = resp.read()
-        root = ET.fromstring(xml_data)
-        ns = {'ns': 'urn:entsoe.eu:wgedi:acknowledgementdocument:7:0'}
-        # Prices are typically in "Publication_MarketDocument" with TimeSeries/Period/Point
-        # Handle common namespaces
-        if b"Publication_MarketDocument" not in xml_data:
-            # Could be an error message from API
-            raise RuntimeError("ENTSO-E returned an unexpected payload (maybe invalid token or window).")
-        # Try generic parse
-        return parse_entsoe_price_xml(xml_data)
-    except Exception as e:
-        raise
+    xml_data = fetch_entsoe_payload(url, zone.name)
 
-def parse_entsoe_price_xml(xml_bytes: bytes) -> pd.DataFrame:
-    # A light-weight parser that extracts (time, price) from the common ENTSO-E DA price schema.
-    # The schema can vary; we handle the typical case here.
-    root = ET.fromstring(xml_bytes)
-    ns = {'ns': root.tag.split('}')[0].strip('{')}
-    series = []
-    for ts in root.findall('.//ns:TimeSeries', ns):
-        currency = ts.findtext('.//ns:currency_Unit.name', default="", namespaces=ns)
-        price_unit = ts.findtext('.//ns:price_Measure_Unit.name', default="", namespaces=ns)
-        for period in ts.findall('.//ns:Period', ns):
-            start_text = period.findtext('ns:timeInterval/ns:start', namespaces=ns)
-            resolution = period.findtext('ns:resolution', namespaces=ns) or 'PT60M'
-            start = pd.to_datetime(start_text, utc=True)
-            points = []
-            for p in period.findall('ns:Point', ns):
-                pos = int(p.findtext('ns:position', namespaces=ns))
-                val = float(p.findtext('ns:price.amount', namespaces=ns))
-                points.append((pos, val))
-            points.sort(key=lambda x: x[0])
-            # Build hourly index
-            if resolution != 'PT60M':
-                # For simplicity, we assume hourly; extend here if you need quarter-hours
-                pass
-            times = [start + pd.Timedelta(hours=i) for i,_ in points]
-            vals = [v for _,v in points]
-            df = pd.DataFrame({"time_utc": times, "price_eur_mwh": vals})
-            series.append(df)
-    if not series:
-        raise RuntimeError("Failed to parse DA prices from ENTSO-E payload.")
-    out = pd.concat(series, ignore_index=True).drop_duplicates(subset=["time_utc"]).sort_values("time_utc")
-    out.set_index("time_utc", inplace=True)
-    return out
+    if b"Publication_MarketDocument" not in xml_data:
+        error_text = parse_entsoe_error(xml_data)
+        if error_text:
+            raise RuntimeError(f"{zone.name} request failed: {error_text}")
+        raise RuntimeError(f"{zone.name} returned a non-price payload")
 
-def fetch_prices_entsoe(zones: Dict[str,str], start: dt.datetime, end: dt.datetime, token: str) -> pd.DataFrame:
+    prices, currency, resolution = parse_entsoe_price_xml(xml_data)
+    prices = normalize_currency(prices, currency, zone.name, gbp_eur)
+    prices = normalize_resolution(prices, resolution)
+    return prices
+
+
+def fetch_prices_entsoe(
+    zones: Dict[str, ZoneSpec],
+    market_days: List[dt.date],
+    token: str,
+    gbp_eur: float | None,
+) -> pd.DataFrame:
     frames = {}
-    for name, code in zones.items():
-        df = fetch_entsoe_da_price(code, start, end, token)
-        frames[name] = df.rename(columns={"price_eur_mwh": name})
-    # outer-join on UTC timestamps
-    all_df = None
-    for name, df in frames.items():
-        all_df = df if all_df is None else all_df.join(df, how="outer")
-    return all_df
+
+    for name, zone in zones.items():
+        zone_frames = []
+        for market_day in market_days:
+            zone_frames.append(fetch_entsoe_da_price(zone, market_day, token, gbp_eur))
+
+        zone_df = pd.concat(zone_frames).sort_index()
+        zone_df = zone_df[~zone_df.index.duplicated(keep="last")]
+        frames[name] = zone_df.rename(columns={"price_eur_mwh": name})
+
+    joined = None
+    for frame in frames.values():
+        joined = frame if joined is None else joined.join(frame, how="outer")
+
+    return joined
+
+
+def compute_route_metrics(df: pd.DataFrame, route_name: str, route_spec: Dict[str, object]) -> None:
+    leg_margin_cols = []
+    leg_labels = []
+
+    for leg in route_spec["legs"]:
+        source = leg["from"]
+        sink = leg["to"]
+        loss = float(leg["loss"])
+        fee = float(leg["fee"])
+        col = f"{route_name}_leg_{source}_{sink}"
+        df[col] = (df[sink] * (1 - loss)) - df[source] - fee
+        leg_margin_cols.append(col)
+        leg_labels.append(f"{source}->{sink}")
+
+    gross_col = f"{route_name}_gross"
+    feasible_col = f"{route_name}_feasible"
+    bottleneck_col = f"{route_name}_bottleneck"
+
+    leg_margins = df[leg_margin_cols]
+    df[gross_col] = leg_margins.sum(axis=1)
+    df[feasible_col] = leg_margins.gt(0).all(axis=1)
+    df[bottleneck_col] = leg_margins.idxmin(axis=1).map(dict(zip(leg_margin_cols, leg_labels)))
+    df[route_name] = np.where(df[feasible_col], df[gross_col], leg_margins.min(axis=1))
+
 
 def compute_netbacks(prices: pd.DataFrame) -> pd.DataFrame:
     """
-    prices: index=UTC hour, columns ['GB','FR','NL','DE','PL','CZ']
-    Returns prices + netback columns + route & signal.
+    prices: index=UTC hour, columns ['GB', 'FR', 'NL', 'DE', 'PL', 'CZ'] in EUR/MWh.
+    Returns prices plus route metrics and a simple route signal.
     """
-    df = prices.copy()
-    # Fill small gaps with forward fill to avoid dropping whole rows
-    df = df.sort_index().interpolate(limit_direction='both')
-    # Route losses (very simplified): HVDC 2% each, AC 1% each
-    loss_R = 1 - (1-0.02)*(1-0.01)*(1-0.01)  # ~0.0394
-    fees_total = 0.8 + 0.3  # capacity+ops placeholders
-    # Capacity heuristics (dummy: allow all hours by default)
-    cap_R1 = 1.0
-    cap_R2 = 1.0
+    required = {"GB", "FR", "NL", "DE", "PL", "CZ"}
+    missing = sorted(required.difference(prices.columns))
+    if missing:
+        raise RuntimeError(f"missing price columns: {', '.join(missing)}")
 
-    df["R1_netback_GB_FR_DE_PL"] = ((df["PL"] * (1 - loss_R)) - df["GB"] - fees_total) * cap_R1
-    df["R2_netback_GB_NL_DE_PL"] = ((df["PL"] * (1 - loss_R)) - df["GB"] - fees_total) * cap_R2
-    df["best_netback"] = df[["R1_netback_GB_FR_DE_PL","R2_netback_GB_NL_DE_PL"]].max(axis=1)
+    df = prices.copy().sort_index().interpolate(limit_direction="both")
+    for route_name, route_spec in ROUTES.items():
+        compute_route_metrics(df, route_name, route_spec)
+
+    route_cols = list(ROUTES)
+    route_label_map = {route_name: route_spec["label"] for route_name, route_spec in ROUTES.items()}
+
+    df["best_netback"] = df[route_cols].max(axis=1)
     df["best_route"] = np.where(
         df["R1_netback_GB_FR_DE_PL"] >= df["R2_netback_GB_NL_DE_PL"],
-        "GB→FR→DE→PL",
-        "GB→NL→DE→PL"
+        route_label_map["R1_netback_GB_FR_DE_PL"],
+        route_label_map["R2_netback_GB_NL_DE_PL"],
     )
     df["export_signal"] = np.where(df["best_netback"] > 0, "EXPORT", "HOLD")
     return df
 
-def synthetic_prices(day: dt.date) -> pd.DataFrame:
-    # Mirror the demo shape but time-zone aware UTC hours for the chosen day
-    idx = pd.date_range(pd.Timestamp(day, tz="UTC"), periods=24, freq="H")
-    rng = np.random.default_rng(42)
-    gb = -5 + 10*np.sin(np.linspace(0, 3*np.pi, 24)) + rng.normal(0, 4, 24)
-    fr = 20 + 12*np.sin(np.linspace(0.2, 3.2*np.pi, 24)) + rng.normal(0, 4, 24)
-    nl = 22 + 12*np.sin(np.linspace(0.3, 3.1*np.pi, 24)) + rng.normal(0, 4, 24)
-    de = 24 + 11*np.sin(np.linspace(0.4, 3.0*np.pi, 24)) + rng.normal(0, 4, 24)
-    pl = 55 + 18*np.sin(np.linspace(0.5, 2.6*np.pi, 24)) + rng.normal(0, 6, 24)
-    cz = 52 + 16*np.sin(np.linspace(0.6, 2.7*np.pi, 24)) + rng.normal(0, 5, 24)
-    df = pd.DataFrame({"GB":gb,"FR":fr,"NL":nl,"DE":de,"PL":pl,"CZ":cz}, index=idx).round(2)
-    return df
 
-def main():
+def synthetic_prices(market_days: List[dt.date]) -> pd.DataFrame:
+    start_day = market_days[0]
+    periods = 24 * len(market_days)
+    idx = pd.date_range(pd.Timestamp(start_day, tz="UTC"), periods=periods, freq="1h")
+
+    rng = np.random.default_rng(42)
+    gb = -5 + 10 * np.sin(np.linspace(0, 3 * np.pi, periods)) + rng.normal(0, 4, periods)
+    fr = 20 + 12 * np.sin(np.linspace(0.2, 3.2 * np.pi, periods)) + rng.normal(0, 4, periods)
+    nl = 22 + 12 * np.sin(np.linspace(0.3, 3.1 * np.pi, periods)) + rng.normal(0, 4, periods)
+    de = 24 + 11 * np.sin(np.linspace(0.4, 3.0 * np.pi, periods)) + rng.normal(0, 4, periods)
+    pl = 55 + 18 * np.sin(np.linspace(0.5, 2.6 * np.pi, periods)) + rng.normal(0, 6, periods)
+    cz = 52 + 16 * np.sin(np.linspace(0.6, 2.7 * np.pi, periods)) + rng.normal(0, 5, periods)
+
+    return pd.DataFrame({"GB": gb, "FR": fr, "NL": nl, "DE": de, "PL": pl, "CZ": cz}, index=idx).round(2)
+
+
+def parse_gbp_eur(value: str | None) -> float | None:
+    if value is None:
+        return None
+    rate = float(value)
+    if rate <= 0:
+        raise ValueError("GBP/EUR rate must be positive")
+    return rate
+
+
+def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--date", help="Single UTC date (YYYY-MM-DD)")
-    parser.add_argument("--start", help="UTC start (YYYY-MM-DD)")
-    parser.add_argument("--end", help="UTC end (YYYY-MM-DD, exclusive)")
+    parser.add_argument("--date", help="Single local market day (YYYY-MM-DD)")
+    parser.add_argument("--start", help="First local market day (YYYY-MM-DD)")
+    parser.add_argument("--end", help="Last local market day, exclusive (YYYY-MM-DD)")
     parser.add_argument("--save", help="Path to save CSV", default="inline_arbitrage_live_output.csv")
-    parser.add_argument("--dry", action="store_true", help="Use synthetic data (no API calls)")
+    parser.add_argument("--dry", action="store_true", help="Use synthetic data explicitly")
+    parser.add_argument("--gbp-eur", type=float, help="GBP->EUR conversion rate for GB prices")
     args = parser.parse_args()
 
+    market_days = resolve_market_days(args)
     token = os.environ.get("ENTOS_E_TOKEN") or os.environ.get("ENTSOE_TOKEN") or ""
+    gbp_eur = args.gbp_eur
+    if gbp_eur is None:
+        for env_name in FX_ENV_NAMES:
+            if os.environ.get(env_name):
+                gbp_eur = parse_gbp_eur(os.environ[env_name])
+                break
 
-    # Determine window
-    if args.date:
-        start = dt.datetime.fromisoformat(args.date).replace(tzinfo=dt.timezone.utc)
-        end = start + dt.timedelta(days=1)
-    else:
-        if not args.start:
-            # default: today UTC
-            start = dt.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=dt.timezone.utc)
+    try:
+        if args.dry:
+            prices = synthetic_prices(market_days)
+            used_source = "synthetic (--dry)"
         else:
-            start = dt.datetime.fromisoformat(args.start).replace(tzinfo=dt.timezone.utc)
-        if not args.end:
-            end = start + dt.timedelta(days=1)
-        else:
-            end = dt.datetime.fromisoformat(args.end).replace(tzinfo=dt.timezone.utc)
-
-    # Get prices
-    if args.dry or not token:
-        prices = synthetic_prices(start.date())
-        used_source = "synthetic"
-    else:
-        try:
-            prices = fetch_prices_entsoe(ZONES, start, end, token)
+            if not token:
+                raise RuntimeError("missing ENTSO-E token; set ENTOS_E_TOKEN or ENTSOE_TOKEN, or use --dry")
+            prices = fetch_prices_entsoe(ZONES, market_days, token, gbp_eur)
             used_source = "entsoe"
-        except Exception as e:
-            # fallback
-            prices = synthetic_prices(start.date())
-            used_source = f"fallback_synthetic_due_to_error: {e}"
 
-    out = compute_netbacks(prices)
-    out.to_csv(args.save)
+        out = compute_netbacks(prices)
+        out.to_csv(args.save)
 
-    print(f"[source={used_source}] Window: {start} to {end}, rows={len(out)}")
-    print(out.head(6).round(2).to_string())
-    print(f"\nSaved: {args.save}")
+        market_day_end = market_days[-1] + dt.timedelta(days=1)
+        print(f"[source={used_source}] Market days: {market_days[0]} to {market_day_end} (exclusive), rows={len(out)}")
+        print(out.head(6).round(2).to_string())
+        print(f"\nSaved: {args.save}")
+        return 0
+    except Exception as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
