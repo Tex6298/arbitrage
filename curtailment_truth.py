@@ -25,7 +25,7 @@ from bmu_generation import (
 )
 from bmu_physical import build_fact_bmu_physical_position_half_hourly, fetch_balancing_physical
 from bmu_truth_utils import build_bmu_interval_spine
-from curtailment_signals import fetch_constraint_daily
+from curtailment_signals import CONSTRAINT_QA_TARGET_DEFINITION, fetch_constraint_daily
 from weather_history import build_fact_weather_hourly
 
 
@@ -320,43 +320,116 @@ def _apply_weather_calibration(
     return frame
 
 
-def _apply_reconciliation(frame: pd.DataFrame, fact_constraint_daily: pd.DataFrame) -> pd.DataFrame:
-    if fact_constraint_daily.empty:
-        frame["gb_daily_estimated_lost_energy_mwh"] = frame.groupby("settlement_date")["lost_energy_mwh"].transform("sum")
-        frame["gb_daily_truth_curtailment_mwh"] = np.nan
-        frame["reconciliation_abs_error_mwh"] = np.nan
-        frame["reconciliation_relative_error"] = np.nan
-        frame["reconciliation_status"] = "warn"
-        return frame
-
-    estimated_daily = (
-        frame.groupby("settlement_date", as_index=False)
-        .agg(gb_daily_estimated_lost_energy_mwh=("lost_energy_mwh", lambda values: float(pd.Series(values).fillna(0.0).sum())))
+def _safe_target_ratio(numerator: pd.Series, denominator: pd.Series) -> pd.Series:
+    return pd.Series(
+        np.where(
+            denominator > 0,
+            numerator / denominator,
+            np.where(numerator <= 1e-6, 0.0, np.nan),
+        ),
+        index=numerator.index,
     )
-    daily = estimated_daily.merge(
-        fact_constraint_daily[["date", "total_curtailment_mwh"]],
+
+
+def _build_reconciliation_view(
+    estimated_daily: pd.DataFrame,
+    fact_constraint_daily: pd.DataFrame,
+    source_target_column: str,
+    output_target_column: str,
+    output_abs_error_column: str,
+    output_relative_error_column: str,
+    output_status_column: str,
+    definition_source_column: str | None = None,
+    definition_output_column: str | None = None,
+) -> pd.DataFrame:
+    daily = estimated_daily.copy()
+    if fact_constraint_daily.empty or source_target_column not in fact_constraint_daily.columns:
+        daily[output_target_column] = np.nan
+        daily[output_abs_error_column] = np.nan
+        daily[output_relative_error_column] = np.nan
+        daily[output_status_column] = "warn"
+        if definition_output_column:
+            daily[definition_output_column] = pd.NA
+        return daily
+
+    columns = ["date", source_target_column]
+    if definition_source_column and definition_source_column in fact_constraint_daily.columns:
+        columns.append(definition_source_column)
+    truth = fact_constraint_daily[columns].copy()
+    rename_map = {source_target_column: output_target_column}
+    if definition_source_column and definition_source_column in truth.columns and definition_output_column:
+        rename_map[definition_source_column] = definition_output_column
+    daily = daily.merge(
+        truth.rename(columns=rename_map),
         left_on="settlement_date",
         right_on="date",
         how="left",
     ).drop(columns="date")
-    daily = daily.rename(columns={"total_curtailment_mwh": "gb_daily_truth_curtailment_mwh"})
-    daily["reconciliation_abs_error_mwh"] = (
-        daily["gb_daily_estimated_lost_energy_mwh"] - daily["gb_daily_truth_curtailment_mwh"]
+    if definition_output_column and definition_output_column not in daily.columns:
+        daily[definition_output_column] = pd.NA
+
+    daily[output_abs_error_column] = (
+        daily["gb_daily_estimated_lost_energy_mwh"] - daily[output_target_column]
     ).abs()
-    daily["reconciliation_relative_error"] = np.where(
-        daily["gb_daily_truth_curtailment_mwh"] > 0,
-        daily["reconciliation_abs_error_mwh"] / daily["gb_daily_truth_curtailment_mwh"],
-        np.where(daily["gb_daily_estimated_lost_energy_mwh"] <= 1e-6, 0.0, np.nan),
+    daily[output_relative_error_column] = _safe_target_ratio(
+        daily[output_abs_error_column],
+        daily[output_target_column],
     )
-    daily["reconciliation_status"] = np.select(
+    daily[output_status_column] = np.select(
         [
-            daily["reconciliation_relative_error"].le(0.25),
-            daily["reconciliation_relative_error"].le(0.50),
+            daily[output_relative_error_column].le(0.25),
+            daily[output_relative_error_column].le(0.50),
         ],
         ["pass", "warn"],
         default="fail",
     )
-    daily.loc[daily["gb_daily_truth_curtailment_mwh"].isna(), "reconciliation_status"] = "warn"
+    daily.loc[daily[output_target_column].isna(), output_status_column] = "warn"
+    return daily
+
+
+def _apply_reconciliation(frame: pd.DataFrame, fact_constraint_daily: pd.DataFrame) -> pd.DataFrame:
+    estimated_daily = (
+        frame.groupby("settlement_date", as_index=False)
+        .agg(gb_daily_estimated_lost_energy_mwh=("lost_energy_mwh", lambda values: float(pd.Series(values).fillna(0.0).sum())))
+    )
+    raw_daily = _build_reconciliation_view(
+        estimated_daily=estimated_daily,
+        fact_constraint_daily=fact_constraint_daily,
+        source_target_column="total_curtailment_mwh",
+        output_target_column="gb_daily_raw_constraint_total_mwh",
+        output_abs_error_column="raw_reconciliation_abs_error_mwh",
+        output_relative_error_column="raw_reconciliation_relative_error",
+        output_status_column="raw_reconciliation_status",
+    )
+    qa_daily = _build_reconciliation_view(
+        estimated_daily=estimated_daily,
+        fact_constraint_daily=fact_constraint_daily,
+        source_target_column="qa_wind_relevant_positive_mwh",
+        output_target_column="gb_daily_qa_target_mwh",
+        output_abs_error_column="qa_reconciliation_abs_error_mwh",
+        output_relative_error_column="qa_reconciliation_relative_error",
+        output_status_column="qa_reconciliation_status",
+        definition_source_column="qa_target_definition",
+        definition_output_column="qa_target_definition",
+    )
+    daily = raw_daily.merge(
+        qa_daily[
+            [
+                "settlement_date",
+                "qa_target_definition",
+                "gb_daily_qa_target_mwh",
+                "qa_reconciliation_abs_error_mwh",
+                "qa_reconciliation_relative_error",
+                "qa_reconciliation_status",
+            ]
+        ],
+        on="settlement_date",
+        how="left",
+    )
+    daily["gb_daily_truth_curtailment_mwh"] = daily["gb_daily_raw_constraint_total_mwh"]
+    daily["reconciliation_abs_error_mwh"] = daily["raw_reconciliation_abs_error_mwh"]
+    daily["reconciliation_relative_error"] = daily["raw_reconciliation_relative_error"]
+    daily["reconciliation_status"] = daily["raw_reconciliation_status"]
 
     frame = frame.merge(daily, on="settlement_date", how="left")
     return frame
@@ -459,6 +532,20 @@ def _ensure_truth_diagnostic_columns(frame: pd.DataFrame) -> pd.DataFrame:
         "lost_energy_estimate_flag": False,
         "counterfactual_valid_flag": False,
     }
+    for column, default_value in defaults.items():
+        if column not in prepared.columns:
+            prepared[column] = default_value
+
+    def _backfill_alias(target_column: str, source_column: str, default_value: object = np.nan) -> None:
+        if target_column not in prepared.columns:
+            if source_column in prepared.columns:
+                prepared[target_column] = prepared[source_column]
+            else:
+                prepared[target_column] = default_value
+        elif source_column in prepared.columns:
+            source_mask = prepared[target_column].isna()
+            prepared.loc[source_mask, target_column] = prepared.loc[source_mask, source_column]
+
     nullable_columns = [
         "generation_mwh",
         "counterfactual_mwh",
@@ -466,12 +553,33 @@ def _ensure_truth_diagnostic_columns(frame: pd.DataFrame) -> pd.DataFrame:
         "weather_scope_key",
         "weather_wind_speed_100m_ms",
     ]
-    for column, default_value in defaults.items():
-        if column not in prepared.columns:
-            prepared[column] = default_value
     for column in nullable_columns:
         if column not in prepared.columns:
             prepared[column] = np.nan
+
+    if "gb_daily_estimated_lost_energy_mwh" not in prepared.columns:
+        prepared["gb_daily_estimated_lost_energy_mwh"] = (
+            prepared.groupby("settlement_date")["lost_energy_mwh"].transform(lambda values: float(pd.Series(values).fillna(0.0).sum()))
+        )
+
+    _backfill_alias("gb_daily_raw_constraint_total_mwh", "gb_daily_truth_curtailment_mwh")
+    _backfill_alias("raw_reconciliation_abs_error_mwh", "reconciliation_abs_error_mwh")
+    _backfill_alias("raw_reconciliation_relative_error", "reconciliation_relative_error")
+    _backfill_alias("raw_reconciliation_status", "reconciliation_status", default_value="warn")
+    _backfill_alias("gb_daily_truth_curtailment_mwh", "gb_daily_raw_constraint_total_mwh")
+    _backfill_alias("reconciliation_abs_error_mwh", "raw_reconciliation_abs_error_mwh")
+    _backfill_alias("reconciliation_relative_error", "raw_reconciliation_relative_error")
+    _backfill_alias("reconciliation_status", "raw_reconciliation_status", default_value="warn")
+    if "qa_target_definition" not in prepared.columns:
+        prepared["qa_target_definition"] = pd.NA
+    if "gb_daily_qa_target_mwh" not in prepared.columns:
+        prepared["gb_daily_qa_target_mwh"] = np.nan
+    if "qa_reconciliation_abs_error_mwh" not in prepared.columns:
+        prepared["qa_reconciliation_abs_error_mwh"] = np.nan
+    if "qa_reconciliation_relative_error" not in prepared.columns:
+        prepared["qa_reconciliation_relative_error"] = np.nan
+    if "qa_reconciliation_status" not in prepared.columns:
+        prepared["qa_reconciliation_status"] = "warn"
     if "counterfactual_invalid_reason" not in prepared.columns:
         prepared["counterfactual_invalid_reason"] = _derive_counterfactual_invalid_reason(prepared)
     if "lost_energy_block_reason" not in prepared.columns:
@@ -485,6 +593,15 @@ def build_fact_curtailment_reconciliation_daily(frame: pd.DataFrame) -> pd.DataF
             columns=[
                 "settlement_date",
                 "gb_daily_estimated_lost_energy_mwh",
+                "qa_target_definition",
+                "gb_daily_raw_constraint_total_mwh",
+                "raw_reconciliation_abs_error_mwh",
+                "raw_reconciliation_relative_error",
+                "raw_reconciliation_status",
+                "gb_daily_qa_target_mwh",
+                "qa_reconciliation_abs_error_mwh",
+                "qa_reconciliation_relative_error",
+                "qa_reconciliation_status",
                 "gb_daily_truth_curtailment_mwh",
                 "reconciliation_abs_error_mwh",
                 "reconciliation_relative_error",
@@ -500,7 +617,11 @@ def build_fact_curtailment_reconciliation_daily(frame: pd.DataFrame) -> pd.DataF
                 "dispatch_outage_row_count",
                 "mapped_dispatch_row_count",
                 "unmapped_dispatch_row_count",
+                "dispatch_coverage_ratio_vs_raw_total",
+                "dispatch_coverage_ratio_vs_qa_target",
                 "dispatch_coverage_ratio_vs_gb_truth",
+                "lost_energy_capture_ratio_vs_raw_total",
+                "lost_energy_capture_ratio_vs_qa_target",
                 "lost_energy_capture_ratio_vs_gb_truth",
                 "lost_energy_to_dispatch_ratio",
                 "primary_dispatch_block_reason",
@@ -511,6 +632,15 @@ def build_fact_curtailment_reconciliation_daily(frame: pd.DataFrame) -> pd.DataF
     dispatch_mask = frame["dispatch_truth_flag"]
     grouped = frame.groupby("settlement_date", as_index=False).agg(
         gb_daily_estimated_lost_energy_mwh=("gb_daily_estimated_lost_energy_mwh", "max"),
+        qa_target_definition=("qa_target_definition", _first_mode),
+        gb_daily_raw_constraint_total_mwh=("gb_daily_raw_constraint_total_mwh", "max"),
+        raw_reconciliation_abs_error_mwh=("raw_reconciliation_abs_error_mwh", "max"),
+        raw_reconciliation_relative_error=("raw_reconciliation_relative_error", "max"),
+        raw_reconciliation_status=("raw_reconciliation_status", _first_mode),
+        gb_daily_qa_target_mwh=("gb_daily_qa_target_mwh", "max"),
+        qa_reconciliation_abs_error_mwh=("qa_reconciliation_abs_error_mwh", "max"),
+        qa_reconciliation_relative_error=("qa_reconciliation_relative_error", "max"),
+        qa_reconciliation_status=("qa_reconciliation_status", _first_mode),
         gb_daily_truth_curtailment_mwh=("gb_daily_truth_curtailment_mwh", "max"),
         reconciliation_abs_error_mwh=("reconciliation_abs_error_mwh", "max"),
         reconciliation_relative_error=("reconciliation_relative_error", "max"),
@@ -552,10 +682,26 @@ def build_fact_curtailment_reconciliation_daily(frame: pd.DataFrame) -> pd.DataF
             lambda values: _first_mode(pd.Series(values)[dispatch_mask.loc[values.index] & ~frame.loc[values.index, "lost_energy_estimate_flag"]]),
         ),
     )
+    grouped["dispatch_coverage_ratio_vs_raw_total"] = _safe_target_ratio(
+        grouped["dispatch_down_mwh_lower_bound"],
+        grouped["gb_daily_raw_constraint_total_mwh"],
+    )
+    grouped["dispatch_coverage_ratio_vs_qa_target"] = _safe_target_ratio(
+        grouped["dispatch_down_mwh_lower_bound"],
+        grouped["gb_daily_qa_target_mwh"],
+    )
     grouped["dispatch_coverage_ratio_vs_gb_truth"] = np.where(
         grouped["gb_daily_truth_curtailment_mwh"] > 0,
         grouped["dispatch_down_mwh_lower_bound"] / grouped["gb_daily_truth_curtailment_mwh"],
         np.nan,
+    )
+    grouped["lost_energy_capture_ratio_vs_raw_total"] = _safe_target_ratio(
+        grouped["gb_daily_estimated_lost_energy_mwh"],
+        grouped["gb_daily_raw_constraint_total_mwh"],
+    )
+    grouped["lost_energy_capture_ratio_vs_qa_target"] = _safe_target_ratio(
+        grouped["gb_daily_estimated_lost_energy_mwh"],
+        grouped["gb_daily_qa_target_mwh"],
     )
     grouped["lost_energy_capture_ratio_vs_gb_truth"] = np.where(
         grouped["gb_daily_truth_curtailment_mwh"] > 0,
@@ -568,6 +714,302 @@ def build_fact_curtailment_reconciliation_daily(frame: pd.DataFrame) -> pd.DataF
         np.nan,
     )
     return grouped.sort_values("settlement_date").reset_index(drop=True)
+
+
+def build_fact_dispatch_alignment_daily(frame: pd.DataFrame) -> pd.DataFrame:
+    columns = [
+        "settlement_date",
+        "qa_target_definition",
+        "gb_daily_qa_target_mwh",
+        "gb_daily_estimated_lost_energy_mwh",
+        "qa_target_shortfall_mwh",
+        "total_dispatch_down_mwh_lower_bound",
+        "estimated_dispatch_half_hour_count",
+        "blocked_dispatch_half_hour_count",
+        "estimated_dispatch_down_mwh_lower_bound",
+        "blocked_dispatch_down_mwh_lower_bound",
+        "blocked_outage_dispatch_down_mwh_lower_bound",
+        "blocked_availability_unknown_dispatch_down_mwh_lower_bound",
+        "blocked_physical_below_generation_dispatch_down_mwh_lower_bound",
+        "blocked_physical_inconsistent_dispatch_down_mwh_lower_bound",
+        "blocked_other_dispatch_down_mwh_lower_bound",
+        "mapped_dispatch_down_mwh_lower_bound",
+        "region_only_dispatch_down_mwh_lower_bound",
+        "unmapped_dispatch_down_mwh_lower_bound",
+        "mapped_estimated_lost_energy_mwh",
+        "region_only_estimated_lost_energy_mwh",
+        "unmapped_estimated_lost_energy_mwh",
+        "mapped_dispatch_bmu_count",
+        "region_only_dispatch_bmu_count",
+        "unmapped_dispatch_bmu_count",
+        "estimated_dispatch_share_of_total_dispatch",
+        "blocked_dispatch_share_of_total_dispatch",
+        "unmapped_dispatch_share_of_total_dispatch",
+        "estimated_capture_ratio_vs_qa_target",
+        "blocked_dispatch_ratio_vs_qa_target",
+        "qa_shortfall_after_blocked_dispatch_mwh",
+        "dispatch_alignment_inference",
+    ]
+    if frame.empty:
+        return pd.DataFrame(columns=columns)
+
+    frame = _ensure_truth_diagnostic_columns(frame)
+    dispatch = frame[frame["dispatch_truth_flag"]].copy()
+    if dispatch.empty:
+        return pd.DataFrame(columns=columns)
+
+    mapped_mask = dispatch["mapping_status"].eq("mapped")
+    region_only_mask = dispatch["mapping_status"].eq("region_only")
+    unmapped_mask = ~(mapped_mask | region_only_mask)
+    blocked_mask = ~dispatch["lost_energy_estimate_flag"]
+    estimated_mask = dispatch["lost_energy_estimate_flag"]
+
+    grouped = dispatch.groupby("settlement_date", as_index=False).agg(
+        qa_target_definition=("qa_target_definition", _first_mode),
+        gb_daily_qa_target_mwh=("gb_daily_qa_target_mwh", "max"),
+        gb_daily_estimated_lost_energy_mwh=("gb_daily_estimated_lost_energy_mwh", "max"),
+        total_dispatch_down_mwh_lower_bound=("accepted_down_delta_mwh_lower_bound", lambda values: float(pd.Series(values).fillna(0.0).sum())),
+        estimated_dispatch_half_hour_count=("lost_energy_estimate_flag", lambda values: int(pd.Series(values).fillna(False).astype(bool).sum())),
+        blocked_dispatch_half_hour_count=("lost_energy_estimate_flag", lambda values: int((~pd.Series(values).fillna(False).astype(bool)).sum())),
+        estimated_dispatch_down_mwh_lower_bound=(
+            "accepted_down_delta_mwh_lower_bound",
+            lambda values: float(pd.Series(values)[estimated_mask.loc[values.index]].fillna(0.0).sum()),
+        ),
+        blocked_dispatch_down_mwh_lower_bound=(
+            "accepted_down_delta_mwh_lower_bound",
+            lambda values: float(pd.Series(values)[blocked_mask.loc[values.index]].fillna(0.0).sum()),
+        ),
+        blocked_outage_dispatch_down_mwh_lower_bound=(
+            "accepted_down_delta_mwh_lower_bound",
+            lambda values: float(
+                pd.Series(values)[blocked_mask.loc[values.index] & dispatch.loc[values.index, "lost_energy_block_reason"].eq("outage")]
+                .fillna(0.0)
+                .sum()
+            ),
+        ),
+        blocked_availability_unknown_dispatch_down_mwh_lower_bound=(
+            "accepted_down_delta_mwh_lower_bound",
+            lambda values: float(
+                pd.Series(values)[blocked_mask.loc[values.index] & dispatch.loc[values.index, "lost_energy_block_reason"].eq("availability_unknown")]
+                .fillna(0.0)
+                .sum()
+            ),
+        ),
+        blocked_physical_below_generation_dispatch_down_mwh_lower_bound=(
+            "accepted_down_delta_mwh_lower_bound",
+            lambda values: float(
+                pd.Series(values)[blocked_mask.loc[values.index] & dispatch.loc[values.index, "lost_energy_block_reason"].eq("physical_below_generation")]
+                .fillna(0.0)
+                .sum()
+            ),
+        ),
+        blocked_physical_inconsistent_dispatch_down_mwh_lower_bound=(
+            "accepted_down_delta_mwh_lower_bound",
+            lambda values: float(
+                pd.Series(values)[blocked_mask.loc[values.index] & dispatch.loc[values.index, "lost_energy_block_reason"].eq("physical_inconsistent")]
+                .fillna(0.0)
+                .sum()
+            ),
+        ),
+        mapped_dispatch_down_mwh_lower_bound=(
+            "accepted_down_delta_mwh_lower_bound",
+            lambda values: float(pd.Series(values)[mapped_mask.loc[values.index]].fillna(0.0).sum()),
+        ),
+        region_only_dispatch_down_mwh_lower_bound=(
+            "accepted_down_delta_mwh_lower_bound",
+            lambda values: float(pd.Series(values)[region_only_mask.loc[values.index]].fillna(0.0).sum()),
+        ),
+        unmapped_dispatch_down_mwh_lower_bound=(
+            "accepted_down_delta_mwh_lower_bound",
+            lambda values: float(pd.Series(values)[unmapped_mask.loc[values.index]].fillna(0.0).sum()),
+        ),
+        mapped_estimated_lost_energy_mwh=(
+            "lost_energy_mwh",
+            lambda values: float(pd.Series(values)[mapped_mask.loc[values.index]].fillna(0.0).sum()),
+        ),
+        region_only_estimated_lost_energy_mwh=(
+            "lost_energy_mwh",
+            lambda values: float(pd.Series(values)[region_only_mask.loc[values.index]].fillna(0.0).sum()),
+        ),
+        unmapped_estimated_lost_energy_mwh=(
+            "lost_energy_mwh",
+            lambda values: float(pd.Series(values)[unmapped_mask.loc[values.index]].fillna(0.0).sum()),
+        ),
+        mapped_dispatch_bmu_count=(
+            "elexon_bm_unit",
+            lambda values: int(dispatch.loc[values.index, "elexon_bm_unit"][mapped_mask.loc[values.index]].nunique()),
+        ),
+        region_only_dispatch_bmu_count=(
+            "elexon_bm_unit",
+            lambda values: int(dispatch.loc[values.index, "elexon_bm_unit"][region_only_mask.loc[values.index]].nunique()),
+        ),
+        unmapped_dispatch_bmu_count=(
+            "elexon_bm_unit",
+            lambda values: int(dispatch.loc[values.index, "elexon_bm_unit"][unmapped_mask.loc[values.index]].nunique()),
+        ),
+    )
+
+    grouped["blocked_other_dispatch_down_mwh_lower_bound"] = (
+        grouped["blocked_dispatch_down_mwh_lower_bound"]
+        - grouped["blocked_outage_dispatch_down_mwh_lower_bound"]
+        - grouped["blocked_availability_unknown_dispatch_down_mwh_lower_bound"]
+        - grouped["blocked_physical_below_generation_dispatch_down_mwh_lower_bound"]
+        - grouped["blocked_physical_inconsistent_dispatch_down_mwh_lower_bound"]
+    )
+    grouped["qa_target_shortfall_mwh"] = grouped["gb_daily_qa_target_mwh"] - grouped["gb_daily_estimated_lost_energy_mwh"]
+    grouped["estimated_dispatch_share_of_total_dispatch"] = _safe_target_ratio(
+        grouped["estimated_dispatch_down_mwh_lower_bound"],
+        grouped["total_dispatch_down_mwh_lower_bound"],
+    )
+    grouped["blocked_dispatch_share_of_total_dispatch"] = _safe_target_ratio(
+        grouped["blocked_dispatch_down_mwh_lower_bound"],
+        grouped["total_dispatch_down_mwh_lower_bound"],
+    )
+    grouped["unmapped_dispatch_share_of_total_dispatch"] = _safe_target_ratio(
+        grouped["unmapped_dispatch_down_mwh_lower_bound"],
+        grouped["total_dispatch_down_mwh_lower_bound"],
+    )
+    grouped["estimated_capture_ratio_vs_qa_target"] = _safe_target_ratio(
+        grouped["gb_daily_estimated_lost_energy_mwh"],
+        grouped["gb_daily_qa_target_mwh"],
+    )
+    grouped["blocked_dispatch_ratio_vs_qa_target"] = _safe_target_ratio(
+        grouped["blocked_dispatch_down_mwh_lower_bound"],
+        grouped["gb_daily_qa_target_mwh"],
+    )
+    grouped["qa_shortfall_after_blocked_dispatch_mwh"] = (
+        grouped["qa_target_shortfall_mwh"] - grouped["blocked_dispatch_down_mwh_lower_bound"]
+    )
+    grouped["dispatch_alignment_inference"] = np.select(
+        [
+            grouped["gb_daily_qa_target_mwh"].isna(),
+            grouped["qa_target_shortfall_mwh"].le(0),
+            grouped["qa_shortfall_after_blocked_dispatch_mwh"].gt(0),
+            grouped["blocked_dispatch_down_mwh_lower_bound"].gt(0),
+        ],
+        [
+            "qa_target_missing",
+            "qa_target_met_or_exceeded",
+            "dispatch_source_shortfall_inferred",
+            "dispatch_blocking_material",
+        ],
+        default="dispatch_alignment_unclear",
+    )
+    return grouped[columns].sort_values("settlement_date").reset_index(drop=True)
+
+
+def build_fact_dispatch_alignment_bmu_daily(frame: pd.DataFrame) -> pd.DataFrame:
+    columns = [
+        "settlement_date",
+        "elexon_bm_unit",
+        "national_grid_bm_unit",
+        "cluster_key",
+        "cluster_label",
+        "parent_region",
+        "mapping_status",
+        "dispatch_half_hour_count",
+        "estimated_dispatch_half_hour_count",
+        "blocked_dispatch_half_hour_count",
+        "accepted_down_delta_mwh_lower_bound",
+        "estimated_dispatch_down_mwh_lower_bound",
+        "blocked_dispatch_down_mwh_lower_bound",
+        "blocked_outage_dispatch_down_mwh_lower_bound",
+        "blocked_availability_unknown_dispatch_down_mwh_lower_bound",
+        "blocked_physical_below_generation_dispatch_down_mwh_lower_bound",
+        "blocked_physical_inconsistent_dispatch_down_mwh_lower_bound",
+        "lost_energy_mwh",
+        "dispatch_alignment_state",
+        "primary_dispatch_block_reason",
+    ]
+    if frame.empty:
+        return pd.DataFrame(columns=columns)
+
+    frame = _ensure_truth_diagnostic_columns(frame)
+    dispatch = frame[frame["dispatch_truth_flag"]].copy()
+    if dispatch.empty:
+        return pd.DataFrame(columns=columns)
+
+    blocked_mask = ~dispatch["lost_energy_estimate_flag"]
+    estimated_mask = dispatch["lost_energy_estimate_flag"]
+
+    grouped = dispatch.groupby(
+        [
+            "settlement_date",
+            "elexon_bm_unit",
+            "national_grid_bm_unit",
+            "cluster_key",
+            "cluster_label",
+            "parent_region",
+            "mapping_status",
+        ],
+        as_index=False,
+        dropna=False,
+    ).agg(
+        dispatch_half_hour_count=("dispatch_truth_flag", lambda values: int(pd.Series(values).fillna(False).astype(bool).sum())),
+        estimated_dispatch_half_hour_count=("lost_energy_estimate_flag", lambda values: int(pd.Series(values).fillna(False).astype(bool).sum())),
+        blocked_dispatch_half_hour_count=("lost_energy_estimate_flag", lambda values: int((~pd.Series(values).fillna(False).astype(bool)).sum())),
+        accepted_down_delta_mwh_lower_bound=("accepted_down_delta_mwh_lower_bound", lambda values: float(pd.Series(values).fillna(0.0).sum())),
+        estimated_dispatch_down_mwh_lower_bound=(
+            "accepted_down_delta_mwh_lower_bound",
+            lambda values: float(pd.Series(values)[estimated_mask.loc[values.index]].fillna(0.0).sum()),
+        ),
+        blocked_dispatch_down_mwh_lower_bound=(
+            "accepted_down_delta_mwh_lower_bound",
+            lambda values: float(pd.Series(values)[blocked_mask.loc[values.index]].fillna(0.0).sum()),
+        ),
+        blocked_outage_dispatch_down_mwh_lower_bound=(
+            "accepted_down_delta_mwh_lower_bound",
+            lambda values: float(
+                pd.Series(values)[blocked_mask.loc[values.index] & dispatch.loc[values.index, "lost_energy_block_reason"].eq("outage")]
+                .fillna(0.0)
+                .sum()
+            ),
+        ),
+        blocked_availability_unknown_dispatch_down_mwh_lower_bound=(
+            "accepted_down_delta_mwh_lower_bound",
+            lambda values: float(
+                pd.Series(values)[blocked_mask.loc[values.index] & dispatch.loc[values.index, "lost_energy_block_reason"].eq("availability_unknown")]
+                .fillna(0.0)
+                .sum()
+            ),
+        ),
+        blocked_physical_below_generation_dispatch_down_mwh_lower_bound=(
+            "accepted_down_delta_mwh_lower_bound",
+            lambda values: float(
+                pd.Series(values)[blocked_mask.loc[values.index] & dispatch.loc[values.index, "lost_energy_block_reason"].eq("physical_below_generation")]
+                .fillna(0.0)
+                .sum()
+            ),
+        ),
+        blocked_physical_inconsistent_dispatch_down_mwh_lower_bound=(
+            "accepted_down_delta_mwh_lower_bound",
+            lambda values: float(
+                pd.Series(values)[blocked_mask.loc[values.index] & dispatch.loc[values.index, "lost_energy_block_reason"].eq("physical_inconsistent")]
+                .fillna(0.0)
+                .sum()
+            ),
+        ),
+        lost_energy_mwh=("lost_energy_mwh", lambda values: float(pd.Series(values).fillna(0.0).sum())),
+        primary_dispatch_block_reason=(
+            "lost_energy_block_reason",
+            lambda values: _first_mode(pd.Series(values)[pd.Series(values).ne("estimated")]),
+        ),
+    )
+    grouped["dispatch_alignment_state"] = np.select(
+        [
+            grouped["blocked_dispatch_half_hour_count"].eq(0),
+            grouped["estimated_dispatch_half_hour_count"].eq(0),
+        ],
+        [
+            "fully_estimated",
+            "fully_blocked",
+        ],
+        default="partially_blocked",
+    )
+    return grouped[columns].sort_values(
+        ["settlement_date", "blocked_dispatch_down_mwh_lower_bound", "accepted_down_delta_mwh_lower_bound"],
+        ascending=[True, False, False],
+    ).reset_index(drop=True)
 
 
 def build_fact_curtailment_gap_reason_daily(frame: pd.DataFrame) -> pd.DataFrame:
@@ -818,7 +1260,7 @@ def build_fact_bmu_curtailment_truth_half_hourly(
         frame["truth_tier"].isin({"physical_baseline", "weather_calibrated"})
         & frame["availability_state"].eq("available")
         & frame["counterfactual_valid_flag"]
-        & frame["reconciliation_status"].eq("pass")
+        & frame["qa_reconciliation_status"].eq("pass")
     )
     frame["research_profile_include"] = frame["dispatch_truth_flag"] & ~frame["availability_state"].eq("outage")
     frame["target_is_proxy"] = False
@@ -864,6 +1306,15 @@ def build_fact_bmu_curtailment_truth_half_hourly(
         "truth_tier",
         "precision_profile_include",
         "research_profile_include",
+        "qa_target_definition",
+        "qa_reconciliation_status",
+        "gb_daily_qa_target_mwh",
+        "qa_reconciliation_abs_error_mwh",
+        "qa_reconciliation_relative_error",
+        "gb_daily_raw_constraint_total_mwh",
+        "raw_reconciliation_abs_error_mwh",
+        "raw_reconciliation_relative_error",
+        "raw_reconciliation_status",
         "reconciliation_status",
         "source_lineage",
         "target_is_proxy",
@@ -983,6 +1434,12 @@ def materialize_bmu_curtailment_truth(
     fact_curtailment_reconciliation_daily = build_fact_curtailment_reconciliation_daily(
         fact_bmu_curtailment_truth_half_hourly_all
     )
+    fact_dispatch_alignment_daily = build_fact_dispatch_alignment_daily(
+        fact_bmu_curtailment_truth_half_hourly_all
+    )
+    fact_dispatch_alignment_bmu_daily = build_fact_dispatch_alignment_bmu_daily(
+        fact_bmu_curtailment_truth_half_hourly_all
+    )
     fact_curtailment_gap_reason_daily = build_fact_curtailment_gap_reason_daily(
         fact_bmu_curtailment_truth_half_hourly_all
     )
@@ -999,6 +1456,8 @@ def materialize_bmu_curtailment_truth(
         "fact_bmu_availability_half_hourly": fact_bmu_availability_half_hourly,
         "fact_bmu_curtailment_truth_half_hourly": fact_bmu_curtailment_truth_half_hourly,
         "fact_curtailment_reconciliation_daily": fact_curtailment_reconciliation_daily,
+        "fact_dispatch_alignment_daily": fact_dispatch_alignment_daily,
+        "fact_dispatch_alignment_bmu_daily": fact_dispatch_alignment_bmu_daily,
         "fact_curtailment_gap_reason_daily": fact_curtailment_gap_reason_daily,
         "fact_bmu_curtailment_gap_bmu_daily": fact_bmu_curtailment_gap_bmu_daily,
     }

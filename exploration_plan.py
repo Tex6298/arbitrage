@@ -66,7 +66,7 @@ DATASET_SPECS: Tuple[DatasetSpec, ...] = (
         role="Joins Elexon BMU standing data to cluster and parent-region scaffolding.",
         source_plan="Elexon reference/bmunits/all plus explicit cluster mapping rules.",
         status="implemented_first_pass",
-        note="First pass covers mapped wind BMUs and leaves the rest explicitly unmapped.",
+        note="First pass covers mapped BMUs, region-only assignments where a cluster would be forced, and leaves the rest explicitly unmapped.",
     ),
     DatasetSpec(
         key="dim_hub",
@@ -147,7 +147,16 @@ DATASET_SPECS: Tuple[DatasetSpec, ...] = (
         role="Target-quality QA surface that explains why BMU truth does or does not reconcile to GB daily curtailment labels.",
         source_plan="Aggregate fact_bmu_curtailment_truth_half_hourly against fact_constraint_daily, plus block-reason and BMU-day gap summaries.",
         status="implemented_first_pass",
-        note="Use this before trusting the precision profile or starting serious backtests.",
+        note="Carries both raw NESO-total reconciliation and the wind-only positive-voltage-plus-thermal QA target used for precision gating.",
+    ),
+    DatasetSpec(
+        key="fact_dispatch_alignment_daily",
+        grain="daily",
+        spatial_scope="GB-wide with BMU dispatch decomposition",
+        role="Explains whether blocked dispatch could close the QA-target gap or whether the current dispatch source undercaptures the target by construction.",
+        source_plan="Derived from fact_bmu_curtailment_truth_half_hourly with dispatch rows split into estimated, blocked, and mapping-status buckets.",
+        status="implemented_first_pass",
+        note="Use this to decide whether to pursue more mapping, less aggressive gating, or another dispatch source.",
     ),
     DatasetSpec(
         key="fact_weather_hourly",
@@ -165,7 +174,7 @@ DATASET_SPECS: Tuple[DatasetSpec, ...] = (
         role="Historical curtailment cost and volume truth set.",
         source_plan="NESO constraint breakdown daily series.",
         status="implemented",
-        note="Good label table, but too coarse to stand alone for intraday or locational work.",
+        note="Now carries both raw category totals and a wind-only positive voltage plus thermal QA target for BMU truth alignment.",
     ),
     DatasetSpec(
         key="fact_wind_split_half_hourly",

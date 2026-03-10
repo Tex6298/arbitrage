@@ -8,7 +8,10 @@ from bmu_availability import build_fact_bmu_availability_half_hourly
 from bmu_dispatch import build_fact_bmu_dispatch_acceptance_half_hourly
 from bmu_physical import build_fact_bmu_physical_position_half_hourly
 from bmu_truth_utils import build_half_hour_interval_frame
+from curtailment_signals import add_constraint_qa_columns
 from curtailment_truth import (
+    build_fact_dispatch_alignment_bmu_daily,
+    build_fact_dispatch_alignment_daily,
     build_fact_bmu_curtailment_gap_bmu_daily,
     build_fact_bmu_curtailment_truth_half_hourly,
     build_fact_curtailment_gap_reason_daily,
@@ -416,7 +419,20 @@ class CurtailmentTruthTests(unittest.TestCase):
                 }
             ]
         )
-        constraints = pd.DataFrame([{"date": base_day, "total_curtailment_mwh": 999.0}])
+        constraints = add_constraint_qa_columns(
+            pd.DataFrame(
+                [
+                    {
+                        "date": base_day,
+                        "total_curtailment_mwh": 999.0,
+                        "voltage_constraints_volume_mwh": 999.0,
+                        "thermal_constraints_volume_mwh": 0.0,
+                        "increasing_system_inertia_volume_mwh": 0.0,
+                        "reducing_largest_loss_volume_mwh": 0.0,
+                    }
+                ]
+            )
+        )
 
         fact = build_fact_bmu_curtailment_truth_half_hourly(
             dim_bmu_asset=dim,
@@ -513,13 +529,19 @@ class CurtailmentTruthTests(unittest.TestCase):
                 },
             ]
         )
-        constraints = pd.DataFrame(
-            [
-                {
-                    "date": dt.date(2024, 10, 1),
-                    "total_curtailment_mwh": 2.0,
-                }
-            ]
+        constraints = add_constraint_qa_columns(
+            pd.DataFrame(
+                [
+                    {
+                        "date": dt.date(2024, 10, 1),
+                        "total_curtailment_mwh": 2.0,
+                        "voltage_constraints_volume_mwh": 2.0,
+                        "thermal_constraints_volume_mwh": 0.0,
+                        "increasing_system_inertia_volume_mwh": 0.0,
+                        "reducing_largest_loss_volume_mwh": 0.0,
+                    }
+                ]
+            )
         )
         fact = build_fact_bmu_curtailment_truth_half_hourly(
             dim_bmu_asset=dim,
@@ -537,6 +559,8 @@ class CurtailmentTruthTests(unittest.TestCase):
         self.assertEqual(period_1["truth_tier"], "physical_baseline")
         self.assertTrue(bool(period_1["precision_profile_include"]))
         self.assertTrue(bool(period_1["research_profile_include"]))
+        self.assertEqual(period_1["qa_reconciliation_status"], "pass")
+        self.assertEqual(period_1["raw_reconciliation_status"], "pass")
         self.assertEqual(period_2["truth_tier"], "physical_baseline")
         self.assertTrue(bool(period_2["precision_profile_include"]))
         self.assertFalse(bool(period_2["research_profile_include"]))
@@ -689,7 +713,20 @@ class CurtailmentTruthTests(unittest.TestCase):
                 },
             ]
         )
-        constraints = pd.DataFrame([{"date": base_day, "total_curtailment_mwh": 10.0}])
+        constraints = add_constraint_qa_columns(
+            pd.DataFrame(
+                [
+                    {
+                        "date": base_day,
+                        "total_curtailment_mwh": 10.0,
+                        "voltage_constraints_volume_mwh": 2.0,
+                        "thermal_constraints_volume_mwh": 0.0,
+                        "increasing_system_inertia_volume_mwh": 8.0,
+                        "reducing_largest_loss_volume_mwh": 0.0,
+                    }
+                ]
+            )
+        )
 
         fact = build_fact_bmu_curtailment_truth_half_hourly(
             dim_bmu_asset=dim,
@@ -709,6 +746,8 @@ class CurtailmentTruthTests(unittest.TestCase):
         self.assertEqual(first_four.loc[3, "lost_energy_block_reason"], "availability_unknown")
         self.assertEqual(first_four.loc[4, "counterfactual_invalid_reason"], "physical_below_generation")
         self.assertEqual(first_four.loc[4, "lost_energy_block_reason"], "physical_below_generation")
+        self.assertEqual(first_four.loc[1, "raw_reconciliation_status"], "fail")
+        self.assertEqual(first_four.loc[1, "qa_reconciliation_status"], "pass")
 
         daily = build_fact_curtailment_reconciliation_daily(fact)
         self.assertEqual(len(daily), 1)
@@ -716,6 +755,27 @@ class CurtailmentTruthTests(unittest.TestCase):
         self.assertAlmostEqual(float(daily.iloc[0]["dispatch_down_mwh_lower_bound"]), 7.5)
         self.assertEqual(int(daily.iloc[0]["lost_energy_estimate_half_hour_count"]), 1)
         self.assertEqual(daily.iloc[0]["primary_dispatch_block_reason"], "availability_unknown")
+        self.assertEqual(daily.iloc[0]["raw_reconciliation_status"], "fail")
+        self.assertEqual(daily.iloc[0]["qa_reconciliation_status"], "pass")
+        self.assertAlmostEqual(float(daily.iloc[0]["dispatch_coverage_ratio_vs_raw_total"]), 0.75)
+        self.assertAlmostEqual(float(daily.iloc[0]["dispatch_coverage_ratio_vs_qa_target"]), 3.75)
+
+        dispatch_alignment_daily = build_fact_dispatch_alignment_daily(fact)
+        self.assertEqual(len(dispatch_alignment_daily), 1)
+        self.assertAlmostEqual(float(dispatch_alignment_daily.iloc[0]["estimated_dispatch_down_mwh_lower_bound"]), 2.0)
+        self.assertAlmostEqual(float(dispatch_alignment_daily.iloc[0]["blocked_dispatch_down_mwh_lower_bound"]), 5.5)
+        self.assertAlmostEqual(
+            float(dispatch_alignment_daily.iloc[0]["blocked_availability_unknown_dispatch_down_mwh_lower_bound"]),
+            4.5,
+        )
+        self.assertAlmostEqual(
+            float(dispatch_alignment_daily.iloc[0]["blocked_physical_below_generation_dispatch_down_mwh_lower_bound"]),
+            1.0,
+        )
+        self.assertEqual(
+            dispatch_alignment_daily.iloc[0]["dispatch_alignment_inference"],
+            "qa_target_met_or_exceeded",
+        )
 
         reason_daily = build_fact_curtailment_gap_reason_daily(fact)
         reason_rows = {
@@ -730,6 +790,110 @@ class CurtailmentTruthTests(unittest.TestCase):
         self.assertEqual(len(bmu_daily), 1)
         self.assertEqual(bmu_daily.iloc[0]["primary_dispatch_block_reason"], "availability_unknown")
         self.assertAlmostEqual(float(bmu_daily.iloc[0]["dispatch_minus_lost_energy_gap_mwh"]), 5.5)
+
+        dispatch_alignment_bmu_daily = build_fact_dispatch_alignment_bmu_daily(fact)
+        self.assertEqual(len(dispatch_alignment_bmu_daily), 1)
+        self.assertEqual(dispatch_alignment_bmu_daily.iloc[0]["dispatch_alignment_state"], "partially_blocked")
+        self.assertAlmostEqual(float(dispatch_alignment_bmu_daily.iloc[0]["blocked_dispatch_down_mwh_lower_bound"]), 5.5)
+
+    def test_missing_qa_target_keeps_precision_profile_conservative(self) -> None:
+        dim = sample_dim_bmu_asset()
+        generation = pd.DataFrame(
+            [
+                {
+                    "settlement_date": dt.date(2024, 10, 1),
+                    "settlement_period": 1,
+                    "elexon_bm_unit": "T_TEST-1",
+                    "generation_mwh": 4.0,
+                }
+            ]
+        )
+        dispatch = pd.DataFrame(
+            [
+                {
+                    "settlement_date": dt.date(2024, 10, 1),
+                    "settlement_period": 1,
+                    "elexon_bm_unit": "T_TEST-1",
+                    "accepted_down_delta_mwh_lower_bound": 2.0,
+                    "accepted_up_delta_mwh_lower_bound": 0.0,
+                    "dispatch_down_flag": True,
+                    "dispatch_up_flag": False,
+                    "acceptance_event_count": 1,
+                    "distinct_acceptance_number_count": 1,
+                }
+            ]
+        )
+        physical = pd.DataFrame(
+            [
+                {
+                    "settlement_date": dt.date(2024, 10, 1),
+                    "settlement_period": 1,
+                    "elexon_bm_unit": "T_TEST-1",
+                    "physical_baseline_source_dataset": "PN",
+                    "physical_baseline_mwh": 6.0,
+                    "physical_consistency_flag": True,
+                    "counterfactual_method": "pn_qpn_physical_max",
+                    "counterfactual_valid_flag": True,
+                }
+            ]
+        )
+        availability = pd.DataFrame(
+            [
+                {
+                    "settlement_date": dt.date(2024, 10, 1),
+                    "settlement_period": 1,
+                    "elexon_bm_unit": "T_TEST-1",
+                    "remit_active_flag": False,
+                    "availability_state": "available",
+                    "availability_confidence": "high",
+                    "uou_output_usable_mw": 20.0,
+                }
+            ]
+        )
+        constraints = pd.DataFrame(
+            [
+                {
+                    "date": dt.date(2024, 10, 1),
+                    "total_curtailment_mwh": 2.0,
+                }
+            ]
+        )
+
+        fact = build_fact_bmu_curtailment_truth_half_hourly(
+            dim_bmu_asset=dim,
+            fact_bmu_generation_half_hourly=generation,
+            fact_bmu_dispatch_acceptance_half_hourly=dispatch,
+            fact_bmu_physical_position_half_hourly=physical,
+            fact_bmu_availability_half_hourly=availability,
+            fact_constraint_daily=constraints,
+            fact_weather_hourly=pd.DataFrame(),
+            start_date=dt.date(2024, 10, 1),
+            end_date=dt.date(2024, 10, 1),
+        )
+
+        first_row = fact.iloc[0]
+        self.assertEqual(first_row["reconciliation_status"], "pass")
+        self.assertEqual(first_row["qa_reconciliation_status"], "warn")
+        self.assertFalse(bool(first_row["precision_profile_include"]))
+
+        legacy_view = fact.drop(
+            columns=[
+                "qa_target_definition",
+                "gb_daily_qa_target_mwh",
+                "qa_reconciliation_abs_error_mwh",
+                "qa_reconciliation_relative_error",
+                "qa_reconciliation_status",
+                "gb_daily_raw_constraint_total_mwh",
+                "raw_reconciliation_abs_error_mwh",
+                "raw_reconciliation_relative_error",
+                "raw_reconciliation_status",
+            ]
+        )
+        daily = build_fact_curtailment_reconciliation_daily(legacy_view)
+        self.assertEqual(daily.iloc[0]["qa_reconciliation_status"], "warn")
+
+        dispatch_alignment_daily = build_fact_dispatch_alignment_daily(legacy_view)
+        self.assertEqual(dispatch_alignment_daily.iloc[0]["dispatch_alignment_inference"], "qa_target_missing")
 
 
 if __name__ == "__main__":

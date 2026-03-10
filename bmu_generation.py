@@ -94,18 +94,31 @@ BMU_CLUSTER_RULES: Tuple[Tuple[str, Tuple[str, ...], str], ...] = (
     ),
     (
         "east_anglia_offshore",
-        (r"\bEAAO-\d+\b", r"\bEAST ANGLIA\b"),
-        "Direct BMU and name matches for East Anglia projects.",
+        (r"\bEAAO-\d+\b", r"\bEAST ANGLIA\b", r"\bGNFSW-\d+\b", r"\bGUNFLEET SANDS\b"),
+        "Direct BMU and name matches for East Anglia and Gunfleet Sands offshore projects.",
     ),
     (
         "humber_offshore",
-        (r"\bTKNEW-\d+\b", r"\bTKNWW-\d+\b", r"\bTRITON KNOLL\b"),
-        "Direct BMU and name matches for Triton Knoll.",
+        (r"\bTKNEW-\d+\b", r"\bTKNWW-\d+\b", r"\bTRITON KNOLL\b", r"\bRCBKO-\d+\b", r"\bRACE BANK\b"),
+        "Direct BMU and name matches for Triton Knoll and Race Bank.",
     ),
     (
         "north_wales_offshore",
         (r"\bGYMRO-\d+\b", r"\bGWYNT Y MOR\b", r"\bGYM OSP\b"),
         "Direct BMU and name matches for Gwynt y Mor.",
+    ),
+)
+
+BMU_PARENT_REGION_RULES: Tuple[Tuple[str, Tuple[str, ...], str], ...] = (
+    (
+        "Scotland",
+        (r"\bCLDCW-\d+\b", r"\bCLDNW-\d+\b", r"\bCLYDE (CENTRAL|NORTH)\b"),
+        "Direct BMU and name matches for Clyde onshore wind; assign parent region without forcing a cluster.",
+    ),
+    (
+        "England/Wales",
+        (r"\bPNYCW-\d+\b", r"\bPEN Y CYMOEDD\b"),
+        "Direct BMU and name matches for Pen y Cymoedd; assign parent region without forcing a cluster.",
     ),
 )
 
@@ -169,6 +182,16 @@ def build_dim_bmu_asset(reference_frame: pd.DataFrame) -> pd.DataFrame:
         wind.loc[match_mask, "cluster_key"] = cluster.key
         wind.loc[match_mask, "cluster_label"] = cluster.label
         wind.loc[match_mask, "parent_region"] = cluster.parent_region
+
+    unmapped_mask = wind["mapping_status"].eq("unmapped")
+    for parent_region, patterns, rule_note in BMU_PARENT_REGION_RULES:
+        regex = re.compile("|".join(patterns), flags=re.IGNORECASE)
+        match_mask = unmapped_mask & wind.apply(lambda row: bool(regex.search(_text_for_matching(row))), axis=1)
+        wind.loc[match_mask, "mapping_status"] = "region_only"
+        wind.loc[match_mask, "mapping_confidence"] = "medium"
+        wind.loc[match_mask, "mapping_rule"] = rule_note
+        wind.loc[match_mask, "parent_region"] = parent_region
+        unmapped_mask = wind["mapping_status"].eq("unmapped")
 
     wind = wind.drop_duplicates(subset=["elexon_bm_unit"], keep="first")
     wind = wind.sort_values(["mapping_status", "cluster_key", "national_grid_bm_unit", "elexon_bm_unit"], na_position="last")

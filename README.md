@@ -152,6 +152,9 @@ Key behavior:
   - `fact_constraint_daily`
   - `fact_wind_split_half_hourly`
   - `fact_regional_curtailment_hourly_proxy`
+- `fact_constraint_daily` now keeps the raw NESO total for context and adds a wind-only QA target:
+  - `qa_target_definition=wind_constraints_positive_only_v1`
+  - `qa_wind_relevant_positive_mwh = max(voltage, 0) + max(thermal, 0)`
 - The hourly regional table is explicitly a proxy. It allocates GB-wide daily curtailment by
   regional wind share, then distributes it intraday by wind shape and down to clusters by
   approximate capacity share.
@@ -159,7 +162,8 @@ Key behavior:
   - `dim_bmu_asset`
   - `fact_bmu_generation_half_hourly`
 - The BMU dimension is a first pass. It maps known wind BMUs into the current cluster registry
-  using explicit name rules and leaves everything else as `mapping_status=unmapped`.
+  using explicit name rules, allows `mapping_status=region_only` when the parent region is clear
+  but no current cluster should be forced, and leaves everything else as `mapping_status=unmapped`.
 - `fact_bmu_generation_half_hourly` is actual generation truth from Elexon B1610, not curtailment truth.
 - `bmu_dispatch.py` now materializes:
   - `fact_bmu_acceptance_event`
@@ -174,6 +178,8 @@ Key behavior:
   - `fact_bmu_availability_half_hourly`
   - `fact_bmu_curtailment_truth_half_hourly`
   - `fact_curtailment_reconciliation_daily`
+  - `fact_dispatch_alignment_daily`
+  - `fact_dispatch_alignment_bmu_daily`
   - `fact_curtailment_gap_reason_daily`
   - `fact_bmu_curtailment_gap_bmu_daily`
 - `weather_history.py` now materializes:
@@ -185,9 +191,15 @@ Key behavior:
   - `weather_calibrated` rows only when BMU, cluster, or parent-region weather power curves can upgrade an otherwise invalid row
 - The truth table now also carries explicit `counterfactual_invalid_reason` and `lost_energy_block_reason` fields so failed capture is diagnosable instead of just silent.
 - The three reconciliation QA tables are the main debugging surface for target completeness:
-  - `fact_curtailment_reconciliation_daily` shows daily GB miss, dispatch coverage, and the dominant block reason
+  - `fact_curtailment_reconciliation_daily` shows both raw NESO-total and wind-only QA reconciliation, dispatch coverage, and the dominant block reason
+  - `fact_dispatch_alignment_daily` shows whether blocked dispatch could materially close the QA-target gap, or whether the current dispatch source is simply too small
+  - `fact_dispatch_alignment_bmu_daily` shows which BMUs are fully estimated, partially blocked, or fully blocked, with blocked lower-bound MWh split by reason
   - `fact_curtailment_gap_reason_daily` breaks each day down by loss-estimate failure reason
   - `fact_bmu_curtailment_gap_bmu_daily` shows which BMUs account for the biggest dispatch-to-lost-energy gap
+- `fact_bmu_curtailment_truth_half_hourly` now carries both reconciliation layers:
+  - raw-context fields: `gb_daily_raw_constraint_total_mwh`, `raw_reconciliation_*`
+  - precision-gate fields: `gb_daily_qa_target_mwh`, `qa_reconciliation_*`
+- `precision_profile_include` now keys off the wind-only QA target, not the mixed raw NESO total.
 - The weather-calibrated tier now uses observed weather history from capacity-weighted anchor points.
   It still does not replace a valid physical-baseline row, and it is still a first pass rather than
   a final turbine-level power model.
@@ -199,7 +211,7 @@ Key behavior:
 - Replace the seed asset registry with confirmed wind farm, node, and owner metadata
 - Turn the topology scaffold into actual transfer gates between clusters and hubs
 - Add forecast weather history and feature versioning so weather forecast error can be backtested
-- Improve dispatch-to-lost-energy capture using the new reconciliation QA tables before relying on the precision profile
+- Improve dispatch-to-lost-energy capture against the wind-only QA target before relying on the precision profile
 - Start with a cluster-point time-slider map, then add hub arcs and error/drift layers
 - Add physical flow and ATC checks
 - Calibrate fee and capacity costs with auction history

@@ -34,6 +34,7 @@ NESO_METERED_WIND_RESOURCES: Dict[str, str] = {
     "2024-2025": "3ac8c742-d601-4b6c-9779-e69cea94e134",
     "2025-2026": "7622b040-977a-45a6-924e-f158df6c29f0",
 }
+CONSTRAINT_QA_TARGET_DEFINITION = "wind_constraints_positive_only_v1"
 LONDON_TZ = ZoneInfo("Europe/London")
 UTC = dt.timezone.utc
 
@@ -154,6 +155,28 @@ def _constraint_column_map(columns: Tuple[str, ...]) -> Dict[str, str]:
     return column_map
 
 
+def add_constraint_qa_columns(frame: pd.DataFrame) -> pd.DataFrame:
+    out = frame.copy()
+    out["qa_target_definition"] = CONSTRAINT_QA_TARGET_DEFINITION
+
+    source_to_target = {
+        "voltage_constraints_volume_mwh": "qa_wind_voltage_positive_mwh",
+        "thermal_constraints_volume_mwh": "qa_wind_thermal_positive_mwh",
+        "increasing_system_inertia_volume_mwh": "qa_inertia_positive_mwh",
+        "reducing_largest_loss_volume_mwh": "qa_largest_loss_positive_mwh",
+    }
+    for source_column, target_column in source_to_target.items():
+        if source_column not in out.columns:
+            out[target_column] = np.nan
+            continue
+        out[target_column] = pd.to_numeric(out[source_column], errors="coerce").clip(lower=0.0)
+
+    out["qa_wind_relevant_positive_mwh"] = out[
+        ["qa_wind_voltage_positive_mwh", "qa_wind_thermal_positive_mwh"]
+    ].sum(axis=1, min_count=2)
+    return out
+
+
 def fetch_constraint_daily(year_label: str) -> pd.DataFrame:
     resource_id = NESO_CONSTRAINT_BREAKDOWN_RESOURCES.get(year_label)
     if not resource_id:
@@ -202,6 +225,7 @@ def fetch_constraint_daily(year_label: str) -> pd.DataFrame:
     cost_columns = [column for column in out.columns if column.endswith("_cost_gbp")]
     out["total_curtailment_mwh"] = out[volume_columns].sum(axis=1, min_count=1)
     out["total_curtailment_cost_gbp"] = out[cost_columns].sum(axis=1, min_count=1)
+    out = add_constraint_qa_columns(out)
 
     out = out.dropna(subset=["date"]).sort_values("date").reset_index(drop=True)
     return out
