@@ -134,6 +134,41 @@ def fetch_boalf_acceptances(
     return pd.concat(frames, ignore_index=True)
 
 
+def fetch_bod_bid_offers(
+    elexon_bm_units: Sequence[str],
+    start_date: dt.date,
+    end_date: dt.date,
+    batch_size: int = 25,
+) -> pd.DataFrame:
+    if end_date < start_date:
+        raise ValueError("end_date must be on or after start_date")
+    if not elexon_bm_units:
+        raise ElexonError("no BMUs provided for BOD fetch")
+
+    frames = []
+    day = start_date
+    while day <= end_date:
+        start_utc, end_utc = _local_day_to_utc_window(day)
+        for batch in _chunked(list(elexon_bm_units), batch_size):
+            params = [
+                ("from", _rfc3339_utc(start_utc)),
+                ("to", _rfc3339_utc(end_utc)),
+            ]
+            params.extend(("bmUnit", bmu) for bmu in batch)
+            url = f"{ELEXON_BASE}/datasets/BOD/stream?{urllib.parse.urlencode(params, doseq=True)}"
+            rows = _fetch_json(url)
+            if not rows:
+                continue
+            frame = pd.DataFrame(rows)
+            frame["source_local_day"] = day.isoformat()
+            frames.append(frame)
+        day += dt.timedelta(days=1)
+
+    if not frames:
+        return pd.DataFrame()
+    return pd.concat(frames, ignore_index=True)
+
+
 def build_fact_bmu_acceptance_event(
     dim_bmu_asset: pd.DataFrame,
     raw_acceptance_frame: pd.DataFrame,
@@ -445,6 +480,150 @@ def build_fact_bmu_dispatch_acceptance_half_hourly(
     return aggregated[keep_columns].sort_values(["interval_start_utc", "elexon_bm_unit"]).reset_index(drop=True)
 
 
+def build_fact_bmu_bid_offer_half_hourly(
+    dim_bmu_asset: pd.DataFrame,
+    raw_bid_offer_frame: pd.DataFrame,
+) -> pd.DataFrame:
+    keep_columns = [
+        "settlement_date",
+        "settlement_period",
+        "interval_start_local",
+        "interval_end_local",
+        "interval_start_utc",
+        "interval_end_utc",
+        "source_key",
+        "source_label",
+        "source_dataset",
+        "target_is_proxy",
+        "elexon_bm_unit",
+        "national_grid_bm_unit",
+        "bm_unit_name",
+        "lead_party_name",
+        "fuel_type",
+        "bm_unit_type",
+        "gsp_group_id",
+        "gsp_group_name",
+        "generation_capacity_mw",
+        "mapping_status",
+        "mapping_confidence",
+        "mapping_rule",
+        "cluster_key",
+        "cluster_label",
+        "parent_region",
+        "bid_offer_pair_count",
+        "negative_bid_pair_count",
+        "negative_bid_available_flag",
+        "minimum_bid_gbp_per_mwh",
+        "maximum_bid_gbp_per_mwh",
+        "most_negative_bid_gbp_per_mwh",
+        "least_negative_bid_gbp_per_mwh",
+        "minimum_offer_gbp_per_mwh",
+        "maximum_offer_gbp_per_mwh",
+    ]
+    if raw_bid_offer_frame.empty:
+        return pd.DataFrame(columns=keep_columns)
+
+    frame = raw_bid_offer_frame.rename(
+        columns={
+            "dataset": "source_dataset",
+            "settlementDate": "settlement_date",
+            "settlementPeriod": "settlement_period",
+            "timeFrom": "interval_start_utc",
+            "timeTo": "interval_end_utc",
+            "pairId": "pair_id",
+            "offer": "offer_gbp_per_mwh",
+            "bid": "bid_gbp_per_mwh",
+            "bmUnit": "elexon_bm_unit",
+            "nationalGridBmUnit": "national_grid_bm_unit_from_fact",
+        }
+    ).copy()
+    frame["settlement_date"] = pd.to_datetime(frame["settlement_date"], errors="coerce").dt.date
+    frame["settlement_period"] = pd.to_numeric(frame["settlement_period"], errors="coerce").astype("Int64")
+    frame["interval_start_utc"] = pd.to_datetime(frame["interval_start_utc"], utc=True, errors="coerce")
+    frame["interval_end_utc"] = pd.to_datetime(frame["interval_end_utc"], utc=True, errors="coerce")
+    frame["interval_start_local"] = frame["interval_start_utc"].dt.tz_convert("Europe/London")
+    frame["interval_end_local"] = frame["interval_end_utc"].dt.tz_convert("Europe/London")
+    frame["pair_id"] = pd.to_numeric(frame["pair_id"], errors="coerce")
+    frame["offer_gbp_per_mwh"] = pd.to_numeric(frame["offer_gbp_per_mwh"], errors="coerce")
+    frame["bid_gbp_per_mwh"] = pd.to_numeric(frame["bid_gbp_per_mwh"], errors="coerce")
+    frame["negative_bid_flag"] = frame["bid_gbp_per_mwh"] < 0
+    frame["source_key"] = "BOD"
+    frame["source_label"] = "Elexon bid-offer data"
+    frame["target_is_proxy"] = False
+
+    dim_columns = [
+        "elexon_bm_unit",
+        "national_grid_bm_unit",
+        "bm_unit_name",
+        "lead_party_name",
+        "fuel_type",
+        "bm_unit_type",
+        "gsp_group_id",
+        "gsp_group_name",
+        "generation_capacity_mw",
+        "mapping_status",
+        "mapping_confidence",
+        "mapping_rule",
+        "cluster_key",
+        "cluster_label",
+        "parent_region",
+    ]
+    frame = frame.merge(dim_bmu_asset[dim_columns], on="elexon_bm_unit", how="left")
+
+    group_columns = [
+        "settlement_date",
+        "settlement_period",
+        "interval_start_local",
+        "interval_end_local",
+        "interval_start_utc",
+        "interval_end_utc",
+        "source_key",
+        "source_label",
+        "source_dataset",
+        "target_is_proxy",
+        "elexon_bm_unit",
+        "national_grid_bm_unit",
+        "bm_unit_name",
+        "lead_party_name",
+        "fuel_type",
+        "bm_unit_type",
+        "gsp_group_id",
+        "gsp_group_name",
+        "generation_capacity_mw",
+        "mapping_status",
+        "mapping_confidence",
+        "mapping_rule",
+        "cluster_key",
+        "cluster_label",
+        "parent_region",
+    ]
+    aggregated = (
+        frame.groupby(group_columns, dropna=False, as_index=False)
+        .agg(
+            bid_offer_pair_count=("pair_id", "count"),
+            negative_bid_pair_count=("negative_bid_flag", "sum"),
+            minimum_bid_gbp_per_mwh=("bid_gbp_per_mwh", "min"),
+            maximum_bid_gbp_per_mwh=("bid_gbp_per_mwh", "max"),
+            minimum_offer_gbp_per_mwh=("offer_gbp_per_mwh", "min"),
+            maximum_offer_gbp_per_mwh=("offer_gbp_per_mwh", "max"),
+            most_negative_bid_gbp_per_mwh=(
+                "bid_gbp_per_mwh",
+                lambda values: float(pd.Series(values)[pd.Series(values) < 0].min())
+                if bool((pd.Series(values) < 0).any())
+                else np.nan,
+            ),
+            least_negative_bid_gbp_per_mwh=(
+                "bid_gbp_per_mwh",
+                lambda values: float(pd.Series(values)[pd.Series(values) < 0].max())
+                if bool((pd.Series(values) < 0).any())
+                else np.nan,
+            ),
+        )
+    )
+    aggregated["negative_bid_available_flag"] = aggregated["negative_bid_pair_count"] > 0
+    return aggregated[keep_columns].sort_values(["interval_start_utc", "elexon_bm_unit"]).reset_index(drop=True)
+
+
 def materialize_bmu_dispatch_history(
     start_date: dt.date,
     end_date: dt.date,
@@ -453,17 +632,20 @@ def materialize_bmu_dispatch_history(
     reference = fetch_bmu_reference_all()
     dim_bmu_asset = build_dim_bmu_asset(reference)
     raw_acceptance = fetch_boalf_acceptances(dim_bmu_asset["elexon_bm_unit"].tolist(), start_date, end_date)
+    raw_bid_offer = fetch_bod_bid_offers(dim_bmu_asset["elexon_bm_unit"].tolist(), start_date, end_date)
     fact_bmu_acceptance_event = build_fact_bmu_acceptance_event(dim_bmu_asset, raw_acceptance)
     fact_bmu_dispatch_acceptance_half_hourly = build_fact_bmu_dispatch_acceptance_half_hourly(
         fact_bmu_acceptance_event,
         start_date=start_date,
         end_date=end_date,
     )
+    fact_bmu_bid_offer_half_hourly = build_fact_bmu_bid_offer_half_hourly(dim_bmu_asset, raw_bid_offer)
 
     frames = {
         "dim_bmu_asset": dim_bmu_asset,
         "fact_bmu_acceptance_event": fact_bmu_acceptance_event,
         "fact_bmu_dispatch_acceptance_half_hourly": fact_bmu_dispatch_acceptance_half_hourly,
+        "fact_bmu_bid_offer_half_hourly": fact_bmu_bid_offer_half_hourly,
     }
 
     target_dir = Path(output_dir)

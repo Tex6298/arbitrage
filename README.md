@@ -17,7 +17,7 @@ Key behavior:
 - Adds a formal exploration plan in `exploration_plan.py` for historical data, map layers, backtests, and drift checks
 - Adds `curtailment_signals.py` to materialize the first three historical tables for backtesting
 - Adds `bmu_generation.py` to materialize BMU standing data and first-pass B1610 generation history
-- Adds `bmu_dispatch.py` to materialize BOALF dispatch acceptances for BMU-level dispatch truth
+- Adds `bmu_dispatch.py` to materialize BOALF dispatch acceptances plus BOD bid-offer evidence for BMU-level dispatch expansion
 - Adds `weather_history.py` to materialize observed anchor, cluster, and parent-region weather history
 - Adds `bmu_physical.py`, `bmu_availability.py`, and `curtailment_truth.py` to materialize a first-pass BMU lost-energy truth layer
 - Scores routes leg-by-leg and blocks a route when any border leg is underwater
@@ -95,7 +95,7 @@ Key behavior:
      --bmu-output-dir bmu_history
    ```
 
-10. Materialize BMU dispatch acceptances and the first half-hour dispatch-truth layer:
+10. Materialize BMU dispatch acceptances, bid-offer evidence, and the first half-hour dispatch layer:
 
    ```bash
    python inline_arbitrage_live.py ^
@@ -168,12 +168,20 @@ Key behavior:
 - `bmu_dispatch.py` now materializes:
   - `fact_bmu_acceptance_event`
   - `fact_bmu_dispatch_acceptance_half_hourly`
-- `fact_bmu_dispatch_acceptance_half_hourly` is dispatch truth, not lost-energy truth. Its
+- `fact_bmu_bid_offer_half_hourly`
+- `fact_bmu_dispatch_acceptance_half_hourly` is direct dispatch truth, not lost-energy truth. Its
   `accepted_down_delta_mwh_lower_bound` field is intentionally a lower-bound dispatch metric
   because BOALF gives accepted levels, not the full no-constraint counterfactual.
+- `fact_bmu_bid_offer_half_hourly` is not dispatch truth. It is an evidence layer from `BOD`
+  that flags negative bid availability and carries price diagnostics so PN-QPN gaps can be used
+  as a second dispatch-evidence tier without pretending `BOD` is an acceptance feed.
 - On March 10, 2026, the Elexon v1 endpoint returned data for `BOALF` while the plain `BOAL`
   path returned `404`, so the dispatch materializer is standardized on `BOALF`.
+- On the same March 10, 2026 probe, `BOD` returned rows for wind BMUs while `NTO` and `NTB`
+  were empty on the sample, so the first dispatch expansion is `BOALF + BOD + PN/QPN`, not
+  a notice-to-deliver path.
 - `curtailment_truth.py` now materializes:
+  - `fact_bmu_bid_offer_half_hourly`
   - `fact_bmu_physical_position_half_hourly`
   - `fact_bmu_availability_half_hourly`
   - `fact_bmu_curtailment_truth_half_hourly`
@@ -189,10 +197,17 @@ Key behavior:
   - `dispatch_only` rows when dispatch truth exists but a lost-energy estimate is not valid
   - `physical_baseline` rows when PN or QPN provides a valid half-hour counterfactual
   - `weather_calibrated` rows only when BMU, cluster, or parent-region weather power curves can upgrade an otherwise invalid row
+- The truth table now also carries explicit dispatch-source tiers:
+  - `acceptance_only` when BOALF alone supports the dispatch row
+  - `physical_inference` when a nearby BOALF down-acceptance window plus a negative `BOD` bid and positive `PN-QPN` gap create a dispatch row with no same-half-hour BOALF acceptance
+  - `acceptance_plus_physical_inference` when the PN-QPN gap materially exceeds the BOALF lower bound inside that BOALF-triggered window
+- The active dispatch quantity for QA and profiles is now `dispatch_down_evidence_mwh_lower_bound`.
+  The original BOALF-only field `accepted_down_delta_mwh_lower_bound` is still preserved as raw
+  acceptance truth so the expansion remains auditable.
 - The truth table now also carries explicit `counterfactual_invalid_reason` and `lost_energy_block_reason` fields so failed capture is diagnosable instead of just silent.
 - The three reconciliation QA tables are the main debugging surface for target completeness:
-  - `fact_curtailment_reconciliation_daily` shows both raw NESO-total and wind-only QA reconciliation, dispatch coverage, and the dominant block reason
-  - `fact_dispatch_alignment_daily` shows whether blocked dispatch could materially close the QA-target gap, or whether the current dispatch source is simply too small
+  - `fact_curtailment_reconciliation_daily` shows both raw NESO-total and wind-only QA reconciliation, with BOALF acceptance and physical-inference dispatch split out separately
+  - `fact_dispatch_alignment_daily` shows whether blocked dispatch could materially close the QA-target gap, and how much of the dispatch surface is still coming from BOALF versus PN-QPN plus BOD inference
   - `fact_dispatch_alignment_bmu_daily` shows which BMUs are fully estimated, partially blocked, or fully blocked, with blocked lower-bound MWh split by reason
   - `fact_curtailment_gap_reason_daily` breaks each day down by loss-estimate failure reason
   - `fact_bmu_curtailment_gap_bmu_daily` shows which BMUs account for the biggest dispatch-to-lost-energy gap

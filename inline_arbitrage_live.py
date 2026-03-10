@@ -484,7 +484,7 @@ def main() -> int:
     parser.add_argument(
         "--materialize-bmu-dispatch",
         action="store_true",
-        help="Fetch and save BOALF acceptance history plus half-hour BMU dispatch-acceptance facts, then exit",
+        help="Fetch and save BOALF acceptance history, BOD bid-offer evidence, and half-hour BMU dispatch facts, then exit",
     )
     parser.add_argument("--dispatch-start", help="BMU dispatch materialization start date, inclusive (YYYY-MM-DD)")
     parser.add_argument("--dispatch-end", help="BMU dispatch materialization end date, inclusive (YYYY-MM-DD)")

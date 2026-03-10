@@ -14,7 +14,9 @@ from bmu_availability import (
 )
 from bmu_dispatch import (
     build_fact_bmu_acceptance_event,
+    build_fact_bmu_bid_offer_half_hourly,
     build_fact_bmu_dispatch_acceptance_half_hourly,
+    fetch_bod_bid_offers,
     fetch_boalf_acceptances,
 )
 from bmu_generation import (
@@ -35,6 +37,7 @@ WEATHER_METHODS = {
     "cluster_weather_power_curve",
     "parent_region_weather_power_curve",
 }
+PHYSICAL_DISPATCH_EXPANSION_WINDOW_PERIODS = 2
 
 
 def _scheme_year_label(value: dt.date) -> str:
@@ -331,6 +334,23 @@ def _safe_target_ratio(numerator: pd.Series, denominator: pd.Series) -> pd.Serie
     )
 
 
+def _append_lineage_token(frame: pd.DataFrame, mask: pd.Series, token: str) -> None:
+    effective_mask = mask.fillna(False).astype(bool)
+    if not bool(effective_mask.any()):
+        return
+    current = frame.loc[effective_mask, "source_lineage"].fillna("")
+    needs_token = ~current.str.contains(rf"(?:^|\|){token}(?:\||$)", regex=True)
+    if not bool(needs_token.any()):
+        return
+    target_index = current.index[needs_token]
+    current_subset = current.loc[target_index]
+    frame.loc[target_index, "source_lineage"] = np.where(
+        current_subset.eq(""),
+        token,
+        current_subset + f"|{token}",
+    )
+
+
 def _build_reconciliation_view(
     estimated_daily: pd.DataFrame,
     fact_constraint_daily: pd.DataFrame,
@@ -528,9 +548,16 @@ def _ensure_truth_diagnostic_columns(frame: pd.DataFrame) -> pd.DataFrame:
         "physical_consistency_flag": True,
         "lost_energy_mwh": 0.0,
         "accepted_down_delta_mwh_lower_bound": 0.0,
+        "dispatch_down_evidence_mwh_lower_bound": 0.0,
+        "physical_dispatch_down_gap_mwh": 0.0,
+        "physical_dispatch_down_increment_mwh_lower_bound": 0.0,
         "dispatch_truth_flag": False,
         "lost_energy_estimate_flag": False,
         "counterfactual_valid_flag": False,
+        "negative_bid_available_flag": False,
+        "negative_bid_pair_count": 0,
+        "dispatch_acceptance_window_flag": False,
+        "dispatch_truth_source_tier": "none",
     }
     for column, default_value in defaults.items():
         if column not in prepared.columns:
@@ -552,6 +579,8 @@ def _ensure_truth_diagnostic_columns(frame: pd.DataFrame) -> pd.DataFrame:
         "physical_baseline_source_dataset",
         "weather_scope_key",
         "weather_wind_speed_100m_ms",
+        "most_negative_bid_gbp_per_mwh",
+        "least_negative_bid_gbp_per_mwh",
     ]
     for column in nullable_columns:
         if column not in prepared.columns:
@@ -570,6 +599,7 @@ def _ensure_truth_diagnostic_columns(frame: pd.DataFrame) -> pd.DataFrame:
     _backfill_alias("reconciliation_abs_error_mwh", "raw_reconciliation_abs_error_mwh")
     _backfill_alias("reconciliation_relative_error", "raw_reconciliation_relative_error")
     _backfill_alias("reconciliation_status", "raw_reconciliation_status", default_value="warn")
+    _backfill_alias("dispatch_down_evidence_mwh_lower_bound", "accepted_down_delta_mwh_lower_bound", default_value=0.0)
     if "qa_target_definition" not in prepared.columns:
         prepared["qa_target_definition"] = pd.NA
     if "gb_daily_qa_target_mwh" not in prepared.columns:
@@ -608,10 +638,13 @@ def build_fact_curtailment_reconciliation_daily(frame: pd.DataFrame) -> pd.DataF
                 "reconciliation_status",
                 "dispatch_half_hour_count",
                 "distinct_dispatch_bmu_count",
+                "accepted_dispatch_down_mwh_lower_bound",
+                "physical_dispatch_down_increment_mwh_lower_bound",
                 "dispatch_down_mwh_lower_bound",
                 "lost_energy_estimate_half_hour_count",
                 "physical_baseline_row_count",
                 "weather_calibrated_row_count",
+                "dispatch_physical_inference_row_count",
                 "dispatch_available_row_count",
                 "dispatch_unknown_availability_row_count",
                 "dispatch_outage_row_count",
@@ -647,8 +680,16 @@ def build_fact_curtailment_reconciliation_daily(frame: pd.DataFrame) -> pd.DataF
         reconciliation_status=("reconciliation_status", _first_mode),
         dispatch_half_hour_count=("dispatch_truth_flag", lambda values: int(pd.Series(values).fillna(False).astype(bool).sum())),
         distinct_dispatch_bmu_count=("elexon_bm_unit", lambda values: int(frame.loc[values.index, "elexon_bm_unit"][dispatch_mask.loc[values.index]].nunique())),
-        dispatch_down_mwh_lower_bound=(
+        accepted_dispatch_down_mwh_lower_bound=(
             "accepted_down_delta_mwh_lower_bound",
+            lambda values: float(pd.Series(values)[dispatch_mask.loc[values.index]].fillna(0.0).sum()),
+        ),
+        physical_dispatch_down_increment_mwh_lower_bound=(
+            "physical_dispatch_down_increment_mwh_lower_bound",
+            lambda values: float(pd.Series(values)[dispatch_mask.loc[values.index]].fillna(0.0).sum()),
+        ),
+        dispatch_down_mwh_lower_bound=(
+            "dispatch_down_evidence_mwh_lower_bound",
             lambda values: float(pd.Series(values)[dispatch_mask.loc[values.index]].fillna(0.0).sum()),
         ),
         lost_energy_estimate_half_hour_count=(
@@ -657,6 +698,12 @@ def build_fact_curtailment_reconciliation_daily(frame: pd.DataFrame) -> pd.DataF
         ),
         physical_baseline_row_count=("truth_tier", lambda values: int(pd.Series(values).eq("physical_baseline").sum())),
         weather_calibrated_row_count=("truth_tier", lambda values: int(pd.Series(values).eq("weather_calibrated").sum())),
+        dispatch_physical_inference_row_count=(
+            "dispatch_truth_source_tier",
+            lambda values: int(
+                pd.Series(values).isin(["physical_inference", "acceptance_plus_physical_inference"]).sum()
+            ),
+        ),
         dispatch_available_row_count=(
             "availability_state",
             lambda values: int(((pd.Series(values) == "available") & dispatch_mask.loc[values.index]).sum()),
@@ -723,6 +770,8 @@ def build_fact_dispatch_alignment_daily(frame: pd.DataFrame) -> pd.DataFrame:
         "gb_daily_qa_target_mwh",
         "gb_daily_estimated_lost_energy_mwh",
         "qa_target_shortfall_mwh",
+        "accepted_dispatch_down_mwh_lower_bound",
+        "physical_dispatch_down_increment_mwh_lower_bound",
         "total_dispatch_down_mwh_lower_bound",
         "estimated_dispatch_half_hour_count",
         "blocked_dispatch_half_hour_count",
@@ -768,19 +817,27 @@ def build_fact_dispatch_alignment_daily(frame: pd.DataFrame) -> pd.DataFrame:
         qa_target_definition=("qa_target_definition", _first_mode),
         gb_daily_qa_target_mwh=("gb_daily_qa_target_mwh", "max"),
         gb_daily_estimated_lost_energy_mwh=("gb_daily_estimated_lost_energy_mwh", "max"),
-        total_dispatch_down_mwh_lower_bound=("accepted_down_delta_mwh_lower_bound", lambda values: float(pd.Series(values).fillna(0.0).sum())),
+        accepted_dispatch_down_mwh_lower_bound=("accepted_down_delta_mwh_lower_bound", lambda values: float(pd.Series(values).fillna(0.0).sum())),
+        physical_dispatch_down_increment_mwh_lower_bound=(
+            "physical_dispatch_down_increment_mwh_lower_bound",
+            lambda values: float(pd.Series(values).fillna(0.0).sum()),
+        ),
+        total_dispatch_down_mwh_lower_bound=(
+            "dispatch_down_evidence_mwh_lower_bound",
+            lambda values: float(pd.Series(values).fillna(0.0).sum()),
+        ),
         estimated_dispatch_half_hour_count=("lost_energy_estimate_flag", lambda values: int(pd.Series(values).fillna(False).astype(bool).sum())),
         blocked_dispatch_half_hour_count=("lost_energy_estimate_flag", lambda values: int((~pd.Series(values).fillna(False).astype(bool)).sum())),
         estimated_dispatch_down_mwh_lower_bound=(
-            "accepted_down_delta_mwh_lower_bound",
+            "dispatch_down_evidence_mwh_lower_bound",
             lambda values: float(pd.Series(values)[estimated_mask.loc[values.index]].fillna(0.0).sum()),
         ),
         blocked_dispatch_down_mwh_lower_bound=(
-            "accepted_down_delta_mwh_lower_bound",
+            "dispatch_down_evidence_mwh_lower_bound",
             lambda values: float(pd.Series(values)[blocked_mask.loc[values.index]].fillna(0.0).sum()),
         ),
         blocked_outage_dispatch_down_mwh_lower_bound=(
-            "accepted_down_delta_mwh_lower_bound",
+            "dispatch_down_evidence_mwh_lower_bound",
             lambda values: float(
                 pd.Series(values)[blocked_mask.loc[values.index] & dispatch.loc[values.index, "lost_energy_block_reason"].eq("outage")]
                 .fillna(0.0)
@@ -788,7 +845,7 @@ def build_fact_dispatch_alignment_daily(frame: pd.DataFrame) -> pd.DataFrame:
             ),
         ),
         blocked_availability_unknown_dispatch_down_mwh_lower_bound=(
-            "accepted_down_delta_mwh_lower_bound",
+            "dispatch_down_evidence_mwh_lower_bound",
             lambda values: float(
                 pd.Series(values)[blocked_mask.loc[values.index] & dispatch.loc[values.index, "lost_energy_block_reason"].eq("availability_unknown")]
                 .fillna(0.0)
@@ -796,7 +853,7 @@ def build_fact_dispatch_alignment_daily(frame: pd.DataFrame) -> pd.DataFrame:
             ),
         ),
         blocked_physical_below_generation_dispatch_down_mwh_lower_bound=(
-            "accepted_down_delta_mwh_lower_bound",
+            "dispatch_down_evidence_mwh_lower_bound",
             lambda values: float(
                 pd.Series(values)[blocked_mask.loc[values.index] & dispatch.loc[values.index, "lost_energy_block_reason"].eq("physical_below_generation")]
                 .fillna(0.0)
@@ -804,7 +861,7 @@ def build_fact_dispatch_alignment_daily(frame: pd.DataFrame) -> pd.DataFrame:
             ),
         ),
         blocked_physical_inconsistent_dispatch_down_mwh_lower_bound=(
-            "accepted_down_delta_mwh_lower_bound",
+            "dispatch_down_evidence_mwh_lower_bound",
             lambda values: float(
                 pd.Series(values)[blocked_mask.loc[values.index] & dispatch.loc[values.index, "lost_energy_block_reason"].eq("physical_inconsistent")]
                 .fillna(0.0)
@@ -812,15 +869,15 @@ def build_fact_dispatch_alignment_daily(frame: pd.DataFrame) -> pd.DataFrame:
             ),
         ),
         mapped_dispatch_down_mwh_lower_bound=(
-            "accepted_down_delta_mwh_lower_bound",
+            "dispatch_down_evidence_mwh_lower_bound",
             lambda values: float(pd.Series(values)[mapped_mask.loc[values.index]].fillna(0.0).sum()),
         ),
         region_only_dispatch_down_mwh_lower_bound=(
-            "accepted_down_delta_mwh_lower_bound",
+            "dispatch_down_evidence_mwh_lower_bound",
             lambda values: float(pd.Series(values)[region_only_mask.loc[values.index]].fillna(0.0).sum()),
         ),
         unmapped_dispatch_down_mwh_lower_bound=(
-            "accepted_down_delta_mwh_lower_bound",
+            "dispatch_down_evidence_mwh_lower_bound",
             lambda values: float(pd.Series(values)[unmapped_mask.loc[values.index]].fillna(0.0).sum()),
         ),
         mapped_estimated_lost_energy_mwh=(
@@ -911,6 +968,7 @@ def build_fact_dispatch_alignment_bmu_daily(frame: pd.DataFrame) -> pd.DataFrame
         "estimated_dispatch_half_hour_count",
         "blocked_dispatch_half_hour_count",
         "accepted_down_delta_mwh_lower_bound",
+        "physical_dispatch_down_increment_mwh_lower_bound",
         "estimated_dispatch_down_mwh_lower_bound",
         "blocked_dispatch_down_mwh_lower_bound",
         "blocked_outage_dispatch_down_mwh_lower_bound",
@@ -949,16 +1007,20 @@ def build_fact_dispatch_alignment_bmu_daily(frame: pd.DataFrame) -> pd.DataFrame
         estimated_dispatch_half_hour_count=("lost_energy_estimate_flag", lambda values: int(pd.Series(values).fillna(False).astype(bool).sum())),
         blocked_dispatch_half_hour_count=("lost_energy_estimate_flag", lambda values: int((~pd.Series(values).fillna(False).astype(bool)).sum())),
         accepted_down_delta_mwh_lower_bound=("accepted_down_delta_mwh_lower_bound", lambda values: float(pd.Series(values).fillna(0.0).sum())),
+        physical_dispatch_down_increment_mwh_lower_bound=(
+            "physical_dispatch_down_increment_mwh_lower_bound",
+            lambda values: float(pd.Series(values).fillna(0.0).sum()),
+        ),
         estimated_dispatch_down_mwh_lower_bound=(
-            "accepted_down_delta_mwh_lower_bound",
+            "dispatch_down_evidence_mwh_lower_bound",
             lambda values: float(pd.Series(values)[estimated_mask.loc[values.index]].fillna(0.0).sum()),
         ),
         blocked_dispatch_down_mwh_lower_bound=(
-            "accepted_down_delta_mwh_lower_bound",
+            "dispatch_down_evidence_mwh_lower_bound",
             lambda values: float(pd.Series(values)[blocked_mask.loc[values.index]].fillna(0.0).sum()),
         ),
         blocked_outage_dispatch_down_mwh_lower_bound=(
-            "accepted_down_delta_mwh_lower_bound",
+            "dispatch_down_evidence_mwh_lower_bound",
             lambda values: float(
                 pd.Series(values)[blocked_mask.loc[values.index] & dispatch.loc[values.index, "lost_energy_block_reason"].eq("outage")]
                 .fillna(0.0)
@@ -966,7 +1028,7 @@ def build_fact_dispatch_alignment_bmu_daily(frame: pd.DataFrame) -> pd.DataFrame
             ),
         ),
         blocked_availability_unknown_dispatch_down_mwh_lower_bound=(
-            "accepted_down_delta_mwh_lower_bound",
+            "dispatch_down_evidence_mwh_lower_bound",
             lambda values: float(
                 pd.Series(values)[blocked_mask.loc[values.index] & dispatch.loc[values.index, "lost_energy_block_reason"].eq("availability_unknown")]
                 .fillna(0.0)
@@ -974,7 +1036,7 @@ def build_fact_dispatch_alignment_bmu_daily(frame: pd.DataFrame) -> pd.DataFrame
             ),
         ),
         blocked_physical_below_generation_dispatch_down_mwh_lower_bound=(
-            "accepted_down_delta_mwh_lower_bound",
+            "dispatch_down_evidence_mwh_lower_bound",
             lambda values: float(
                 pd.Series(values)[blocked_mask.loc[values.index] & dispatch.loc[values.index, "lost_energy_block_reason"].eq("physical_below_generation")]
                 .fillna(0.0)
@@ -982,7 +1044,7 @@ def build_fact_dispatch_alignment_bmu_daily(frame: pd.DataFrame) -> pd.DataFrame
             ),
         ),
         blocked_physical_inconsistent_dispatch_down_mwh_lower_bound=(
-            "accepted_down_delta_mwh_lower_bound",
+            "dispatch_down_evidence_mwh_lower_bound",
             lambda values: float(
                 pd.Series(values)[blocked_mask.loc[values.index] & dispatch.loc[values.index, "lost_energy_block_reason"].eq("physical_inconsistent")]
                 .fillna(0.0)
@@ -1021,6 +1083,7 @@ def build_fact_curtailment_gap_reason_daily(frame: pd.DataFrame) -> pd.DataFrame
                 "dispatch_half_hour_count",
                 "distinct_bmu_count",
                 "accepted_down_delta_mwh_lower_bound",
+                "dispatch_down_mwh_lower_bound",
                 "lost_energy_mwh",
                 "share_of_dispatch_rows",
                 "share_of_dispatch_down_mwh_lower_bound",
@@ -1037,6 +1100,7 @@ def build_fact_curtailment_gap_reason_daily(frame: pd.DataFrame) -> pd.DataFrame
                 "dispatch_half_hour_count",
                 "distinct_bmu_count",
                 "accepted_down_delta_mwh_lower_bound",
+                "dispatch_down_mwh_lower_bound",
                 "lost_energy_mwh",
                 "share_of_dispatch_rows",
                 "share_of_dispatch_down_mwh_lower_bound",
@@ -1047,11 +1111,12 @@ def build_fact_curtailment_gap_reason_daily(frame: pd.DataFrame) -> pd.DataFrame
         dispatch_half_hour_count=("dispatch_truth_flag", lambda values: int(pd.Series(values).fillna(False).astype(bool).sum())),
         distinct_bmu_count=("elexon_bm_unit", "nunique"),
         accepted_down_delta_mwh_lower_bound=("accepted_down_delta_mwh_lower_bound", lambda values: float(pd.Series(values).fillna(0.0).sum())),
+        dispatch_down_mwh_lower_bound=("dispatch_down_evidence_mwh_lower_bound", lambda values: float(pd.Series(values).fillna(0.0).sum())),
         lost_energy_mwh=("lost_energy_mwh", lambda values: float(pd.Series(values).fillna(0.0).sum())),
     )
     daily_totals = grouped.groupby("settlement_date", as_index=False).agg(
         total_dispatch_half_hour_count=("dispatch_half_hour_count", "sum"),
-        total_dispatch_down_mwh_lower_bound=("accepted_down_delta_mwh_lower_bound", "sum"),
+        total_dispatch_down_mwh_lower_bound=("dispatch_down_mwh_lower_bound", "sum"),
     )
     grouped = grouped.merge(daily_totals, on="settlement_date", how="left")
     grouped["share_of_dispatch_rows"] = np.where(
@@ -1061,11 +1126,11 @@ def build_fact_curtailment_gap_reason_daily(frame: pd.DataFrame) -> pd.DataFrame
     )
     grouped["share_of_dispatch_down_mwh_lower_bound"] = np.where(
         grouped["total_dispatch_down_mwh_lower_bound"] > 0,
-        grouped["accepted_down_delta_mwh_lower_bound"] / grouped["total_dispatch_down_mwh_lower_bound"],
+        grouped["dispatch_down_mwh_lower_bound"] / grouped["total_dispatch_down_mwh_lower_bound"],
         np.nan,
     )
     return grouped.drop(columns=["total_dispatch_half_hour_count", "total_dispatch_down_mwh_lower_bound"]).sort_values(
-        ["settlement_date", "accepted_down_delta_mwh_lower_bound"],
+        ["settlement_date", "dispatch_down_mwh_lower_bound"],
         ascending=[True, False],
     ).reset_index(drop=True)
 
@@ -1084,6 +1149,7 @@ def build_fact_bmu_curtailment_gap_bmu_daily(frame: pd.DataFrame) -> pd.DataFram
                 "dispatch_half_hour_count",
                 "lost_energy_estimate_half_hour_count",
                 "accepted_down_delta_mwh_lower_bound",
+                "dispatch_down_mwh_lower_bound",
                 "lost_energy_mwh",
                 "dispatch_minus_lost_energy_gap_mwh",
                 "primary_dispatch_block_reason",
@@ -1105,6 +1171,7 @@ def build_fact_bmu_curtailment_gap_bmu_daily(frame: pd.DataFrame) -> pd.DataFram
                 "dispatch_half_hour_count",
                 "lost_energy_estimate_half_hour_count",
                 "accepted_down_delta_mwh_lower_bound",
+                "dispatch_down_mwh_lower_bound",
                 "lost_energy_mwh",
                 "dispatch_minus_lost_energy_gap_mwh",
                 "primary_dispatch_block_reason",
@@ -1127,6 +1194,7 @@ def build_fact_bmu_curtailment_gap_bmu_daily(frame: pd.DataFrame) -> pd.DataFram
         dispatch_half_hour_count=("dispatch_truth_flag", lambda values: int(pd.Series(values).fillna(False).astype(bool).sum())),
         lost_energy_estimate_half_hour_count=("lost_energy_estimate_flag", lambda values: int(pd.Series(values).fillna(False).astype(bool).sum())),
         accepted_down_delta_mwh_lower_bound=("accepted_down_delta_mwh_lower_bound", lambda values: float(pd.Series(values).fillna(0.0).sum())),
+        dispatch_down_mwh_lower_bound=("dispatch_down_evidence_mwh_lower_bound", lambda values: float(pd.Series(values).fillna(0.0).sum())),
         lost_energy_mwh=("lost_energy_mwh", lambda values: float(pd.Series(values).fillna(0.0).sum())),
         primary_dispatch_block_reason=(
             "lost_energy_block_reason",
@@ -1134,10 +1202,10 @@ def build_fact_bmu_curtailment_gap_bmu_daily(frame: pd.DataFrame) -> pd.DataFram
         ),
     )
     grouped["dispatch_minus_lost_energy_gap_mwh"] = (
-        grouped["accepted_down_delta_mwh_lower_bound"] - grouped["lost_energy_mwh"]
+        grouped["dispatch_down_mwh_lower_bound"] - grouped["lost_energy_mwh"]
     )
     return grouped.sort_values(
-        ["settlement_date", "dispatch_minus_lost_energy_gap_mwh", "accepted_down_delta_mwh_lower_bound"],
+        ["settlement_date", "dispatch_minus_lost_energy_gap_mwh", "dispatch_down_mwh_lower_bound"],
         ascending=[True, False, False],
     ).reset_index(drop=True)
 
@@ -1152,6 +1220,7 @@ def build_fact_bmu_curtailment_truth_half_hourly(
     fact_weather_hourly: pd.DataFrame,
     start_date: dt.date,
     end_date: dt.date,
+    fact_bmu_bid_offer_half_hourly: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     frame = build_bmu_interval_spine(dim_bmu_asset, start_date, end_date)
     generation_columns = ["settlement_date", "settlement_period", "elexon_bm_unit", "generation_mwh"]
@@ -1172,8 +1241,12 @@ def build_fact_bmu_curtailment_truth_half_hourly(
         "acceptance_event_count",
         "distinct_acceptance_number_count",
     ]
+    dispatch_frame = fact_bmu_dispatch_acceptance_half_hourly.copy()
+    for column in dispatch_columns:
+        if column not in dispatch_frame.columns:
+            dispatch_frame[column] = np.nan
     frame = frame.merge(
-        fact_bmu_dispatch_acceptance_half_hourly[dispatch_columns],
+        dispatch_frame[dispatch_columns],
         on=["settlement_date", "settlement_period", "elexon_bm_unit"],
         how="left",
     )
@@ -1182,17 +1255,47 @@ def build_fact_bmu_curtailment_truth_half_hourly(
         "settlement_date",
         "settlement_period",
         "elexon_bm_unit",
+        "pn_mwh",
+        "qpn_mwh",
         "physical_baseline_source_dataset",
         "physical_baseline_mwh",
         "physical_consistency_flag",
         "counterfactual_method",
         "counterfactual_valid_flag",
     ]
+    physical_frame = fact_bmu_physical_position_half_hourly.copy()
+    for column in physical_columns:
+        if column not in physical_frame.columns:
+            physical_frame[column] = np.nan if column in {"pn_mwh", "qpn_mwh", "physical_baseline_mwh"} else pd.NA
     frame = frame.merge(
-        fact_bmu_physical_position_half_hourly[physical_columns],
+        physical_frame[physical_columns],
         on=["settlement_date", "settlement_period", "elexon_bm_unit"],
         how="left",
     )
+
+    if fact_bmu_bid_offer_half_hourly is None:
+        fact_bmu_bid_offer_half_hourly = pd.DataFrame()
+
+    bid_offer_columns = [
+        "settlement_date",
+        "settlement_period",
+        "elexon_bm_unit",
+        "negative_bid_pair_count",
+        "negative_bid_available_flag",
+        "most_negative_bid_gbp_per_mwh",
+        "least_negative_bid_gbp_per_mwh",
+    ]
+    if fact_bmu_bid_offer_half_hourly.empty:
+        frame["negative_bid_pair_count"] = 0
+        frame["negative_bid_available_flag"] = False
+        frame["most_negative_bid_gbp_per_mwh"] = np.nan
+        frame["least_negative_bid_gbp_per_mwh"] = np.nan
+    else:
+        frame = frame.merge(
+            fact_bmu_bid_offer_half_hourly[bid_offer_columns],
+            on=["settlement_date", "settlement_period", "elexon_bm_unit"],
+            how="left",
+        )
 
     availability_columns = [
         "settlement_date",
@@ -1203,8 +1306,12 @@ def build_fact_bmu_curtailment_truth_half_hourly(
         "availability_confidence",
         "uou_output_usable_mw",
     ]
+    availability_frame = fact_bmu_availability_half_hourly.copy()
+    for column in availability_columns:
+        if column not in availability_frame.columns:
+            availability_frame[column] = np.nan
     frame = frame.merge(
-        fact_bmu_availability_half_hourly[availability_columns],
+        availability_frame[availability_columns],
         on=["settlement_date", "settlement_period", "elexon_bm_unit"],
         how="left",
     )
@@ -1215,7 +1322,71 @@ def build_fact_bmu_curtailment_truth_half_hourly(
     frame["accepted_up_delta_mwh_lower_bound"] = pd.to_numeric(
         frame["accepted_up_delta_mwh_lower_bound"], errors="coerce"
     ).fillna(0.0)
-    frame["dispatch_truth_flag"] = frame["accepted_down_delta_mwh_lower_bound"] > 0
+    frame["pn_mwh"] = pd.to_numeric(frame["pn_mwh"], errors="coerce")
+    frame["qpn_mwh"] = pd.to_numeric(frame["qpn_mwh"], errors="coerce")
+    frame["negative_bid_pair_count"] = pd.to_numeric(frame["negative_bid_pair_count"], errors="coerce").fillna(0).astype(int)
+    frame["negative_bid_available_flag"] = (
+        frame["negative_bid_available_flag"].where(frame["negative_bid_available_flag"].notna(), False).astype(bool)
+    )
+    frame["most_negative_bid_gbp_per_mwh"] = pd.to_numeric(frame["most_negative_bid_gbp_per_mwh"], errors="coerce")
+    frame["least_negative_bid_gbp_per_mwh"] = pd.to_numeric(frame["least_negative_bid_gbp_per_mwh"], errors="coerce")
+    frame["physical_dispatch_down_gap_mwh"] = (
+        (frame["pn_mwh"] - frame["qpn_mwh"]).clip(lower=0.0)
+    )
+    frame.loc[frame["pn_mwh"].isna() | frame["qpn_mwh"].isna(), "physical_dispatch_down_gap_mwh"] = 0.0
+    frame = frame.sort_values(["elexon_bm_unit", "settlement_date", "settlement_period"]).reset_index(drop=True)
+    frame["dispatch_acceptance_window_flag"] = (
+        frame.groupby(["elexon_bm_unit", "settlement_date"])["accepted_down_delta_mwh_lower_bound"]
+        .transform(
+            lambda values: (
+                pd.Series(values)
+                .gt(0)
+                .astype(int)
+                .rolling(
+                    window=(PHYSICAL_DISPATCH_EXPANSION_WINDOW_PERIODS * 2) + 1,
+                    min_periods=1,
+                    center=True,
+                )
+                .max()
+                .astype(bool)
+            )
+        )
+    )
+    positive_physical_gap_mask = (
+        frame["counterfactual_valid_flag"].where(frame["counterfactual_valid_flag"].notna(), False).astype(bool)
+        & frame["generation_mwh"].notna()
+        & frame["physical_baseline_mwh"].notna()
+        & (frame["physical_baseline_mwh"] > frame["generation_mwh"] + 1e-6)
+        & frame["physical_consistency_flag"].where(frame["physical_consistency_flag"].notna(), False).astype(bool)
+    )
+    physical_inference_mask = (
+        frame["negative_bid_available_flag"]
+        & frame["dispatch_acceptance_window_flag"]
+        & positive_physical_gap_mask
+        & frame["physical_dispatch_down_gap_mwh"].gt(frame["accepted_down_delta_mwh_lower_bound"] + 1e-6)
+    )
+    frame["physical_dispatch_down_increment_mwh_lower_bound"] = 0.0
+    frame.loc[physical_inference_mask, "physical_dispatch_down_increment_mwh_lower_bound"] = (
+        frame.loc[physical_inference_mask, "physical_dispatch_down_gap_mwh"]
+        - frame.loc[physical_inference_mask, "accepted_down_delta_mwh_lower_bound"]
+    )
+    frame["dispatch_down_evidence_mwh_lower_bound"] = (
+        frame["accepted_down_delta_mwh_lower_bound"] + frame["physical_dispatch_down_increment_mwh_lower_bound"]
+    )
+    frame["dispatch_truth_source_tier"] = np.select(
+        [
+            frame["accepted_down_delta_mwh_lower_bound"].gt(0) & frame["physical_dispatch_down_increment_mwh_lower_bound"].gt(0),
+            frame["accepted_down_delta_mwh_lower_bound"].gt(0),
+            frame["physical_dispatch_down_increment_mwh_lower_bound"].gt(0),
+        ],
+        [
+            "acceptance_plus_physical_inference",
+            "acceptance_only",
+            "physical_inference",
+        ],
+        default="none",
+    )
+    frame["dispatch_truth_flag"] = frame["dispatch_down_evidence_mwh_lower_bound"] > 0
     frame["remit_active_flag"] = frame["remit_active_flag"].where(frame["remit_active_flag"].notna(), False).astype(bool)
     frame["availability_state"] = frame["availability_state"].fillna("unknown")
     frame["availability_confidence"] = frame["availability_confidence"].fillna("low")
@@ -1275,6 +1446,12 @@ def build_fact_bmu_curtailment_truth_half_hourly(
     frame.loc[frame["uou_output_usable_mw"].notna(), "source_lineage"] = (
         frame.loc[frame["uou_output_usable_mw"].notna(), "source_lineage"] + "|UOU2T14D"
     )
+    _append_lineage_token(frame, frame["negative_bid_available_flag"], "BOD")
+    _append_lineage_token(
+        frame,
+        frame["physical_dispatch_down_increment_mwh_lower_bound"].gt(0),
+        "balancing_physical",
+    )
 
     keep_columns = [
         "settlement_date",
@@ -1292,6 +1469,15 @@ def build_fact_bmu_curtailment_truth_half_hourly(
         "generation_mwh",
         "accepted_down_delta_mwh_lower_bound",
         "accepted_up_delta_mwh_lower_bound",
+        "dispatch_down_evidence_mwh_lower_bound",
+        "dispatch_truth_source_tier",
+        "physical_dispatch_down_gap_mwh",
+        "physical_dispatch_down_increment_mwh_lower_bound",
+        "dispatch_acceptance_window_flag",
+        "negative_bid_available_flag",
+        "negative_bid_pair_count",
+        "most_negative_bid_gbp_per_mwh",
+        "least_negative_bid_gbp_per_mwh",
         "availability_state",
         "remit_active_flag",
         "availability_confidence",
@@ -1373,12 +1559,14 @@ def materialize_bmu_curtailment_truth(
     fact_bmu_generation_half_hourly = build_fact_bmu_generation_half_hourly(dim_bmu_asset, raw_generation)
 
     raw_acceptance = fetch_boalf_acceptances(dim_bmu_asset["elexon_bm_unit"].tolist(), start_date, end_date)
+    raw_bid_offer = fetch_bod_bid_offers(dim_bmu_asset["elexon_bm_unit"].tolist(), start_date, end_date)
     fact_bmu_acceptance_event = build_fact_bmu_acceptance_event(dim_bmu_asset, raw_acceptance)
     fact_bmu_dispatch_acceptance_half_hourly = build_fact_bmu_dispatch_acceptance_half_hourly(
         fact_bmu_acceptance_event,
         start_date=start_date,
         end_date=end_date,
     )
+    fact_bmu_bid_offer_half_hourly = build_fact_bmu_bid_offer_half_hourly(dim_bmu_asset, raw_bid_offer)
 
     raw_physical = fetch_balancing_physical(dim_bmu_asset["elexon_bm_unit"].tolist(), start_date, end_date)
     fact_bmu_physical_position_half_hourly = build_fact_bmu_physical_position_half_hourly(
@@ -1424,6 +1612,7 @@ def materialize_bmu_curtailment_truth(
         dim_bmu_asset=dim_bmu_asset,
         fact_bmu_generation_half_hourly=fact_bmu_generation_half_hourly,
         fact_bmu_dispatch_acceptance_half_hourly=fact_bmu_dispatch_acceptance_half_hourly,
+        fact_bmu_bid_offer_half_hourly=fact_bmu_bid_offer_half_hourly,
         fact_bmu_physical_position_half_hourly=fact_bmu_physical_position_half_hourly,
         fact_bmu_availability_half_hourly=fact_bmu_availability_half_hourly,
         fact_constraint_daily=fact_constraint_daily,
@@ -1452,6 +1641,7 @@ def materialize_bmu_curtailment_truth(
     )
 
     frames = {
+        "fact_bmu_bid_offer_half_hourly": fact_bmu_bid_offer_half_hourly,
         "fact_bmu_physical_position_half_hourly": fact_bmu_physical_position_half_hourly,
         "fact_bmu_availability_half_hourly": fact_bmu_availability_half_hourly,
         "fact_bmu_curtailment_truth_half_hourly": fact_bmu_curtailment_truth_half_hourly,

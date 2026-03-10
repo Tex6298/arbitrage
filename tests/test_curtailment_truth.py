@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 from bmu_availability import build_fact_bmu_availability_half_hourly
-from bmu_dispatch import build_fact_bmu_dispatch_acceptance_half_hourly
+from bmu_dispatch import build_fact_bmu_bid_offer_half_hourly, build_fact_bmu_dispatch_acceptance_half_hourly
 from bmu_physical import build_fact_bmu_physical_position_half_hourly
 from bmu_truth_utils import build_half_hour_interval_frame
 from curtailment_signals import add_constraint_qa_columns
@@ -164,6 +164,43 @@ class CurtailmentTruthTests(unittest.TestCase):
         self.assertEqual(first_row["acceptance_event_count"], 2)
         self.assertEqual(first_row["distinct_acceptance_number_count"], 2)
         self.assertAlmostEqual(first_row["accepted_down_delta_mwh_lower_bound"], 2.0)
+
+    def test_bid_offer_half_hourly_marks_negative_bid_availability(self) -> None:
+        dim = sample_dim_bmu_asset()
+        raw_bid_offer = pd.DataFrame(
+            [
+                {
+                    "dataset": "BOD",
+                    "settlementDate": "2024-10-01",
+                    "settlementPeriod": 1,
+                    "timeFrom": "2024-09-30T23:00:00Z",
+                    "timeTo": "2024-09-30T23:30:00Z",
+                    "pairId": -1,
+                    "offer": 0.0,
+                    "bid": -65.0,
+                    "nationalGridBmUnit": "TEST-1",
+                    "bmUnit": "T_TEST-1",
+                },
+                {
+                    "dataset": "BOD",
+                    "settlementDate": "2024-10-01",
+                    "settlementPeriod": 1,
+                    "timeFrom": "2024-09-30T23:00:00Z",
+                    "timeTo": "2024-09-30T23:30:00Z",
+                    "pairId": 1,
+                    "offer": 1500.0,
+                    "bid": 100.0,
+                    "nationalGridBmUnit": "TEST-1",
+                    "bmUnit": "T_TEST-1",
+                },
+            ]
+        )
+        fact = build_fact_bmu_bid_offer_half_hourly(dim, raw_bid_offer)
+        first_row = fact.iloc[0]
+        self.assertTrue(bool(first_row["negative_bid_available_flag"]))
+        self.assertEqual(int(first_row["negative_bid_pair_count"]), 1)
+        self.assertAlmostEqual(float(first_row["most_negative_bid_gbp_per_mwh"]), -65.0)
+        self.assertAlmostEqual(float(first_row["least_negative_bid_gbp_per_mwh"]), -65.0)
 
     def test_physical_baseline_below_generation_is_invalid(self) -> None:
         dim = sample_dim_bmu_asset()
@@ -449,6 +486,121 @@ class CurtailmentTruthTests(unittest.TestCase):
         self.assertEqual(upgraded_row["truth_tier"], "weather_calibrated")
         self.assertTrue(bool(upgraded_row["lost_energy_estimate_flag"]))
         self.assertEqual(upgraded_row["counterfactual_method"], "bmu_weather_power_curve")
+
+    def test_dispatch_truth_expands_from_negative_bid_and_pn_qpn_gap(self) -> None:
+        dim = sample_dim_bmu_asset()
+        base_day = dt.date(2024, 10, 1)
+        generation = pd.DataFrame(
+            [
+                {
+                    "settlement_date": base_day,
+                    "settlement_period": 1,
+                    "elexon_bm_unit": "T_TEST-1",
+                    "generation_mwh": 4.0,
+                },
+                {
+                    "settlement_date": base_day,
+                    "settlement_period": 2,
+                    "elexon_bm_unit": "T_TEST-1",
+                    "generation_mwh": 7.0,
+                }
+            ]
+        )
+        dispatch = pd.DataFrame(
+            [
+                {
+                    "settlement_date": base_day,
+                    "settlement_period": 2,
+                    "elexon_bm_unit": "T_TEST-1",
+                    "accepted_down_delta_mwh_lower_bound": 0.5,
+                    "accepted_up_delta_mwh_lower_bound": 0.0,
+                    "dispatch_down_flag": True,
+                    "dispatch_up_flag": False,
+                    "acceptance_event_count": 1,
+                    "distinct_acceptance_number_count": 1,
+                }
+            ]
+        )
+        physical = pd.DataFrame(
+            [
+                {
+                    "settlement_date": base_day,
+                    "settlement_period": 1,
+                    "elexon_bm_unit": "T_TEST-1",
+                    "pn_mwh": 7.0,
+                    "qpn_mwh": 2.0,
+                    "physical_baseline_source_dataset": "PN",
+                    "physical_baseline_mwh": 7.0,
+                    "physical_consistency_flag": True,
+                    "counterfactual_method": "pn_qpn_physical_max",
+                    "counterfactual_valid_flag": True,
+                }
+            ]
+        )
+        bid_offer = pd.DataFrame(
+            [
+                {
+                    "settlement_date": base_day,
+                    "settlement_period": 1,
+                    "elexon_bm_unit": "T_TEST-1",
+                    "negative_bid_pair_count": 1,
+                    "negative_bid_available_flag": True,
+                    "most_negative_bid_gbp_per_mwh": -80.0,
+                    "least_negative_bid_gbp_per_mwh": -80.0,
+                }
+            ]
+        )
+        availability = pd.DataFrame(
+            [
+                {
+                    "settlement_date": base_day,
+                    "settlement_period": 1,
+                    "elexon_bm_unit": "T_TEST-1",
+                    "remit_active_flag": False,
+                    "availability_state": "available",
+                    "availability_confidence": "high",
+                    "uou_output_usable_mw": 20.0,
+                }
+            ]
+        )
+        constraints = add_constraint_qa_columns(
+            pd.DataFrame(
+                [
+                    {
+                        "date": base_day,
+                        "total_curtailment_mwh": 3.0,
+                        "voltage_constraints_volume_mwh": 3.0,
+                        "thermal_constraints_volume_mwh": 0.0,
+                        "increasing_system_inertia_volume_mwh": 0.0,
+                        "reducing_largest_loss_volume_mwh": 0.0,
+                    }
+                ]
+            )
+        )
+
+        fact = build_fact_bmu_curtailment_truth_half_hourly(
+            dim_bmu_asset=dim,
+            fact_bmu_generation_half_hourly=generation,
+            fact_bmu_dispatch_acceptance_half_hourly=dispatch,
+            fact_bmu_physical_position_half_hourly=physical,
+            fact_bmu_availability_half_hourly=availability,
+            fact_constraint_daily=constraints,
+            fact_weather_hourly=pd.DataFrame(),
+            start_date=base_day,
+            end_date=base_day,
+            fact_bmu_bid_offer_half_hourly=bid_offer,
+        )
+        first_row = fact.iloc[0]
+        self.assertTrue(bool(first_row["dispatch_truth_flag"]))
+        self.assertTrue(bool(first_row["dispatch_acceptance_window_flag"]))
+        self.assertEqual(first_row["dispatch_truth_source_tier"], "physical_inference")
+        self.assertAlmostEqual(float(first_row["physical_dispatch_down_gap_mwh"]), 5.0)
+        self.assertAlmostEqual(float(first_row["physical_dispatch_down_increment_mwh_lower_bound"]), 5.0)
+        self.assertAlmostEqual(float(first_row["dispatch_down_evidence_mwh_lower_bound"]), 5.0)
+        self.assertTrue(bool(first_row["research_profile_include"]))
+        self.assertTrue(bool(first_row["precision_profile_include"]))
+        self.assertIn("BOD", first_row["source_lineage"])
+        self.assertIn("balancing_physical", first_row["source_lineage"])
 
     def test_truth_profiles_follow_row_flags(self) -> None:
         dim = sample_dim_bmu_asset()

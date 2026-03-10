@@ -1,0 +1,1100 @@
+settlement_date,elexon_bm_unit,national_grid_bm_unit,cluster_key,cluster_label,parent_region,mapping_status,dispatch_half_hour_count,lost_energy_estimate_half_hour_count,accepted_down_delta_mwh_lower_bound,dispatch_down_mwh_lower_bound,lost_energy_mwh,primary_dispatch_block_reason,dispatch_minus_lost_energy_gap_mwh
+2024-10-01,T_TKNWW-1,TKNWW-1,humber_offshore,Humber Offshore,England/Wales,mapped,48,19,0.0,8298.5,84.686,physical_below_generation,8213.814
+2024-10-01,T_HOWBO-1,HOWBO-1,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,13,0.0,8256.5,283.843,physical_below_generation,7972.657
+2024-10-01,T_TKNEW-1,TKNEW-1,humber_offshore,Humber Offshore,England/Wales,mapped,48,3,0.0,7753.5,86.60699999999999,physical_below_generation,7666.893
+2024-10-01,T_HOWBO-2,HOWBO-2,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,42,0.0,8357.0,836.02,physical_below_generation,7520.98
+2024-10-01,T_EAAO-2,EAAO-2,east_anglia_offshore,East Anglia Offshore,England/Wales,mapped,48,9,0.0,7463.0,370.50300000000004,physical_below_generation,7092.497
+2024-10-01,T_HOWBO-3,HOWBO-3,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,4,0.0,6952.25,30.18000000000002,physical_below_generation,6922.07
+2024-10-01,T_HOWAO-3,HOWAO-3,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,9,0.0,7019.75,116.53699999999996,physical_below_generation,6903.213
+2024-10-01,T_HOWAO-2,HOWAO-2,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,16,0.0,7144.25,273.828,physical_below_generation,6870.4220000000005
+2024-10-01,T_HOWAO-1,HOWAO-1,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,26,0.0,7111.0,445.56899999999996,physical_below_generation,6665.4310000000005
+2024-10-01,T_WLNYO-3,WLNYO-3,,,,unmapped,48,0,0.0,6001.25,0.0,outage,6001.25
+2024-10-01,T_RCBKO-1,RCBKO-1,humber_offshore,Humber Offshore,England/Wales,mapped,48,18,2.8166666666666664,5652.25,197.12800000000004,physical_below_generation,5455.122
+2024-10-01,T_RCBKO-2,RCBKO-2,humber_offshore,Humber Offshore,England/Wales,mapped,48,17,1.3333333333333333,5465.5,251.902,physical_below_generation,5213.598
+2024-10-01,T_WLNYO-4,WLNYO-4,,,,unmapped,48,18,0.0,4041.75,164.39000000000004,physical_below_generation,3877.36
+2024-10-01,T_BRBEO-1,BRBEO-1,,,,unmapped,48,27,0.0,3744.75,258.26899999999995,physical_below_generation,3486.481
+2024-10-01,T_RMPNO-1,RMPNO-1,,,,unmapped,48,29,0.0,3748.0,269.48699999999997,physical_below_generation,3478.513
+2024-10-01,T_WTMSO-1,WTMSO-1,,,,unmapped,48,4,0.0,3330.5,7.3559999999999945,physical_below_generation,3323.1440000000002
+2024-10-01,T_MOWWO-1,MOWWO-1,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,0.0,3272.0,0.0,outage,3272.0
+2024-10-01,T_RMPNO-2,RMPNO-2,,,,unmapped,48,34,0.0,3507.5,239.40699999999998,physical_below_generation,3268.093
+2024-10-01,T_MOWWO-2,MOWWO-2,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,0.0,3020.5,0.0,outage,3020.5
+2024-10-01,T_LNCSW-2,LNCSO-2,,,,unmapped,48,8,0.0,3026.5,55.97200000000001,physical_below_generation,2970.528
+2024-10-01,T_LARYW-2,LARYO-2,,,,unmapped,48,12,0.0,2928.0,90.123,physical_below_generation,2837.877
+2024-10-01,T_LARYW-3,LARYO-3,,,,unmapped,48,13,0.0,2880.0,107.58099999999999,physical_below_generation,2772.419
+2024-10-01,T_LARYW-1,LARYO-1,,,,unmapped,48,10,0.0,2823.0,82.84000000000002,physical_below_generation,2740.16
+2024-10-01,T_LNCSW-1,LNCSO-1,,,,unmapped,48,15,0.0,2838.25,151.24699999999999,physical_below_generation,2687.003
+2024-10-01,T_LARYW-4,LARYO-4,,,,unmapped,48,10,0.0,2715.5,101.231,physical_below_generation,2614.2690000000002
+2024-10-01,T_SHRSW-1,SHRSO-1,,,,unmapped,47,15,0.0,2770.0,208.606,physical_below_generation,2561.3940000000002
+2024-10-01,T_HMGTO-1,HMGTO-1,,,,unmapped,48,5,0.0,2476.5,10.928999999999995,physical_below_generation,2465.571
+2024-10-01,T_HMGTO-2,HMGTO-2,,,,unmapped,48,12,0.0,2447.5,10.404000000000003,physical_below_generation,2437.096
+2024-10-01,T_SHRSW-2,SHRSO-2,,,,unmapped,47,16,0.0,2661.0,227.144,physical_below_generation,2433.8559999999998
+2024-10-01,T_WLNYO-2,WLNYO-2,,,,unmapped,48,22,0.0,2487.25,223.70999999999998,physical_below_generation,2263.54
+2024-10-01,T_MOWEO-3,MOWEO-3,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,0.0,2225.0,0.0,outage,2225.0
+2024-10-01,T_WHILW-1,WHILW-1,,,,unmapped,48,20,0.0,2361.5,144.19799999999998,physical_below_generation,2217.302
+2024-10-01,T_MOWEO-1,MOWEO-1,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,0.0,2017.0,0.0,outage,2017.0
+2024-10-01,T_KLGLW-1,KLGLW-1,,,,unmapped,48,31,0.0,2350.0,339.489,physical_below_generation,2010.511
+2024-10-01,T_MOWEO-2,MOWEO-2,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,0.0,1897.5,0.0,outage,1897.5
+2024-10-01,T_GRGBW-2,GRGBW-2,,,,unmapped,48,0,0.0,1868.5833333333335,0.0,physical_below_generation,1868.5833333333335
+2024-10-01,T_DDGNO-3,DDGNO-3,,,,unmapped,48,13,0.0,1896.5,63.91,physical_below_generation,1832.59
+2024-10-01,T_FALGW-1,FALGW-1,,,,unmapped,48,26,0.0,1972.25,157.58,physical_below_generation,1814.67
+2024-10-01,T_DDGNO-1,DDGNO-1,,,,unmapped,48,13,0.0,1858.5,66.83699999999999,physical_below_generation,1791.663
+2024-10-01,T_GANW-22,GAOFO-2,,,,unmapped,48,12,0.0,1686.5,48.28999999999999,physical_below_generation,1638.21
+2024-10-01,T_GANW-13,GAOFO-3,,,,unmapped,48,9,0.0,1674.0,41.449999999999996,physical_below_generation,1632.55
+2024-10-01,T_GANW-11,GAOFO-1,,,,unmapped,48,8,0.0,1673.0,43.30499999999999,physical_below_generation,1629.695
+2024-10-01,T_GANW-24,GAOFO-4,,,,unmapped,48,19,0.0,1677.5,50.690000000000005,physical_below_generation,1626.81
+2024-10-01,T_DDGNO-4,DDGNO-4,,,,unmapped,48,4,0.0,1648.0,36.788,physical_below_generation,1611.212
+2024-10-01,T_GRGBW-1,GRGBW-1,,,,unmapped,48,20,0.0,1633.1916666666666,35.63499999999999,physical_below_generation,1597.5566666666666
+2024-10-01,T_GNFSW-1,GNFSW-1,east_anglia_offshore,East Anglia Offshore,England/Wales,mapped,48,21,2.8166666666666664,1728.25,191.82999999999998,physical_below_generation,1536.42
+2024-10-01,T_GYMR-15,GYMRO-15,north_wales_offshore,North Wales Offshore,England/Wales,mapped,48,42,0.0,1896.5,395.39,physical_below_generation,1501.1100000000001
+2024-10-01,T_SGRWO-1,SGRWO-1,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,6,16.916666666666668,1548.4666666666667,112.39599999999999,physical_below_generation,1436.0706666666667
+2024-10-01,T_CRYRW-2,CRYRW-2,,,,unmapped,48,17,0.0,1581.0,167.788,physical_below_generation,1413.212
+2024-10-01,T_WDNSO-1,WDNSO-1,,,,unmapped,48,24,0.0,1488.0,161.144,physical_below_generation,1326.856
+2024-10-01,T_WDNSO-2,WDNSO-2,,,,unmapped,48,24,0.0,1488.0,214.32399999999998,physical_below_generation,1273.676
+2024-10-01,T_DDGNO-2,DDGNO-2,,,,unmapped,48,5,0.0,1304.5,42.499,physical_below_generation,1262.001
+2024-10-01,T_WLNYW-1,WLNYW-1,,,,unmapped,48,19,0.0,1340.25,109.15,physical_below_generation,1231.1
+2024-10-01,T_WHILW-2,WHILW-2,,,,unmapped,48,28,0.0,1442.0,212.60999999999999,physical_below_generation,1229.39
+2024-10-01,T_GYMR-17,GYMRO-17,north_wales_offshore,North Wales Offshore,England/Wales,mapped,48,44,0.0,1569.0,354.75,physical_below_generation,1214.25
+2024-10-01,T_AKGLW-3,AKGLW-3,,,,unmapped,48,42,0.0,1422.0,244.96900000000002,physical_below_generation,1177.031
+2024-10-01,T_HRSTW-1,HRSTW-1,,,,unmapped,48,36,0.0,1453.0,367.52,physical_below_generation,1085.48
+2024-10-01,T_THNTO-1,THNTO-1,,,,unmapped,48,6,0.0,1092.25,20.515,physical_below_generation,1071.735
+2024-10-01,T_THNTO-2,THNTO-2,,,,unmapped,48,6,0.0,1092.25,20.679000000000002,physical_below_generation,1071.571
+2024-10-01,E_BURBO,BURBW-1,,,,unmapped,48,23,0.0,1184.0,115.08500000000001,physical_below_generation,1068.915
+2024-10-01,T_SGRWO-6,SGRWO-6,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,4,30.900000000000002,1102.0,46.079999999999984,physical_below_generation,1055.92
+2024-10-01,T_AKGLW-2,AKGLW-2,,,,unmapped,48,0,0.0,1023.25,0.0,physical_below_generation,1023.25
+2024-10-01,T_SOKYW-1,SOKYW-1,,,,unmapped,48,0,0.0,974.25,0.0,physical_below_generation,974.25
+2024-10-01,T_GNFSW-2,GNFSW-2,east_anglia_offshore,East Anglia Offshore,England/Wales,mapped,48,16,1.6,1082.5,114.441,physical_below_generation,968.059
+2024-10-01,T_GYMR-26,GYMRO-26,north_wales_offshore,North Wales Offshore,England/Wales,mapped,48,45,0.0,1219.0,256.54999999999995,physical_below_generation,962.45
+2024-10-01,T_GYMR-28,GYMRO-28,north_wales_offshore,North Wales Offshore,England/Wales,mapped,48,0,0.0,871.0,0.0,outage,871.0
+2024-10-01,T_RREW-1,RREW-1,,,,unmapped,48,37,0.0,1068.0,264.35400000000004,physical_inconsistent,803.646
+2024-10-01,E_KINCW-1,KINCW-1,,,,unmapped,48,46,0.0,971.25,174.262,physical_below_generation,796.988
+2024-10-01,T_PNYCW-1,PNYCW-1,,,England/Wales,region_only,48,4,3.316666666666667,775.0,25.79,physical_below_generation,749.21
+2024-10-01,T_RRWW-1,RRWW-1,,,,unmapped,48,42,0.0,1060.5,321.62899999999996,physical_below_generation,738.8710000000001
+2024-10-01,T_WISTW-2,WISTW-2,,,,unmapped,48,32,0.0,833.75,181.14999999999998,physical_below_generation,652.6
+2024-10-01,T_SGRWO-5,SGRWO-5,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,28,3.1333333333333333,1123.1833333333334,487.853,physical_below_generation,635.3303333333333
+2024-10-01,T_KPMRW-1,KPMRW-1,,,,unmapped,48,27,0.0,690.25,65.14,physical_below_generation,625.11
+2024-10-01,T_BEINW-1,BEINW-1,,,,unmapped,48,29,0.0,725.5,111.14500000000001,physical_below_generation,614.355
+2024-10-01,T_KENNW-1,KENNW-1,,,,unmapped,48,45,0.0,808.75,201.205,physical_below_generation,607.545
+2024-10-01,T_BLKWW-1,BLKWW-1,,,,unmapped,48,28,0.0,689.25,99.181,physical_below_generation,590.069
+2024-10-01,T_BLLA-1,BLLA-1,,,,unmapped,48,33,0.0,718.0,128.488,physical_below_generation,589.512
+2024-10-01,T_SGRWO-4,SGRWO-4,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,28,6.783333333333332,1615.15,1041.4893333333334,physical_below_generation,573.6606666666667
+2024-10-01,T_MIDMW-1,MIDMW-1,,,,unmapped,48,29,0.0,591.0,72.45100000000001,physical_below_generation,518.549
+2024-10-01,T_BLLA-2,BLLA-2,,,,unmapped,48,32,0.0,574.5,78.52799999999999,physical_below_generation,495.972
+2024-10-01,T_SGRWO-3,SGRWO-3,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,22,10.233333333333334,1496.6333333333332,1022.3513333333333,physical_below_generation,474.2819999999999
+2024-10-01,E_HBHDW-1,HBHDW-1,,,,unmapped,48,38,0.0,540.0,92.345,physical_below_generation,447.655
+2024-10-01,T_OMNDW-1,OMNDO-1,,,,unmapped,48,4,0.0,437.25,5.58,physical_below_generation,431.67
+2024-10-01,T_WDRGW-1,WDRGW-1,,,,unmapped,48,18,0.0,488.75,59.942,physical_below_generation,428.808
+2024-10-01,T_KYPEW-1,KYPEW-1,,,,unmapped,32,14,0.0,458.25,31.070999999999998,physical_below_generation,427.179
+2024-10-01,T_SGRWO-2,SGRWO-2,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,23,4.15,794.7416666666666,389.7056666666666,physical_below_generation,405.03599999999994
+2024-10-01,T_ABRBO-1,ABRBO-1,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,0,0.0,404.75,0.0,physical_below_generation,404.75
+2024-10-01,T_TWSHW-1,TWSHW-1,,,,unmapped,48,41,0.0,552.75,150.84699999999998,physical_below_generation,401.903
+2024-10-01,T_MILWW-1,MILWW-1,,,,unmapped,48,31,0.0,571.25,177.64999999999998,physical_below_generation,393.6
+2024-10-01,E_GRGRW-1,GRGRW-1,,,,unmapped,48,38,0.0,491.5,101.66900000000001,physical_below_generation,389.831
+2024-10-01,T_SANQW-1,SANQW-1,,,,unmapped,48,33,0.0,429.75,48.346999999999994,physical_below_generation,381.403
+2024-10-01,T_BOWLW-1,BOWLW-1,,,,unmapped,48,29,0.0,441.0,67.544,physical_below_generation,373.456
+2024-10-01,T_AFTOW-1,AFTOW-1,,,,unmapped,48,5,0.0,367.5,3.3209999999999997,physical_below_generation,364.179
+2024-10-01,E_ASHWW-1,ASHWW-1,,,,unmapped,48,23,0.0,394.75,31.554000000000002,physical_below_generation,363.196
+2024-10-01,T_GLWSW-1,GLWSW-1,,,,unmapped,48,18,0.0,390.75,31.398,physical_below_generation,359.352
+2024-10-01,T_ARCHW-1,ARCHW-1,,,,unmapped,48,33,0.0,450.5,91.53,physical_below_generation,358.97
+2024-10-01,T_WHIHW-1,WHIHW-1,,,,unmapped,48,34,0.0,373.0,42.187,physical_below_generation,330.813
+2024-10-01,T_SAKNW-1,SAKNW-1,,,,unmapped,48,31,0.0,493.75,169.60399999999998,physical_below_generation,324.146
+2024-10-01,T_DALQW-1,DALQW-1,,,,unmapped,48,32,0.0,415.5,97.019,physical_below_generation,318.481
+2024-10-01,T_DUNGW-1,DUNGW-1,,,,unmapped,48,18,0.0,366.425,57.113,physical_below_generation,309.312
+2024-10-01,T_DOREW-2,DOREW-2,,,,unmapped,48,27,0.0,354.75,53.141,physical_below_generation,301.609
+2024-10-01,E_BTUIW-3,BTUIW-3,,,,unmapped,48,20,0.0,325.5,38.057,physical_below_generation,287.443
+2024-10-01,T_CLDNW-1,CLDNW-1,,,Scotland,region_only,48,0,3.5166666666666666,270.55833333333334,0.0,physical_below_generation,270.55833333333334
+2024-10-01,T_DOREW-1,DOREW-1,,,,unmapped,48,25,0.0,328.75,64.55,physical_below_generation,264.2
+2024-10-01,T_DBAWO-1,DBAWO-1,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,24,0,0.0,264.0,0.0,outage,264.0
+2024-10-01,T_CGTHW-1,CGTHW-1,,,,unmapped,48,33,0.0,353.5,111.87,physical_below_generation,241.63
+2024-10-01,T_DRSLW-1,DRSLW-1,,,,unmapped,48,39,0.0,335.5,108.97399999999999,physical_below_generation,226.526
+2024-10-01,T_CLDCW-1,CLDCW-1,,,Scotland,region_only,48,1,1.4166666666666665,229.875,4.094999999999999,physical_below_generation,225.78
+2024-10-01,T_CRYRW-3,CRYRW-3,,,,unmapped,48,23,0.0,228.25,23.609,physical_below_generation,204.641
+2024-10-01,T_MKHLW-1,MKHLW-1,,,,unmapped,48,29,0.0,258.5,53.99,physical_below_generation,204.51
+2024-10-01,T_DNLWW-1,DNLWW-1,,,,unmapped,48,15,0.0,204.5,6.324999999999999,physical_below_generation,198.175
+2024-10-01,T_EWHLW-1,EWHLW-1,,,,unmapped,18,7,0.0,179.0,5.463,physical_below_generation,173.537
+2024-10-01,E_HRHLW-1,HRHLW-1,,,,unmapped,48,28,0.0,195.5,27.374,physical_below_generation,168.126
+2024-10-01,T_CLDSW-1,CLDSW-1,,,,unmapped,48,5,0.0,170.64166666666665,4.647,physical_below_generation,165.99466666666666
+2024-10-01,T_BEATO-1,BEATO-1,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,8,0.0,166.8,23.974000000000004,physical_below_generation,142.82600000000002
+2024-10-01,T_KILBW-1,KILBW-1,,,,unmapped,48,37,0.0,272.25,134.46299999999997,physical_below_generation,137.78700000000003
+2024-10-01,T_GRIFW-2,GRIFW-2,,,,unmapped,48,10,0.0,147.0,10.379,physical_below_generation,136.621
+2024-10-01,T_ACHRW-1,ACHRW-1,,,,unmapped,48,15,0.0,146.5,13.562999999999999,physical_below_generation,132.937
+2024-10-01,T_GNAPW-1,GNAPW-1,,,,unmapped,48,16,0.0,144.5,13.433,physical_below_generation,131.067
+2024-10-01,T_GRIFW-1,GRIFW-1,,,,unmapped,48,13,0.0,150.20833333333331,20.131999999999998,physical_below_generation,130.0763333333333
+2024-10-01,E_BTUIW-2,BTUIW-2,,,,unmapped,48,26,0.0,145.5,22.796,physical_below_generation,122.70400000000001
+2024-10-01,E_BRYBW-1,BRYBW-1,,,,unmapped,48,31,0.0,169.25,51.357,physical_below_generation,117.893
+2024-10-01,T_DOUGW-1,DOUGW-1,,,,unmapped,48,0,0.0,111.5,0.0,physical_below_generation,111.5
+2024-10-01,E_TULWW-1,TULWW-1,,,,unmapped,48,42,0.0,141.25,32.616,physical_below_generation,108.634
+2024-10-01,T_MYGPW-1,MYGPW-1,,,,unmapped,48,10,0.0,145.25,39.25,physical_below_generation,106.0
+2024-10-01,T_HADHW-1,HADHW-1,,,,unmapped,48,13,0.0,139.15833333333333,39.629,physical_below_generation,99.52933333333334
+2024-10-01,T_HALSW-1,HALSW-1,,,,unmapped,48,33,0.0,120.0,22.113,physical_below_generation,97.887
+2024-10-01,T_BEATO-2,BEATO-2,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,9,0.0,130.83333333333334,35.105,physical_below_generation,95.72833333333335
+2024-10-01,T_STLGW-2,STLGW-2,,,,unmapped,48,0,0.0,94.32499999999999,0.0,physical_below_generation,94.32499999999999
+2024-10-01,T_STLGW-1,STLGW-1,,,,unmapped,48,5,0.0,92.39166666666668,1.6650000000000005,physical_below_generation,90.72666666666667
+2024-10-01,T_TDBNW-1,TDBNW-1,,,,unmapped,48,0,0.0,85.55,0.0,physical_below_generation,85.55
+2024-10-01,T_COUWW-1,COUWW-1,,,,unmapped,48,32,0.0,145.0,62.63400000000001,physical_below_generation,82.36599999999999
+2024-10-01,E_CRGTW-1,CRGTW-1,,,,unmapped,48,22,0.0,87.25,5.055999999999999,physical_below_generation,82.194
+2024-10-01,E_BABAW-1,BABAW-1,,,,unmapped,48,45,0.0,150.75,68.875,physical_below_generation,81.875
+2024-10-01,E_CNCLW-1,CNCLW-1,,,,unmapped,48,32,0.0,114.0,34.797,physical_below_generation,79.203
+2024-10-01,T_CRGHW-1,CRGHW-1,,,,unmapped,48,29,0.0,115.75,36.565,physical_below_generation,79.185
+2024-10-01,T_BEATO-3,BEATO-3,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,2,0.0,97.76666666666665,20.146,physical_below_generation,77.62066666666665
+2024-10-01,E_HLTWW-1,HLTWW-1,,,,unmapped,48,6,0.0,81.5,4.859,physical_below_generation,76.641
+2024-10-01,T_STLGW-3,STLGW-3,,,,unmapped,37,2,0.0,68.36666666666666,1.4089999999999998,physical_below_generation,66.95766666666665
+2024-10-01,T_BEATO-4,BEATO-4,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,2,0.0,67.425,12.376000000000001,physical_below_generation,55.04899999999999
+2024-10-01,T_ANSUW-1,ANSUW-1,,,,unmapped,48,31,0.0,73.75,18.86,physical_below_generation,54.89
+2024-10-01,T_BHLAW-1,BHLAW-1,,,,unmapped,48,2,0.0,53.58333333333333,5.114999999999999,physical_below_generation,48.46833333333333
+2024-10-01,E_BNWKW-1,BNWKW-1,,,,unmapped,45,35,0.0,83.25,35.077,physical_below_generation,48.173
+2024-10-01,T_VKNGW-2,VKNGW-2,shetland_wind,Shetland Wind,Scotland,mapped,32,8,0.0,48.8,5.975173641304347,physical_below_generation,42.82482635869565
+2024-10-01,T_BDCHW-1,BDCHW-1,,,,unmapped,48,36,0.0,76.5,34.447,physical_below_generation,42.053
+2024-10-01,T_GORDW-2,GORDW-2,,,,unmapped,47,3,0.0,41.88333333333333,1.0630000000000002,physical_below_generation,40.82033333333333
+2024-10-01,E_BETHW-1,BETHW-1,,,,unmapped,43,14,0.0,44.0,4.742000000000001,physical_below_generation,39.257999999999996
+2024-10-01,T_STRNW-1,STRNW-1,,,,unmapped,28,7,0.0,43.733333333333334,4.783999999999999,physical_below_generation,38.949333333333335
+2024-10-01,T_GORDW-1,GORDW-1,,,,unmapped,48,0,0.0,32.641666666666666,0.0,physical_below_generation,32.641666666666666
+2024-10-01,T_FSDLW-1,FSDLW-1,,,,unmapped,48,13,0.0,36.25,3.615,physical_below_generation,32.635
+2024-10-01,E_CLFLW-1,CLFLW-1,,,,unmapped,44,20,0.0,40.0,8.841000000000001,physical_below_generation,31.159
+2024-10-01,T_VKNGW-1,VKNGW-1,shetland_wind,Shetland Wind,Scotland,mapped,40,29,0.0,81.3,52.65333333333333,physical_below_generation,28.64666666666667
+2024-10-01,T_EDINW-1,EDINW-1,,,,unmapped,48,22,0.0,33.75,5.16,physical_below_generation,28.59
+2024-10-01,T_VKNGW-3,VKNGW-3,shetland_wind,Shetland Wind,Scotland,mapped,34,8,0.0,17.075000000000003,4.4446666666666665,physical_below_generation,12.630333333333336
+2024-10-01,T_VKNGW-4,VKNGW-4,shetland_wind,Shetland Wind,Scotland,mapped,44,17,0.0,24.266666666666666,13.389000000000001,physical_below_generation,10.877666666666665
+2024-10-01,E_PIBUW-1,PIBUW-1,,,,unmapped,48,48,0.0,804.5,804.7719999999999,,-0.2719999999999345
+2024-10-02,T_HOWBO-1,HOWBO-1,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,5,0.0,9303.0,14.205000000000027,physical_below_generation,9288.795
+2024-10-02,T_HOWBO-2,HOWBO-2,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,32,0.0,9414.0,657.0999999999999,physical_below_generation,8756.9
+2024-10-02,T_HOWAO-2,HOWAO-2,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,8,0.0,8757.75,56.55399999999999,physical_below_generation,8701.196
+2024-10-02,T_HOWAO-3,HOWAO-3,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,5,0.0,8604.75,17.308999999999997,physical_below_generation,8587.441
+2024-10-02,T_TKNWW-1,TKNWW-1,humber_offshore,Humber Offshore,England/Wales,mapped,48,28,0.0,8580.5,134.80800000000002,physical_below_generation,8445.692
+2024-10-02,T_HOWAO-1,HOWAO-1,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,13,0.0,8604.75,203.50000000000003,physical_below_generation,8401.25
+2024-10-02,T_TKNEW-1,TKNEW-1,humber_offshore,Humber Offshore,England/Wales,mapped,48,5,0.0,8353.0,4.722999999999985,physical_below_generation,8348.277
+2024-10-02,T_HOWBO-3,HOWBO-3,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,4,0.0,7907.5,32.459999999999994,physical_below_generation,7875.04
+2024-10-02,T_EAAO-2,EAAO-2,east_anglia_offshore,East Anglia Offshore,England/Wales,mapped,48,10,0.0,6304.5,138.38,physical_below_generation,6166.12
+2024-10-02,T_RCBKO-1,RCBKO-1,humber_offshore,Humber Offshore,England/Wales,mapped,48,5,0.0,5844.75,32.855000000000004,physical_below_generation,5811.895
+2024-10-02,T_RCBKO-2,RCBKO-2,humber_offshore,Humber Offshore,England/Wales,mapped,48,7,0.0,5785.25,28.225999999999985,physical_below_generation,5757.024
+2024-10-02,T_WLNYO-3,WLNYO-3,,,,unmapped,48,0,0.0,3572.75,0.0,outage,3572.75
+2024-10-02,T_SHRSW-1,SHRSO-1,,,,unmapped,48,16,5.8999999999999995,3356.0,63.43800000000002,physical_below_generation,3292.562
+2024-10-02,T_SHRSW-2,SHRSO-2,,,,unmapped,48,17,0.0,3290.5,38.46800000000001,physical_below_generation,3252.032
+2024-10-02,T_WTMSO-1,WTMSO-1,,,,unmapped,48,20,0.0,3310.5,220.39,physical_below_generation,3090.11
+2024-10-02,T_LNCSW-2,LNCSO-2,,,,unmapped,48,3,0.0,3056.75,10.731000000000002,physical_below_generation,3046.019
+2024-10-02,T_WLNYO-4,WLNYO-4,,,,unmapped,48,19,0.0,3118.0,220.70000000000002,physical_below_generation,2897.3
+2024-10-02,T_LNCSW-1,LNCSO-1,,,,unmapped,48,5,0.0,2862.75,15.425999999999995,physical_below_generation,2847.324
+2024-10-02,T_BRBEO-1,BRBEO-1,,,,unmapped,48,21,0.0,2948.0,190.352,physical_below_generation,2757.648
+2024-10-02,T_RMPNO-1,RMPNO-1,,,,unmapped,48,23,0.0,2708.0,233.192,physical_below_generation,2474.808
+2024-10-02,T_RMPNO-2,RMPNO-2,,,,unmapped,48,22,0.0,2609.5,244.50800000000004,physical_below_generation,2364.992
+2024-10-02,T_DDGNO-3,DDGNO-3,,,,unmapped,48,10,0.0,2371.5,7.6399999999999935,physical_below_generation,2363.86
+2024-10-02,T_DDGNO-1,DDGNO-1,,,,unmapped,48,32,0.0,2364.5,53.541,physical_below_generation,2310.959
+2024-10-02,T_HMGTO-2,HMGTO-2,,,,unmapped,48,5,0.0,2311.5,2.2800000000000082,physical_below_generation,2309.22
+2024-10-02,T_HMGTO-1,HMGTO-1,,,,unmapped,48,15,0.0,2325.0,24.33100000000001,physical_below_generation,2300.669
+2024-10-02,T_WDNSO-1,WDNSO-1,,,,unmapped,48,25,0.0,2429.5,260.78999999999996,physical_below_generation,2168.71
+2024-10-02,T_DDGNO-4,DDGNO-4,,,,unmapped,48,0,0.0,2070.0,0.0,physical_below_generation,2070.0
+2024-10-02,T_WDNSO-2,WDNSO-2,,,,unmapped,48,33,0.0,2429.5,428.428,physical_below_generation,2001.0720000000001
+2024-10-02,T_LARYW-3,LARYO-3,,,,unmapped,48,16,0.0,2050.5,61.19399999999999,physical_below_generation,1989.306
+2024-10-02,T_LARYW-2,LARYO-2,,,,unmapped,48,18,0.0,2089.0,114.205,physical_below_generation,1974.795
+2024-10-02,T_LARYW-4,LARYO-4,,,,unmapped,48,17,0.0,1996.5,62.81599999999999,physical_below_generation,1933.684
+2024-10-02,T_LARYW-1,LARYO-1,,,,unmapped,48,19,0.0,2019.0,121.156,physical_below_generation,1897.844
+2024-10-02,T_GYMR-15,GYMRO-15,north_wales_offshore,North Wales Offshore,England/Wales,mapped,48,37,0.0,2434.0,540.27,physical_below_generation,1893.73
+2024-10-02,T_WLNYO-2,WLNYO-2,,,,unmapped,48,23,0.0,1932.75,263.47,physical_below_generation,1669.28
+2024-10-02,T_DDGNO-2,DDGNO-2,,,,unmapped,48,1,0.0,1658.0,1.2729999999999997,physical_below_generation,1656.727
+2024-10-02,T_GYMR-17,GYMRO-17,north_wales_offshore,North Wales Offshore,England/Wales,mapped,48,46,0.0,2012.5,547.16,physical_below_generation,1465.3400000000001
+2024-10-02,T_WLNYW-1,WLNYW-1,,,,unmapped,48,29,0.0,1609.75,239.68,physical_below_generation,1370.07
+2024-10-02,T_GANW-24,GAOFO-4,,,,unmapped,48,14,0.0,1421.5,62.419999999999995,physical_inconsistent,1359.08
+2024-10-02,T_PNYCW-1,PNYCW-1,,,England/Wales,region_only,48,0,2.033333333333333,1346.75,0.0,physical_below_generation,1346.75
+2024-10-02,T_GANW-13,GAOFO-3,,,,unmapped,48,19,0.0,1376.5,54.400000000000006,physical_below_generation,1322.1
+2024-10-02,T_GANW-11,GAOFO-1,,,,unmapped,48,21,0.0,1348.5,63.26400000000001,physical_below_generation,1285.2359999999999
+2024-10-02,T_GANW-22,GAOFO-2,,,,unmapped,48,42,0.0,1309.0,54.89000000000001,physical_below_generation,1254.11
+2024-10-02,T_GYMR-26,GYMRO-26,north_wales_offshore,North Wales Offshore,England/Wales,mapped,48,35,0.0,1355.0,249.19000000000003,physical_below_generation,1105.81
+2024-10-02,T_GYMR-28,GYMRO-28,north_wales_offshore,North Wales Offshore,England/Wales,mapped,48,5,0.0,1076.0,19.19,outage,1056.81
+2024-10-02,T_WHILW-1,WHILW-1,,,,unmapped,48,34,0.0,1223.5,227.34300000000002,physical_below_generation,996.1569999999999
+2024-10-02,T_GNFSW-1,GNFSW-1,east_anglia_offshore,East Anglia Offshore,England/Wales,mapped,48,20,0.0,1528.0,545.7850000000001,physical_below_generation,982.2149999999999
+2024-10-02,T_KLGLW-1,KLGLW-1,,,,unmapped,48,31,0.0,1231.0,289.339,physical_below_generation,941.6610000000001
+2024-10-02,T_HRSTW-1,HRSTW-1,,,,unmapped,48,31,0.0,1075.5,149.39000000000001,physical_below_generation,926.11
+2024-10-02,T_RREW-1,RREW-1,,,,unmapped,48,33,0.0,1040.5,215.884,physical_inconsistent,824.616
+2024-10-02,T_FALGW-1,FALGW-1,,,,unmapped,48,43,0.0,1045.5,236.95999999999998,physical_below_generation,808.54
+2024-10-02,T_THNTO-2,THNTO-2,,,,unmapped,48,12,0.0,700.75,14.428999999999998,physical_below_generation,686.321
+2024-10-02,T_RRWW-1,RRWW-1,,,,unmapped,48,41,0.0,923.0,240.93,physical_below_generation,682.0699999999999
+2024-10-02,T_THNTO-1,THNTO-1,,,,unmapped,48,13,0.0,700.75,20.392,physical_below_generation,680.358
+2024-10-02,E_BURBO,BURBW-1,,,,unmapped,48,22,0.0,732.75,62.84,physical_below_generation,669.91
+2024-10-02,T_WHILW-2,WHILW-2,,,,unmapped,48,36,0.0,712.0,106.72,physical_below_generation,605.28
+2024-10-02,T_GNFSW-2,GNFSW-2,east_anglia_offshore,East Anglia Offshore,England/Wales,mapped,48,0,0.0,573.0,0.0,physical_below_generation,573.0
+2024-10-02,T_SOKYW-1,SOKYW-1,,,,unmapped,48,3,0.0,569.75,0.9999999999999991,physical_below_generation,568.75
+2024-10-02,T_BOWLW-1,BOWLW-1,,,,unmapped,48,33,0.0,700.5,150.73600000000002,physical_below_generation,549.764
+2024-10-02,T_MOWWO-1,MOWWO-1,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,44,0,0.0,545.5,0.0,outage,545.5
+2024-10-02,T_MOWWO-2,MOWWO-2,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,44,0,0.0,545.0,0.0,outage,545.0
+2024-10-02,T_AKGLW-2,AKGLW-2,,,,unmapped,48,26,0.0,552.0,34.21,physical_below_generation,517.79
+2024-10-02,T_OMNDW-1,OMNDO-1,,,,unmapped,48,10,0.0,512.75,17.915,physical_below_generation,494.835
+2024-10-02,T_AKGLW-3,AKGLW-3,,,,unmapped,48,48,0.0,745.0,268.38800000000003,,476.61199999999997
+2024-10-02,T_CRYRW-2,CRYRW-2,,,,unmapped,48,26,0.0,514.5,39.584,physical_below_generation,474.916
+2024-10-02,T_BLKWW-1,BLKWW-1,,,,unmapped,48,27,0.0,520.75,79.313,physical_below_generation,441.437
+2024-10-02,E_BTUIW-3,BTUIW-3,,,,unmapped,48,35,0.36666666666666664,513.0,100.72800000000001,physical_below_generation,412.272
+2024-10-02,T_WISTW-2,WISTW-2,,,,unmapped,48,37,0.0,536.75,168.601,physical_below_generation,368.149
+2024-10-02,T_KENNW-1,KENNW-1,,,,unmapped,48,29,0.0,404.0,65.785,physical_below_generation,338.21500000000003
+2024-10-02,T_WDRGW-1,WDRGW-1,,,,unmapped,48,26,0.0,436.5,99.11000000000001,physical_below_generation,337.39
+2024-10-02,T_BLLA-1,BLLA-1,,,,unmapped,48,28,0.0,390.0,54.255,physical_below_generation,335.745
+2024-10-02,T_GRGBW-1,GRGBW-1,,,,unmapped,48,5,0.0,346.275,13.198000000000006,physical_below_generation,333.077
+2024-10-02,T_GRGBW-2,GRGBW-2,,,,unmapped,48,6,0.0,298.58333333333337,6.004333333333334,physical_below_generation,292.57900000000006
+2024-10-02,T_KPMRW-1,KPMRW-1,,,,unmapped,48,26,0.0,322.0,36.10999999999999,physical_below_generation,285.89
+2024-10-02,T_COUWW-1,COUWW-1,,,,unmapped,48,35,0.0,317.0,79.78399999999999,physical_below_generation,237.216
+2024-10-02,E_HBHDW-1,HBHDW-1,,,,unmapped,48,43,0.0,315.25,84.532,physical_below_generation,230.71800000000002
+2024-10-02,E_KINCW-1,KINCW-1,,,,unmapped,48,43,0.0,287.75,59.138,physical_below_generation,228.612
+2024-10-02,E_GRGRW-1,GRGRW-1,,,,unmapped,40,29,0.0,268.0,46.20099999999999,physical_inconsistent,221.799
+2024-10-02,T_MIDMW-1,MIDMW-1,,,,unmapped,47,28,0.0,248.0,27.479000000000003,physical_below_generation,220.521
+2024-10-02,T_BLLA-2,BLLA-2,,,,unmapped,48,24,0.0,255.5,38.799,physical_below_generation,216.701
+2024-10-02,T_DRSLW-1,DRSLW-1,,,,unmapped,48,29,0.0,253.5,52.779999999999994,physical_below_generation,200.72
+2024-10-02,T_AFTOW-1,AFTOW-1,,,,unmapped,48,23,0.0,225.0,25.958000000000006,physical_below_generation,199.042
+2024-10-02,T_TWSHW-1,TWSHW-1,,,,unmapped,48,33,0.0,291.25,92.548,physical_below_generation,198.702
+2024-10-02,T_KYPEW-1,KYPEW-1,,,,unmapped,28,19,0.5333333333333333,271.75,78.435,physical_below_generation,193.315
+2024-10-02,E_BTUIW-2,BTUIW-2,,,,unmapped,48,24,0.0,221.0,32.672,physical_below_generation,188.328
+2024-10-02,T_ARCHW-1,ARCHW-1,,,,unmapped,48,26,0.0,243.0,55.46,physical_below_generation,187.54
+2024-10-02,T_GLWSW-1,GLWSW-1,,,,unmapped,48,27,0.0,229.75,46.1,physical_below_generation,183.65
+2024-10-02,T_SANQW-1,SANQW-1,,,,unmapped,48,29,0.0,246.0,68.912,physical_below_generation,177.088
+2024-10-02,T_MOWEO-1,MOWEO-1,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,39,0,0.0,176.0,0.0,outage,176.0
+2024-10-02,T_MOWEO-3,MOWEO-3,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,47,0,0.0,171.0,0.0,outage,171.0
+2024-10-02,T_ACHRW-1,ACHRW-1,,,,unmapped,48,28,0.0,218.0,55.952,physical_below_generation,162.048
+2024-10-02,E_ASHWW-1,ASHWW-1,,,,unmapped,48,37,0.0,207.0,45.459,physical_below_generation,161.541
+2024-10-02,T_MOWEO-2,MOWEO-2,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,0.0,157.5,0.0,outage,157.5
+2024-10-02,T_DALQW-1,DALQW-1,,,,unmapped,48,30,0.0,223.5,82.70400000000001,physical_below_generation,140.796
+2024-10-02,T_SAKNW-1,SAKNW-1,,,,unmapped,48,25,0.0,170.0,36.209,physical_below_generation,133.791
+2024-10-02,T_WHIHW-1,WHIHW-1,,,,unmapped,48,15,0.0,142.75,14.357,physical_below_generation,128.393
+2024-10-02,T_MKHLW-1,MKHLW-1,,,,unmapped,48,20,0.0,163.5,44.376000000000005,physical_below_generation,119.124
+2024-10-02,T_BEINW-1,BEINW-1,,,,unmapped,48,23,0.0,130.0,13.85,physical_below_generation,116.15
+2024-10-02,T_MILWW-1,MILWW-1,,,,unmapped,48,46,0.0,173.25,67.17,physical_below_generation,106.08
+2024-10-02,T_SGRWO-5,SGRWO-5,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,45,3,0.13333333333333333,102.60000000000001,2.2760000000000025,physical_below_generation,100.32400000000001
+2024-10-02,T_CRGHW-1,CRGHW-1,,,,unmapped,48,35,0.0,168.5,73.561,physical_below_generation,94.939
+2024-10-02,T_MYGPW-1,MYGPW-1,,,,unmapped,48,0,0.0,94.5,0.0,physical_below_generation,94.5
+2024-10-02,E_HRHLW-1,HRHLW-1,,,,unmapped,48,22,0.0,105.5,14.036000000000001,physical_below_generation,91.464
+2024-10-02,T_SGRWO-4,SGRWO-4,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,47,3,0.0,139.41666666666666,48.13033333333334,physical_below_generation,91.28633333333332
+2024-10-02,T_SGRWO-6,SGRWO-6,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,3,10.266666666666666,90.675,1.121,physical_below_generation,89.554
+2024-10-02,T_CRYRW-3,CRYRW-3,,,,unmapped,48,37,0.0,116.75,27.899,physical_below_generation,88.851
+2024-10-02,T_GNAPW-1,GNAPW-1,,,,unmapped,48,28,0.0,116.0,27.186999999999998,physical_below_generation,88.813
+2024-10-02,T_SGRWO-2,SGRWO-2,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,6,0.18333333333333332,102.38333333333335,17.26,physical_below_generation,85.12333333333335
+2024-10-02,T_SGRWO-1,SGRWO-1,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,2,7.216666666666668,82.19166666666666,1.9033333333333333,physical_below_generation,80.28833333333333
+2024-10-02,T_DNLWW-1,DNLWW-1,,,,unmapped,48,11,0.0,80.5,5.622,physical_below_generation,74.878
+2024-10-02,T_CGTHW-1,CGTHW-1,,,,unmapped,48,5,0.0,75.0,1.14,physical_below_generation,73.86
+2024-10-02,T_ABRBO-1,ABRBO-1,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,41,11,0.0,77.25,3.400126358695652,physical_below_generation,73.84987364130434
+2024-10-02,T_CLDCW-1,CLDCW-1,,,Scotland,region_only,48,0,0.0,71.425,0.0,physical_below_generation,71.425
+2024-10-02,T_HADHW-1,HADHW-1,,,,unmapped,48,7,0.0,80.45,11.544,physical_below_generation,68.906
+2024-10-02,T_DOUGW-1,DOUGW-1,,,,unmapped,48,7,0.0,70.5,3.9639999999999995,physical_below_generation,66.536
+2024-10-02,T_FSDLW-1,FSDLW-1,,,,unmapped,48,5,0.0,68.0,1.669,physical_below_generation,66.331
+2024-10-02,T_CLDNW-1,CLDNW-1,,,Scotland,region_only,48,1,0.0,65.93333333333334,6.600999999999999,physical_below_generation,59.33233333333334
+2024-10-02,T_DOREW-1,DOREW-1,,,,unmapped,42,29,0.0,105.5,49.708,physical_below_generation,55.792
+2024-10-02,T_ANSUW-1,ANSUW-1,,,,unmapped,48,33,0.0,85.5,29.838,physical_below_generation,55.662
+2024-10-02,T_SGRWO-3,SGRWO-3,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,3,0.0,112.09166666666667,57.980199999999996,physical_below_generation,54.11146666666667
+2024-10-02,E_BRYBW-1,BRYBW-1,,,,unmapped,48,29,0.0,63.75,14.053,physical_below_generation,49.697
+2024-10-02,T_GRIFW-2,GRIFW-2,,,,unmapped,41,0,0.0,49.59166666666666,0.0,physical_below_generation,49.59166666666666
+2024-10-02,T_CLDSW-1,CLDSW-1,,,,unmapped,48,0,0.0,47.108333333333334,0.0,physical_below_generation,47.108333333333334
+2024-10-02,T_KILBW-1,KILBW-1,,,,unmapped,48,29,0.0,71.25,27.378,physical_below_generation,43.872
+2024-10-02,E_CRGTW-1,CRGTW-1,,,,unmapped,48,26,0.0,52.0,9.116999999999999,physical_below_generation,42.883
+2024-10-02,T_DUNGW-1,DUNGW-1,,,,unmapped,48,13,0.0,54.46666666666667,14.289666666666667,physical_below_generation,40.177
+2024-10-02,T_STLGW-3,STLGW-3,,,,unmapped,47,2,0.0,39.93333333333333,0.7110000000000001,physical_below_generation,39.22233333333333
+2024-10-02,T_TDBNW-1,TDBNW-1,,,,unmapped,43,1,0.0,36.53333333333333,0.29400000000000004,physical_below_generation,36.239333333333335
+2024-10-02,T_STLGW-2,STLGW-2,,,,unmapped,48,2,0.0,36.15833333333333,0.057999999999999996,physical_below_generation,36.10033333333333
+2024-10-02,T_DOREW-2,DOREW-2,,,,unmapped,42,37,0.0,78.25,42.772999999999996,physical_below_generation,35.477000000000004
+2024-10-02,E_CNCLW-1,CNCLW-1,,,,unmapped,48,35,0.0,48.0,16.029,physical_below_generation,31.971
+2024-10-02,T_STLGW-1,STLGW-1,,,,unmapped,47,10,0.0,35.324999999999996,4.42,physical_below_generation,30.904999999999994
+2024-10-02,E_CLFLW-1,CLFLW-1,,,,unmapped,42,17,0.0,36.5,6.46,physical_below_generation,30.04
+2024-10-02,T_GRIFW-1,GRIFW-1,,,,unmapped,40,2,0.0,29.041666666666668,0.15033333333333332,physical_below_generation,28.891333333333336
+2024-10-02,E_TULWW-1,TULWW-1,,,,unmapped,39,19,0.0,31.0,7.779,physical_below_generation,23.221
+2024-10-02,T_VKNGW-1,VKNGW-1,shetland_wind,Shetland Wind,Scotland,mapped,46,28,0.0,49.56666666666667,27.138666666666666,physical_below_generation,22.428000000000004
+2024-10-02,T_VKNGW-2,VKNGW-2,shetland_wind,Shetland Wind,Scotland,mapped,45,23,0.0,33.37499999999999,10.953,physical_below_generation,22.421999999999993
+2024-10-02,T_BHLAW-1,BHLAW-1,,,,unmapped,43,11,0.0,30.349999999999994,10.906999999999998,physical_below_generation,19.442999999999998
+2024-10-02,T_GORDW-1,GORDW-1,,,,unmapped,47,7,0.0,19.449999999999996,2.1740000000000004,physical_below_generation,17.275999999999996
+2024-10-02,T_VKNGW-4,VKNGW-4,shetland_wind,Shetland Wind,Scotland,mapped,48,24,0.0,31.83333333333333,15.253333333333334,physical_below_generation,16.579999999999995
+2024-10-02,T_STRNW-1,STRNW-1,,,,unmapped,14,1,0.0,15.566666666666666,0.014999999999999902,physical_below_generation,15.551666666666666
+2024-10-02,E_BABAW-1,BABAW-1,,,,unmapped,48,32,0.0,34.25,18.958,physical_below_generation,15.292000000000002
+2024-10-02,T_VKNGW-3,VKNGW-3,shetland_wind,Shetland Wind,Scotland,mapped,47,29,0.0,31.05,19.25733333333334,physical_below_generation,11.792666666666662
+2024-10-02,T_BEATO-2,BEATO-2,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,23,12,0.0,18.191666666666666,8.051635869565215,physical_below_generation,10.140030797101451
+2024-10-02,T_HALSW-1,HALSW-1,,,,unmapped,14,2,0.0,10.0,0.624,physical_below_generation,9.376
+2024-10-02,T_EDINW-1,EDINW-1,,,,unmapped,22,0,0.0,8.75,0.0,physical_below_generation,8.75
+2024-10-02,E_HLTWW-1,HLTWW-1,,,,unmapped,13,4,0.0,6.5,0.531,physical_below_generation,5.969
+2024-10-02,T_BDCHW-1,BDCHW-1,,,,unmapped,48,36,0.0,24.0,18.539,physical_below_generation,5.4609999999999985
+2024-10-02,T_BEATO-1,BEATO-1,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,25,4,0.0,6.658333333333334,2.91525,physical_below_generation,3.743083333333334
+2024-10-02,E_BETHW-1,BETHW-1,,,,unmapped,8,3,0.0,4.0,0.387,physical_below_generation,3.613
+2024-10-02,E_BNWKW-1,BNWKW-1,,,,unmapped,16,15,0.0,5.25,3.2379999999999995,physical_below_generation,2.0120000000000005
+2024-10-02,T_BEATO-3,BEATO-3,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,31,8,0.0,4.499999999999999,2.4909384057971016,physical_below_generation,2.0090615942028975
+2024-10-02,T_BEATO-4,BEATO-4,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,29,12,0.0,9.966666666666667,8.450290609094202,physical_below_generation,1.5163760575724652
+2024-10-02,T_GORDW-2,GORDW-2,,,,unmapped,9,0,0.0,0.5666666666666667,0.0,physical_below_generation,0.5666666666666667
+2024-10-02,E_PIBUW-1,PIBUW-1,,,,unmapped,48,48,0.0,535.0,535.2529999999999,,-0.25299999999992906
+2024-10-03,T_EAAO-2,EAAO-2,east_anglia_offshore,East Anglia Offshore,England/Wales,mapped,48,36,0.0,5742.5,997.903,physical_below_generation,4744.597
+2024-10-03,T_WLNYO-3,WLNYO-3,,,,unmapped,48,0,0.0,2164.75,0.0,outage,2164.75
+2024-10-03,T_RMPNO-2,RMPNO-2,,,,unmapped,48,16,0.0,2074.5,84.846,physical_below_generation,1989.654
+2024-10-03,T_HOWBO-1,HOWBO-1,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,16,0.0,2140.5,265.331,physical_below_generation,1875.1689999999999
+2024-10-03,T_RMPNO-1,RMPNO-1,,,,unmapped,48,15,0.0,1871.5,75.82,physical_below_generation,1795.68
+2024-10-03,T_HOWAO-3,HOWAO-3,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,25,0.0,2042.75,358.71700000000004,physical_below_generation,1684.033
+2024-10-03,T_HOWBO-3,HOWBO-3,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,18,0.0,1827.25,160.22899999999998,physical_below_generation,1667.021
+2024-10-03,T_KLGLW-1,KLGLW-1,,,,unmapped,48,22,0.0,1791.5,162.417,physical_below_generation,1629.083
+2024-10-03,T_HOWAO-2,HOWAO-2,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,30,0.0,2097.0,473.49,physical_below_generation,1623.51
+2024-10-03,T_WLNYO-4,WLNYO-4,,,,unmapped,48,22,0.0,1757.75,170.245,physical_below_generation,1587.505
+2024-10-03,T_MOWEO-3,MOWEO-3,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,4.833333333333334,1551.0,0.0,outage,1551.0
+2024-10-03,T_TKNEW-1,TKNEW-1,humber_offshore,Humber Offshore,England/Wales,mapped,48,12,0.0,1794.0,260.56600000000003,physical_below_generation,1533.434
+2024-10-03,T_RCBKO-1,RCBKO-1,humber_offshore,Humber Offshore,England/Wales,mapped,48,20,0.0,1672.0,178.75,physical_below_generation,1493.25
+2024-10-03,T_RCBKO-2,RCBKO-2,humber_offshore,Humber Offshore,England/Wales,mapped,48,20,0.0,1655.75,171.043,physical_below_generation,1484.7069999999999
+2024-10-03,T_HOWBO-2,HOWBO-2,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,35,0.0,2161.0,718.462,physical_below_generation,1442.538
+2024-10-03,T_HOWAO-1,HOWAO-1,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,36,0.0,2053.5,625.281,physical_below_generation,1428.219
+2024-10-03,T_TKNWW-1,TKNWW-1,humber_offshore,Humber Offshore,England/Wales,mapped,48,14,0.0,1565.5,255.18200000000002,physical_below_generation,1310.318
+2024-10-03,T_LARYW-3,LARYO-3,,,,unmapped,48,12,0.0,1374.5,68.56,physical_below_generation,1305.94
+2024-10-03,T_MOWEO-1,MOWEO-1,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,11.466666666666669,1288.5,0.0,outage,1288.5
+2024-10-03,T_LARYW-4,LARYO-4,,,,unmapped,48,10,0.0,1262.0,57.31,physical_below_generation,1204.69
+2024-10-03,T_LARYW-2,LARYO-2,,,,unmapped,48,21,0.0,1274.0,127.75,physical_below_generation,1146.25
+2024-10-03,T_MOWWO-1,MOWWO-1,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,0.0,1105.5,0.0,outage,1105.5
+2024-10-03,T_MOWEO-2,MOWEO-2,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,2.65,1102.0,0.0,outage,1102.0
+2024-10-03,T_LARYW-1,LARYO-1,,,,unmapped,48,25,0.0,1249.0,152.55,physical_below_generation,1096.45
+2024-10-03,T_MOWWO-2,MOWWO-2,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,0.0,1083.0,0.0,outage,1083.0
+2024-10-03,T_WTMSO-1,WTMSO-1,,,,unmapped,48,24,0.0,1082.0,72.356,physical_below_generation,1009.644
+2024-10-03,T_GANW-24,GAOFO-4,,,,unmapped,48,23,0.0,1060.0,61.510000000000005,physical_below_generation,998.49
+2024-10-03,T_GANW-22,GAOFO-2,,,,unmapped,48,34,0.0,1093.0,100.32000000000001,physical_below_generation,992.68
+2024-10-03,T_GANW-13,GAOFO-3,,,,unmapped,48,34,0.0,1103.5,112.32,physical_below_generation,991.1800000000001
+2024-10-03,T_GANW-11,GAOFO-1,,,,unmapped,48,28,0.0,1053.0,79.043,physical_below_generation,973.957
+2024-10-03,T_WLNYO-2,WLNYO-2,,,,unmapped,48,35,0.0,1053.25,129.82,physical_below_generation,923.4300000000001
+2024-10-03,T_BRBEO-1,BRBEO-1,,,,unmapped,48,27,0.0,1022.5,150.96300000000002,physical_below_generation,871.537
+2024-10-03,T_WDNSO-1,WDNSO-1,,,,unmapped,48,26,0.0,948.5,122.286,physical_below_generation,826.2139999999999
+2024-10-03,T_DDGNO-3,DDGNO-3,,,,unmapped,48,24,0.0,868.5,97.67,physical_below_generation,770.83
+2024-10-03,T_LNCSW-2,LNCSO-2,,,,unmapped,48,14,0.0,796.0,52.35999999999999,physical_below_generation,743.64
+2024-10-03,T_WDNSO-2,WDNSO-2,,,,unmapped,48,31,0.0,948.5,204.926,physical_below_generation,743.5740000000001
+2024-10-03,T_HMGTO-2,HMGTO-2,,,,unmapped,48,11,0.0,739.5,39.452,physical_below_generation,700.048
+2024-10-03,T_PNYCW-1,PNYCW-1,,,England/Wales,region_only,48,9,0.0,709.0,11.815000000000001,physical_below_generation,697.185
+2024-10-03,T_SHRSW-2,SHRSO-2,,,,unmapped,48,25,0.0,887.0,197.024,physical_below_generation,689.976
+2024-10-03,T_LNCSW-1,LNCSO-1,,,,unmapped,48,13,0.0,714.75,31.424,physical_below_generation,683.326
+2024-10-03,T_DDGNO-1,DDGNO-1,,,,unmapped,48,22,0.0,751.0,81.981,physical_below_generation,669.019
+2024-10-03,T_DDGNO-4,DDGNO-4,,,,unmapped,48,18,0.0,719.5,67.381,physical_below_generation,652.119
+2024-10-03,T_HMGTO-1,HMGTO-1,,,,unmapped,48,16,0.0,689.5,48.965,physical_below_generation,640.535
+2024-10-03,T_SHRSW-1,SHRSO-1,,,,unmapped,48,29,0.0,822.5,184.741,physical_below_generation,637.759
+2024-10-03,T_WLNYW-1,WLNYW-1,,,,unmapped,48,28,0.0,737.25,109.55,physical_below_generation,627.7
+2024-10-03,E_BTUIW-3,BTUIW-3,,,,unmapped,48,27,0.0,609.0,61.842,physical_below_generation,547.158
+2024-10-03,T_THNTO-1,THNTO-1,,,,unmapped,48,0,0.0,532.25,0.0,physical_below_generation,532.25
+2024-10-03,T_THNTO-2,THNTO-2,,,,unmapped,48,0,0.0,532.25,0.0,physical_below_generation,532.25
+2024-10-03,T_SOKYW-1,SOKYW-1,,,,unmapped,48,0,0.0,523.0,0.0,physical_below_generation,523.0
+2024-10-03,T_DDGNO-2,DDGNO-2,,,,unmapped,48,16,0.0,526.0,47.599,physical_below_generation,478.401
+2024-10-03,T_ARCHW-1,ARCHW-1,,,,unmapped,48,29,0.0,450.0,59.75699999999999,physical_below_generation,390.243
+2024-10-03,T_WHILW-1,WHILW-1,,,,unmapped,48,17,0.0,423.5,36.504,physical_below_generation,386.996
+2024-10-03,T_MILWW-1,MILWW-1,,,,unmapped,48,36,0.0,542.5,158.42,physical_below_generation,384.08000000000004
+2024-10-03,T_GYMR-15,GYMRO-15,north_wales_offshore,North Wales Offshore,England/Wales,mapped,48,37,0.0,553.5,181.70222676056335,physical_below_generation,371.79777323943665
+2024-10-03,T_WISTW-2,WISTW-2,,,,unmapped,48,36,0.0,478.25,117.63999999999999,physical_below_generation,360.61
+2024-10-03,T_WDRGW-1,WDRGW-1,,,,unmapped,48,34,0.0,522.25,182.767,physical_below_generation,339.483
+2024-10-03,T_DOREW-1,DOREW-1,,,,unmapped,42,17,0.0,414.75,88.6,physical_below_generation,326.15
+2024-10-03,T_GNFSW-1,GNFSW-1,east_anglia_offshore,East Anglia Offshore,England/Wales,mapped,48,3,0.0,317.25,7.545999999999999,physical_below_generation,309.704
+2024-10-03,T_FALGW-1,FALGW-1,,,,unmapped,48,31,0.0,331.25,41.2,physical_below_generation,290.05
+2024-10-03,T_WHILW-2,WHILW-2,,,,unmapped,48,22,0.0,322.0,39.033,physical_below_generation,282.967
+2024-10-03,T_GYMR-17,GYMRO-17,north_wales_offshore,North Wales Offshore,England/Wales,mapped,48,47,0.0,623.5,343.84,physical_inconsistent,279.66
+2024-10-03,T_CRGHW-1,CRGHW-1,,,,unmapped,48,18,0.0,276.0,22.924,physical_below_generation,253.076
+2024-10-03,T_OMNDW-1,OMNDO-1,,,,unmapped,48,4,0.0,252.5,2.3549999999999986,physical_below_generation,250.145
+2024-10-03,T_MKHLW-1,MKHLW-1,,,,unmapped,48,22,0.0,284.5,38.77,physical_below_generation,245.73
+2024-10-03,T_ACHRW-1,ACHRW-1,,,,unmapped,48,38,0.0,346.0,106.921,physical_below_generation,239.079
+2024-10-03,E_BTUIW-2,BTUIW-2,,,,unmapped,48,29,0.0,270.5,41.924,physical_below_generation,228.576
+2024-10-03,T_BOWLW-1,BOWLW-1,,,,unmapped,48,34,0.0,306.25,77.748,physical_below_generation,228.502
+2024-10-03,T_GNFSW-2,GNFSW-2,east_anglia_offshore,East Anglia Offshore,England/Wales,mapped,48,4,0.0,233.0,6.699000000000001,physical_below_generation,226.301
+2024-10-03,T_GYMR-26,GYMRO-26,north_wales_offshore,North Wales Offshore,England/Wales,mapped,48,29,0.0,320.5,102.07000000000001,physical_below_generation,218.43
+2024-10-03,E_BURBO,BURBW-1,,,,unmapped,48,27,0.0,251.25,35.807,physical_below_generation,215.44299999999998
+2024-10-03,T_DRSLW-1,DRSLW-1,,,,unmapped,48,25,0.0,262.0,48.42,physical_below_generation,213.57999999999998
+2024-10-03,T_AFTOW-1,AFTOW-1,,,,unmapped,48,17,0.0,227.0,17.375999999999998,physical_below_generation,209.624
+2024-10-03,T_RRWW-1,RRWW-1,,,,unmapped,48,26,0.0,272.0,65.101,physical_below_generation,206.899
+2024-10-03,T_KENNW-1,KENNW-1,,,,unmapped,48,28,0.0,247.25,42.265,physical_below_generation,204.985
+2024-10-03,T_RREW-1,RREW-1,,,,unmapped,48,25,0.0,263.5,58.889,physical_below_generation,204.611
+2024-10-03,T_GYMR-28,GYMRO-28,north_wales_offshore,North Wales Offshore,England/Wales,mapped,48,36,0.0,338.5,136.84,physical_below_generation,201.66
+2024-10-03,T_GRGBW-2,GRGBW-2,,,,unmapped,48,0,0.0,200.25833333333333,0.0,physical_below_generation,200.25833333333333
+2024-10-03,T_BLKWW-1,BLKWW-1,,,,unmapped,48,30,0.0,264.5,67.604,physical_below_generation,196.89600000000002
+2024-10-03,T_BEINW-1,BEINW-1,,,,unmapped,48,20,0.0,236.0,55.293,physical_below_generation,180.707
+2024-10-03,T_STLGW-2,STLGW-2,,,,unmapped,48,0,0.0,172.05,0.0,physical_below_generation,172.05
+2024-10-03,T_TWSHW-1,TWSHW-1,,,,unmapped,48,33,0.0,221.25,57.812,physical_below_generation,163.438
+2024-10-03,T_SANQW-1,SANQW-1,,,,unmapped,48,12,0.0,163.0,4.043999999999999,physical_below_generation,158.956
+2024-10-03,T_CGTHW-1,CGTHW-1,,,,unmapped,48,4,0.0,158.75,1.234,physical_below_generation,157.516
+2024-10-03,T_STLGW-3,STLGW-3,,,,unmapped,48,0,0.0,148.44166666666666,0.0,physical_below_generation,148.44166666666666
+2024-10-03,T_DUNGW-1,DUNGW-1,,,,unmapped,48,8,0.0,156.34166666666664,12.33,physical_below_generation,144.01166666666663
+2024-10-03,T_WHIHW-1,WHIHW-1,,,,unmapped,48,26,0.0,166.5,23.400999999999996,physical_below_generation,143.099
+2024-10-03,T_COUWW-1,COUWW-1,,,,unmapped,48,24,0.0,165.5,22.538,physical_below_generation,142.962
+2024-10-03,T_DOREW-2,DOREW-2,,,,unmapped,37,22,0.0,190.25,51.306,physical_below_generation,138.94400000000002
+2024-10-03,T_GNAPW-1,GNAPW-1,,,,unmapped,48,25,0.0,146.0,9.471,physical_below_generation,136.529
+2024-10-03,E_KINCW-1,KINCW-1,,,,unmapped,26,20,0.0,161.0,24.934,physical_below_generation,136.066
+2024-10-03,T_KPMRW-1,KPMRW-1,,,,unmapped,48,28,0.0,170.5,35.232,physical_below_generation,135.268
+2024-10-03,T_KILBW-1,KILBW-1,,,,unmapped,48,35,0.0,248.5,116.92399999999999,physical_below_generation,131.57600000000002
+2024-10-03,T_STLGW-1,STLGW-1,,,,unmapped,48,9,0.0,143.64999999999998,12.883,physical_below_generation,130.76699999999997
+2024-10-03,E_CNCLW-1,CNCLW-1,,,,unmapped,48,28,0.0,161.25,42.801,physical_below_generation,118.449
+2024-10-03,T_HRSTW-1,HRSTW-1,,,,unmapped,47,24,0.0,158.5,46.077,physical_below_generation,112.423
+2024-10-03,T_SAKNW-1,SAKNW-1,,,,unmapped,48,37,0.0,192.5,80.773,physical_below_generation,111.727
+2024-10-03,T_EDINW-1,EDINW-1,,,,unmapped,48,3,0.0,110.75,0.20999999999999996,physical_below_generation,110.54
+2024-10-03,T_MIDMW-1,MIDMW-1,,,,unmapped,41,20,0.0,126.5,18.403,physical_below_generation,108.09700000000001
+2024-10-03,T_AKGLW-2,AKGLW-2,,,,unmapped,46,44,0.0,166.0,61.080999999999996,physical_below_generation,104.91900000000001
+2024-10-03,T_ABRBO-1,ABRBO-1,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,29,14,0.0,119.5,15.533999999999999,physical_below_generation,103.96600000000001
+2024-10-03,T_GRGBW-1,GRGBW-1,,,,unmapped,48,0,0.0,103.64999999999999,0.0,physical_below_generation,103.64999999999999
+2024-10-03,T_ANSUW-1,ANSUW-1,,,,unmapped,48,27,0.0,118.25,15.798,physical_below_generation,102.452
+2024-10-03,T_HALSW-1,HALSW-1,,,,unmapped,48,23,0.0,123.0,28.084,physical_below_generation,94.916
+2024-10-03,T_CLDNW-1,CLDNW-1,,,Scotland,region_only,48,2,0.0,98.33333333333333,3.5219999999999994,physical_below_generation,94.81133333333332
+2024-10-03,T_AKGLW-3,AKGLW-3,,,,unmapped,48,47,0.0,221.75,127.34100000000001,physical_below_generation,94.40899999999999
+2024-10-03,T_BLLA-1,BLLA-1,,,,unmapped,44,12,0.0,104.0,11.478000000000002,physical_below_generation,92.52199999999999
+2024-10-03,T_BEATO-3,BEATO-3,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,10,0.0,96.41666666666667,6.119423007246376,physical_below_generation,90.29724365942029
+2024-10-03,E_BRYBW-1,BRYBW-1,,,,unmapped,48,35,0.0,116.0,26.149,physical_below_generation,89.851
+2024-10-03,T_KYPEW-1,KYPEW-1,,,,unmapped,20,5,0.0,89.0,3.3579999999999997,physical_below_generation,85.642
+2024-10-03,E_BETHW-1,BETHW-1,,,,unmapped,42,15,0.0,88.0,8.567,physical_below_generation,79.43299999999999
+2024-10-03,E_BABAW-1,BABAW-1,,,,unmapped,48,27,0.0,98.0,24.394000000000002,physical_below_generation,73.606
+2024-10-03,T_FSDLW-1,FSDLW-1,,,,unmapped,48,0,0.0,72.25,0.0,physical_below_generation,72.25
+2024-10-03,T_VKNGW-3,VKNGW-3,shetland_wind,Shetland Wind,Scotland,mapped,48,0,0.21666666666666667,67.65833333333333,0.0,physical_below_generation,67.65833333333333
+2024-10-03,E_ASHWW-1,ASHWW-1,,,,unmapped,47,29,0.0,82.5,20.755000000000003,physical_below_generation,61.745
+2024-10-03,T_CLDCW-1,CLDCW-1,,,Scotland,region_only,48,0,0.0,61.075,0.0,physical_below_generation,61.075
+2024-10-03,E_HBHDW-1,HBHDW-1,,,,unmapped,48,31,0.0,94.5,34.129,physical_below_generation,60.371
+2024-10-03,T_GLWSW-1,GLWSW-1,,,,unmapped,48,29,0.0,88.5,31.883,physical_below_generation,56.617000000000004
+2024-10-03,T_STRNW-1,STRNW-1,,,,unmapped,48,2,0.0,56.89999999999999,0.6000000000000002,physical_below_generation,56.29999999999999
+2024-10-03,E_BNWKW-1,BNWKW-1,,,,unmapped,44,17,0.0,65.0,8.951,physical_below_generation,56.049
+2024-10-03,T_BLLA-2,BLLA-2,,,,unmapped,36,9,0.0,62.5,6.677,physical_below_generation,55.823
+2024-10-03,T_HADHW-1,HADHW-1,,,,unmapped,48,0,0.0,50.05833333333334,0.0,physical_below_generation,50.05833333333334
+2024-10-03,T_VKNGW-1,VKNGW-1,shetland_wind,Shetland Wind,Scotland,mapped,48,7,0.3,59.48333333333333,9.755,physical_below_generation,49.728333333333325
+2024-10-03,T_VKNGW-4,VKNGW-4,shetland_wind,Shetland Wind,Scotland,mapped,48,1,0.18333333333333332,50.45,0.8360000000000003,physical_below_generation,49.614000000000004
+2024-10-03,T_CRYRW-2,CRYRW-2,,,,unmapped,28,7,0.0,62.75,14.239999999999998,physical_below_generation,48.510000000000005
+2024-10-03,E_HLTWW-1,HLTWW-1,,,,unmapped,24,6,0.0,45.5,3.0500000000000003,physical_below_generation,42.45
+2024-10-03,E_GRGRW-1,GRGRW-1,,,,unmapped,48,32,0.0,66.25,24.152,physical_below_generation,42.098
+2024-10-03,T_MOWWO-3,MOWWO-3,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,2,0,0.0,40.5,0.0,outage,40.5
+2024-10-03,T_BDCHW-1,BDCHW-1,,,,unmapped,48,11,0.0,54.0,14.312999999999999,physical_below_generation,39.687
+2024-10-03,T_GORDW-1,GORDW-1,,,,unmapped,39,6,0.0,40.35,2.3013333333333335,physical_below_generation,38.04866666666667
+2024-10-03,T_VKNGW-2,VKNGW-2,shetland_wind,Shetland Wind,Scotland,mapped,48,6,0.2,40.44166666666666,4.940333333333333,physical_below_generation,35.50133333333333
+2024-10-03,E_HRHLW-1,HRHLW-1,,,,unmapped,31,16,0.0,44.0,8.924,physical_below_generation,35.076
+2024-10-03,E_TULWW-1,TULWW-1,,,,unmapped,22,22,0.0,42.0,11.103999999999997,,30.896
+2024-10-03,T_DNLWW-1,DNLWW-1,,,,unmapped,25,8,0.0,31.0,2.218,physical_below_generation,28.782
+2024-10-03,T_CLDSW-1,CLDSW-1,,,,unmapped,43,4,0.0,28.35833333333334,2.425333333333333,physical_below_generation,25.933000000000007
+2024-10-03,T_GRIFW-2,GRIFW-2,,,,unmapped,26,2,0.0,28.725,3.267,physical_below_generation,25.458000000000002
+2024-10-03,T_BEATO-2,BEATO-2,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,17,0.0,34.16666666666667,10.148635869565215,physical_below_generation,24.018030797101456
+2024-10-03,T_MYGPW-1,MYGPW-1,,,,unmapped,45,24,0.0,29.75,6.31,physical_below_generation,23.44
+2024-10-03,T_BEATO-4,BEATO-4,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,9,0.0,31.21666666666667,10.264202894927536,physical_below_generation,20.952463771739133
+2024-10-03,E_CLFLW-1,CLFLW-1,,,,unmapped,37,19,0.0,27.5,8.773,physical_below_generation,18.727
+2024-10-03,T_DOUGW-1,DOUGW-1,,,,unmapped,43,27,0.0,35.75,17.733000000000004,physical_below_generation,18.016999999999996
+2024-10-03,T_DALQW-1,DALQW-1,,,,unmapped,45,33,0.0,62.5,46.784000000000006,physical_below_generation,15.715999999999994
+2024-10-03,T_GRIFW-1,GRIFW-1,,,,unmapped,25,2,0.0,18.216666666666665,2.682,physical_below_generation,15.534666666666665
+2024-10-03,T_BEATO-1,BEATO-1,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,19,0.0,26.791666666666664,11.51158333333333,physical_below_generation,15.280083333333334
+2024-10-03,T_TDBNW-1,TDBNW-1,,,,unmapped,24,0,0.0,14.025,0.0,physical_below_generation,14.025
+2024-10-03,T_CREAW-1,CREAW-1,,,,unmapped,8,0,0.0,12.5,0.0,physical_inconsistent,12.5
+2024-10-03,T_GORDW-2,GORDW-2,,,,unmapped,26,5,0.16666666666666666,30.041666666666668,17.755333333333333,physical_below_generation,12.286333333333335
+2024-10-03,T_BHLAW-1,BHLAW-1,,,,unmapped,36,0,0.0,9.841666666666669,0.0,physical_below_generation,9.841666666666669
+2024-10-03,T_CRYRW-3,CRYRW-3,,,,unmapped,35,31,0.0,21.75,11.922999999999998,physical_below_generation,9.827000000000002
+2024-10-03,E_CRGTW-1,CRGTW-1,,,,unmapped,48,48,0.0,26.25,19.826,,6.4239999999999995
+2024-10-03,T_SGRWO-2,SGRWO-2,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,24,15,0.35,12.016666666666666,10.444894927536232,physical_below_generation,1.5717717391304333
+2024-10-03,E_PIBUW-1,PIBUW-1,,,,unmapped,46,46,0.0,228.25,228.44699999999995,,-0.19699999999994589
+2024-10-03,T_SGRWO-5,SGRWO-5,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,23,14,0.4,10.266666666666667,11.088804347826086,physical_below_generation,-0.8221376811594183
+2024-10-03,T_SGRWO-4,SGRWO-4,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,25,15,0.5333333333333333,13.15,17.062414855072465,physical_below_generation,-3.9124148550724644
+2024-10-03,T_SGRWO-3,SGRWO-3,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,26,17,0.6,17.8,22.025307401268115,physical_below_generation,-4.225307401268115
+2024-10-03,T_SGRWO-1,SGRWO-1,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,39,21,1.2166666666666668,32.949999999999996,49.10375996376811,physical_below_generation,-16.153759963768117
+2024-10-03,T_SGRWO-6,SGRWO-6,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,37,23,1.4666666666666668,37.41666666666667,62.29724275362319,physical_below_generation,-24.880576086956516
+2024-10-04,T_WLNYO-3,WLNYO-3,,,,unmapped,48,0,0.0,5820.0,0.0,outage,5820.0
+2024-10-04,T_MOWEO-3,MOWEO-3,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,7.183333333333333,5361.5,0.0,outage,5361.5
+2024-10-04,T_WLNYO-4,WLNYO-4,,,,unmapped,48,17,0.0,5558.0,227.56399999999996,physical_below_generation,5330.436
+2024-10-04,T_MOWEO-1,MOWEO-1,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,5.033333333333333,4147.0,0.0,outage,4147.0
+2024-10-04,T_MOWEO-2,MOWEO-2,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,11.8,4135.5,0.0,outage,4135.5
+2024-10-04,T_KLGLW-1,KLGLW-1,,,,unmapped,48,37,0.0,4427.0,351.881,physical_below_generation,4075.119
+2024-10-04,T_MOWWO-1,MOWWO-1,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,0.0,3995.0,0.0,outage,3995.0
+2024-10-04,T_MOWWO-2,MOWWO-2,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,0.0,3746.5,0.0,outage,3746.5
+2024-10-04,T_WDNSO-1,WDNSO-1,,,,unmapped,48,13,0.0,3386.5,89.918,physical_below_generation,3296.582
+2024-10-04,T_BRBEO-1,BRBEO-1,,,,unmapped,48,14,0.0,3327.5,82.299,physical_below_generation,3245.201
+2024-10-04,T_WDNSO-2,WDNSO-2,,,,unmapped,48,27,0.0,3386.5,368.50199999999995,physical_below_generation,3017.998
+2024-10-04,T_WLNYO-2,WLNYO-2,,,,unmapped,48,31,0.0,3020.25,286.32,physical_below_generation,2733.93
+2024-10-04,T_WHILW-1,WHILW-1,,,,unmapped,48,19,0.0,2713.5,263.809,physical_below_generation,2449.691
+2024-10-04,T_WLNYW-1,WLNYW-1,,,,unmapped,48,35,0.0,2168.5,285.33,physical_below_generation,1883.17
+2024-10-04,T_SOKYW-1,SOKYW-1,,,,unmapped,48,0,0.0,1747.0,0.0,physical_below_generation,1747.0
+2024-10-04,T_RRWW-1,RRWW-1,,,,unmapped,48,12,0.0,1507.5,42.104,physical_below_generation,1465.396
+2024-10-04,T_FALGW-1,FALGW-1,,,,unmapped,48,30,0.0,1708.5,310.08000000000004,physical_below_generation,1398.42
+2024-10-04,T_ARCHW-1,ARCHW-1,,,,unmapped,48,39,0.0,1516.0,225.24999999999997,physical_below_generation,1290.75
+2024-10-04,T_HOWBO-2,HOWBO-2,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,36,7,0.0,1291.5,24.091999999999995,physical_below_generation,1267.408
+2024-10-04,T_HOWBO-1,HOWBO-1,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,36,13,0.0,1290.75,53.91476525821594,physical_below_generation,1236.835234741784
+2024-10-04,T_WHILW-2,WHILW-2,,,,unmapped,48,19,0.0,1376.0,154.19,physical_below_generation,1221.81
+2024-10-04,T_RREW-1,RREW-1,,,,unmapped,48,12,0.0,1200.0,52.108,physical_below_generation,1147.892
+2024-10-04,T_HOWAO-1,HOWAO-1,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,35,6,0.0,1154.25,13.139999999999995,physical_below_generation,1141.11
+2024-10-04,T_KPMRW-1,KPMRW-1,,,,unmapped,48,19,0.0,1217.75,77.75,physical_below_generation,1140.0
+2024-10-04,T_HOWAO-2,HOWAO-2,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,35,12,0.0,1169.0,33.672,physical_below_generation,1135.328
+2024-10-04,T_HOWAO-3,HOWAO-3,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,35,16,0.0,1171.5,76.818,physical_below_generation,1094.682
+2024-10-04,T_HOWBO-3,HOWBO-3,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,36,12,0.0,1135.0,44.896,physical_below_generation,1090.104
+2024-10-04,E_BTUIW-3,BTUIW-3,,,,unmapped,48,35,0.0,1118.0,35.501999999999995,physical_below_generation,1082.498
+2024-10-04,T_WISTW-2,WISTW-2,,,,unmapped,48,33,3.666666666666667,1255.25,183.594,physical_below_generation,1071.656
+2024-10-04,T_DRSLW-1,DRSLW-1,,,,unmapped,48,12,0.0,1113.0,47.620000000000005,physical_below_generation,1065.38
+2024-10-04,T_EAAO-2,EAAO-2,east_anglia_offshore,East Anglia Offshore,England/Wales,mapped,48,44,0.0,1527.5,500.16799999999995,physical_below_generation,1027.332
+2024-10-04,E_KINCW-1,KINCW-1,,,,unmapped,48,31,0.0,1035.75,45.513999999999996,physical_below_generation,990.236
+2024-10-04,T_GYMR-17,GYMRO-17,north_wales_offshore,North Wales Offshore,England/Wales,mapped,48,20,0.0,1044.5,89.82,physical_below_generation,954.6800000000001
+2024-10-04,T_BOWLW-1,BOWLW-1,,,,unmapped,48,29,0.0,956.25,45.99599999999999,physical_below_generation,910.254
+2024-10-04,E_BURBO,BURBW-1,,,,unmapped,48,20,0.0,923.75,51.232000000000006,physical_below_generation,872.518
+2024-10-04,T_OMNDW-1,OMNDO-1,,,,unmapped,48,0,0.0,858.0,0.0,physical_below_generation,858.0
+2024-10-04,T_GYMR-15,GYMRO-15,north_wales_offshore,North Wales Offshore,England/Wales,mapped,48,28,0.0,992.5,143.57999999999998,physical_below_generation,848.9200000000001
+2024-10-04,T_BEATO-1,BEATO-1,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,1,0.0,851.4166666666667,6.597000000000001,physical_below_generation,844.8196666666668
+2024-10-04,T_BLKWW-1,BLKWW-1,,,,unmapped,48,29,0.0,908.25,134.74200000000002,physical_below_generation,773.508
+2024-10-04,T_AKGLW-3,AKGLW-3,,,,unmapped,48,37,0.0,1118.75,347.32000000000005,physical_below_generation,771.43
+2024-10-04,T_AKGLW-2,AKGLW-2,,,,unmapped,48,14,0.0,785.5,18.59,physical_below_generation,766.91
+2024-10-04,T_AFTOW-1,AFTOW-1,,,,unmapped,48,8,0.0,773.5,14.306999999999995,physical_below_generation,759.193
+2024-10-04,T_MIDMW-1,MIDMW-1,,,,unmapped,48,16,0.0,778.25,23.797,physical_below_generation,754.453
+2024-10-04,T_CGTHW-1,CGTHW-1,,,,unmapped,48,4,0.0,744.5,5.359999999999999,physical_below_generation,739.14
+2024-10-04,T_PNYCW-1,PNYCW-1,,,England/Wales,region_only,48,0,0.0,739.0,0.0,physical_below_generation,739.0
+2024-10-04,T_MKHLW-1,MKHLW-1,,,,unmapped,48,21,0.0,777.5,43.63,physical_below_generation,733.87
+2024-10-04,T_BLLA-1,BLLA-1,,,,unmapped,48,20,0.0,752.0,53.938,physical_below_generation,698.062
+2024-10-04,T_MILWW-1,MILWW-1,,,,unmapped,48,39,0.0,903.5,210.26,physical_below_generation,693.24
+2024-10-04,T_RCBKO-2,RCBKO-2,humber_offshore,Humber Offshore,England/Wales,mapped,33,4,0.0,662.5,10.237,physical_below_generation,652.263
+2024-10-04,T_RCBKO-1,RCBKO-1,humber_offshore,Humber Offshore,England/Wales,mapped,33,7,1.1,663.0,16.657999999999998,physical_below_generation,646.342
+2024-10-04,T_KENNW-1,KENNW-1,,,,unmapped,48,38,0.0,965.75,349.805,physical_below_generation,615.9449999999999
+2024-10-04,T_TKNWW-1,TKNWW-1,humber_offshore,Humber Offshore,England/Wales,mapped,48,12,0.0,636.0,20.226,physical_below_generation,615.774
+2024-10-04,T_DOREW-1,DOREW-1,,,,unmapped,42,31,1.4166666666666667,1166.75,552.7629999999999,physical_below_generation,613.9870000000001
+2024-10-04,T_ABRBO-1,ABRBO-1,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,0,0.0,599.5,0.0,physical_below_generation,599.5
+2024-10-04,E_BTUIW-2,BTUIW-2,,,,unmapped,48,12,0.0,608.5,14.546000000000001,physical_below_generation,593.954
+2024-10-04,T_ACHRW-1,ACHRW-1,,,,unmapped,48,36,0.0,770.5,187.95100000000002,physical_below_generation,582.549
+2024-10-04,T_GYMR-26,GYMRO-26,north_wales_offshore,North Wales Offshore,England/Wales,mapped,48,26,0.0,668.0,95.28999999999999,physical_below_generation,572.71
+2024-10-04,T_CRYRW-2,CRYRW-2,,,,unmapped,48,18,0.0,655.25,82.54,physical_below_generation,572.71
+2024-10-04,T_GYMR-28,GYMRO-28,north_wales_offshore,North Wales Offshore,England/Wales,mapped,48,21,0.0,644.0,81.44,physical_below_generation,562.56
+2024-10-04,T_SANQW-1,SANQW-1,,,,unmapped,48,11,0.0,577.75,15.732000000000001,physical_below_generation,562.018
+2024-10-04,T_TWSHW-1,TWSHW-1,,,,unmapped,48,42,2.0833333333333335,785.5,230.092,physical_below_generation,555.408
+2024-10-04,T_HRSTW-1,HRSTW-1,,,,unmapped,48,22,0.0,622.5,69.926,physical_below_generation,552.574
+2024-10-04,T_WHIHW-1,WHIHW-1,,,,unmapped,48,5,0.0,556.5,4.149,physical_below_generation,552.351
+2024-10-04,T_BEATO-3,BEATO-3,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,1,0.0,548.45,2.656000000000006,physical_below_generation,545.7940000000001
+2024-10-04,T_SAKNW-1,SAKNW-1,,,,unmapped,48,27,10.633333333333333,776.75,240.51899999999998,physical_below_generation,536.231
+2024-10-04,T_CLDNW-1,CLDNW-1,,,Scotland,region_only,48,1,0.0,532.4666666666667,0.07299999999999329,physical_below_generation,532.3936666666667
+2024-10-04,T_TKNEW-1,TKNEW-1,humber_offshore,Humber Offshore,England/Wales,mapped,48,14,0.0,539.0,24.567534741784016,physical_below_generation,514.432465258216
+2024-10-04,T_CRGHW-1,CRGHW-1,,,,unmapped,48,27,0.0,593.25,81.858,physical_below_generation,511.392
+2024-10-04,T_WTMSO-1,WTMSO-1,,,,unmapped,36,6,0.0,516.25,7.012,physical_below_generation,509.238
+2024-10-04,T_BEATO-2,BEATO-2,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,2,0.0,521.5833333333333,13.135000000000005,physical_below_generation,508.44833333333327
+2024-10-04,T_KILBW-1,KILBW-1,,,,unmapped,48,25,0.0,617.25,117.682,physical_below_generation,499.568
+2024-10-04,E_ASHWW-1,ASHWW-1,,,,unmapped,48,15,0.0,527.0,30.746000000000002,physical_below_generation,496.254
+2024-10-04,T_WDRGW-1,WDRGW-1,,,,unmapped,48,43,2.4833333333333334,868.25,380.5,physical_below_generation,487.75
+2024-10-04,T_HALSW-1,HALSW-1,,,,unmapped,48,15,0.6666666666666666,509.0,47.032,physical_below_generation,461.968
+2024-10-04,T_BLLA-2,BLLA-2,,,,unmapped,48,33,0.0,550.5,94.68100000000001,physical_below_generation,455.81899999999996
+2024-10-04,T_CREAW-1,CREAW-1,,,,unmapped,28,13,0.0,505.25,77.56299999999999,physical_inconsistent,427.687
+2024-10-04,E_HBHDW-1,HBHDW-1,,,,unmapped,48,20,0.0,459.75,46.623000000000005,physical_below_generation,413.127
+2024-10-04,E_CNCLW-1,CNCLW-1,,,,unmapped,48,31,0.0,524.5,120.554,physical_below_generation,403.946
+2024-10-04,T_STLGW-3,STLGW-3,,,,unmapped,48,5,0.0,407.75,6.113000000000003,physical_below_generation,401.637
+2024-10-04,T_COUWW-1,COUWW-1,,,,unmapped,48,7,0.0,405.0,5.4849999999999985,physical_below_generation,399.515
+2024-10-04,E_HRHLW-1,HRHLW-1,,,,unmapped,48,17,0.0,407.5,15.646,physical_below_generation,391.854
+2024-10-04,E_BRYBW-1,BRYBW-1,,,,unmapped,48,31,2.1,563.0,194.48499999999999,physical_below_generation,368.515
+2024-10-04,T_MOWWO-3,MOWWO-3,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,24,0,0.0,368.5,0.0,outage,368.5
+2024-10-04,T_DOREW-2,DOREW-2,,,,unmapped,42,29,1.2,859.0,494.55899999999997,physical_below_generation,364.44100000000003
+2024-10-04,E_GRGRW-1,GRGRW-1,,,,unmapped,48,30,0.0,446.25,91.30199999999999,physical_below_generation,354.948
+2024-10-04,T_KYPEW-1,KYPEW-1,,,,unmapped,22,0,0.0,354.5,0.0,physical_below_generation,354.5
+2024-10-04,T_GNAPW-1,GNAPW-1,,,,unmapped,48,19,0.0,368.5,15.325000000000001,physical_below_generation,353.175
+2024-10-04,T_HADHW-1,HADHW-1,,,,unmapped,48,1,0.0,351.8083333333334,2.5040000000000013,physical_below_generation,349.3043333333334
+2024-10-04,T_SHRSW-2,SHRSO-2,,,,unmapped,37,16,0.0,395.5,55.22200000000001,physical_below_generation,340.278
+2024-10-04,T_HMGTO-1,HMGTO-1,,,,unmapped,48,23,0.0,365.0,27.287000000000003,physical_below_generation,337.713
+2024-10-04,T_STLGW-2,STLGW-2,,,,unmapped,48,7,0.0,365.80833333333334,37.111999999999995,physical_below_generation,328.6963333333333
+2024-10-04,T_BDCHW-1,BDCHW-1,,,,unmapped,48,16,0.0,337.0,20.04,physical_below_generation,316.96
+2024-10-04,T_DALQW-1,DALQW-1,,,,unmapped,48,25,0.0,444.5,130.76,physical_below_generation,313.74
+2024-10-04,T_CLDCW-1,CLDCW-1,,,Scotland,region_only,48,0,0.0,298.90000000000003,0.0,physical_below_generation,298.90000000000003
+2024-10-04,E_BNWKW-1,BNWKW-1,,,,unmapped,48,25,0.0,333.75,38.734,physical_below_generation,295.016
+2024-10-04,T_DUNGW-1,DUNGW-1,,,,unmapped,48,16,12.6,660.025,365.5783333333334,physical_below_generation,294.4466666666666
+2024-10-04,T_BEINW-1,BEINW-1,,,,unmapped,48,47,0.0,1019.0,725.615,physical_below_generation,293.385
+2024-10-04,T_SHRSW-1,SHRSO-1,,,,unmapped,37,17,0.0,328.5,38.915000000000006,physical_below_generation,289.585
+2024-10-04,E_BABAW-1,BABAW-1,,,,unmapped,48,19,0.7,393.5,109.00200000000001,physical_below_generation,284.498
+2024-10-04,T_HMGTO-2,HMGTO-2,,,,unmapped,48,22,0.0,298.0,16.967,physical_below_generation,281.033
+2024-10-04,E_BETHW-1,BETHW-1,,,,unmapped,48,31,0.0,350.0,72.47399999999999,physical_below_generation,277.526
+2024-10-04,E_HLTWW-1,HLTWW-1,,,,unmapped,48,6,0.0,271.5,4.817,physical_below_generation,266.683
+2024-10-04,T_GLWSW-1,GLWSW-1,,,,unmapped,48,24,0.0,313.25,47.82900000000001,physical_below_generation,265.421
+2024-10-04,T_STLGW-1,STLGW-1,,,,unmapped,48,12,0.0,383.4083333333333,129.51500000000001,physical_below_generation,253.8933333333333
+2024-10-04,T_ANSUW-1,ANSUW-1,,,,unmapped,48,15,0.0,257.5,8.344000000000001,physical_below_generation,249.156
+2024-10-04,T_DDGNO-1,DDGNO-1,,,,unmapped,48,24,0.0,285.0,36.925,physical_below_generation,248.075
+2024-10-04,T_DDGNO-4,DDGNO-4,,,,unmapped,47,19,0.0,264.0,21.085,physical_below_generation,242.915
+2024-10-04,T_DDGNO-3,DDGNO-3,,,,unmapped,48,30,0.0,276.0,33.333,physical_below_generation,242.667
+2024-10-04,T_BEATO-4,BEATO-4,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,1,0.0,244.95833333333334,3.9410000000000025,physical_below_generation,241.01733333333334
+2024-10-04,T_FSDLW-1,FSDLW-1,,,,unmapped,48,0,0.0,225.25,0.0,physical_below_generation,225.25
+2024-10-04,T_DDGNO-2,DDGNO-2,,,,unmapped,47,14,0.0,212.0,12.483,physical_below_generation,199.517
+2024-10-04,T_MOWWO-4,MOWWO-4,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,15,0,0.0,195.5,0.0,outage,195.5
+2024-10-04,T_DNLWW-1,DNLWW-1,,,,unmapped,48,16,0.0,198.5,14.95,physical_below_generation,183.55
+2024-10-04,T_LNCSW-2,LNCSO-2,,,,unmapped,34,13,0.0,196.75,14.558,physical_below_generation,182.192
+2024-10-04,T_RMPNO-2,RMPNO-2,,,,unmapped,48,18,0.0,198.0,25.698,physical_below_generation,172.302
+2024-10-04,T_DOUGW-1,DOUGW-1,,,,unmapped,48,2,0.0,159.25,1.416,physical_below_generation,157.834
+2024-10-04,T_LNCSW-1,LNCSO-1,,,,unmapped,34,16,0.0,174.0,23.576,physical_below_generation,150.424
+2024-10-04,T_CLDSW-1,CLDSW-1,,,,unmapped,48,2,0.0,151.8416666666667,1.4819999999999993,physical_below_generation,150.3596666666667
+2024-10-04,T_BHLAW-1,BHLAW-1,,,,unmapped,48,0,0.0,149.8,0.0,physical_below_generation,149.8
+2024-10-04,T_RMPNO-1,RMPNO-1,,,,unmapped,48,17,0.0,166.5,21.749000000000002,physical_below_generation,144.751
+2024-10-04,T_STRNW-1,STRNW-1,,,,unmapped,48,3,0.0,139.61666666666667,5.666,physical_below_generation,133.95066666666668
+2024-10-04,E_TULWW-1,TULWW-1,,,,unmapped,48,34,0.0,146.0,20.759,physical_below_generation,125.241
+2024-10-04,T_GANW-24,GAOFO-4,,,,unmapped,48,38,0.0,187.5,64.25999999999999,physical_below_generation,123.24000000000001
+2024-10-04,T_GANW-22,GAOFO-2,,,,unmapped,48,39,0.0,158.5,49.91,physical_below_generation,108.59
+2024-10-04,T_GORDW-1,GORDW-1,,,,unmapped,48,1,0.5833333333333334,108.73333333333333,0.6573333333333333,physical_below_generation,108.07600000000001
+2024-10-04,T_GANW-13,GAOFO-3,,,,unmapped,48,38,0.0,161.0,55.39999999999999,physical_below_generation,105.60000000000001
+2024-10-04,T_CRYRW-3,CRYRW-3,,,,unmapped,48,27,0.0,123.0,19.305,physical_below_generation,103.695
+2024-10-04,T_GANW-11,GAOFO-1,,,,unmapped,48,33,0.0,138.5,38.462,physical_below_generation,100.038
+2024-10-04,T_LARYW-3,LARYO-3,,,,unmapped,48,33,0.0,143.0,45.572,physical_below_generation,97.428
+2024-10-04,T_LARYW-4,LARYO-4,,,,unmapped,48,29,0.0,126.5,34.365,physical_below_generation,92.13499999999999
+2024-10-04,T_EDINW-1,EDINW-1,,,,unmapped,37,24,0.0,285.25,195.75,physical_below_generation,89.5
+2024-10-04,T_LARYW-2,LARYO-2,,,,unmapped,48,32,0.0,133.0,45.44500000000001,physical_below_generation,87.55499999999999
+2024-10-04,T_MYGPW-1,MYGPW-1,,,,unmapped,48,8,0.0,87.0,3.69,physical_below_generation,83.31
+2024-10-04,T_LARYW-1,LARYO-1,,,,unmapped,48,36,0.0,131.5,51.345,physical_below_generation,80.155
+2024-10-04,T_GRIFW-2,GRIFW-2,,,,unmapped,48,2,0.0,56.99166666666667,3.2279999999999998,physical_below_generation,53.763666666666666
+2024-10-04,T_VKNGW-3,VKNGW-3,shetland_wind,Shetland Wind,Scotland,mapped,48,17,1.3,105.28333333333333,58.14566666666667,physical_below_generation,47.13766666666666
+2024-10-04,T_DBAWO-1,DBAWO-1,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,26,0,0.0,47.0,0.0,outage,47.0
+2024-10-04,T_GRIFW-1,GRIFW-1,,,,unmapped,48,2,0.0,45.858333333333334,1.137,physical_below_generation,44.721333333333334
+2024-10-04,T_TDBNW-1,TDBNW-1,,,,unmapped,48,9,0.0,50.49166666666667,5.853,physical_below_generation,44.638666666666666
+2024-10-04,E_CLFLW-1,CLFLW-1,,,,unmapped,48,30,0.0,54.5,12.393,physical_below_generation,42.107
+2024-10-04,T_VKNGW-1,VKNGW-1,shetland_wind,Shetland Wind,Scotland,mapped,48,29,2.1166666666666667,132.925,93.34033333333335,physical_below_generation,39.584666666666664
+2024-10-04,T_GRGBW-1,GRGBW-1,,,,unmapped,35,10,0.0,49.40833333333333,9.955333333333334,physical_below_generation,39.452999999999996
+2024-10-04,T_GNFSW-1,GNFSW-1,east_anglia_offshore,East Anglia Offshore,England/Wales,mapped,37,12,0.0,42.5,7.841,physical_below_generation,34.659
+2024-10-04,T_VKNGW-4,VKNGW-4,shetland_wind,Shetland Wind,Scotland,mapped,48,23,2.683333333333333,177.2333333333333,142.94050697463769,physical_below_generation,34.292826358695606
+2024-10-04,T_GNFSW-2,GNFSW-2,east_anglia_offshore,East Anglia Offshore,England/Wales,mapped,44,18,0.0,40.0,7.799,physical_below_generation,32.201
+2024-10-04,T_GRGBW-2,GRGBW-2,,,,unmapped,40,17,0.0,45.575,22.606333333333332,physical_below_generation,22.96866666666667
+2024-10-04,T_THNTO-2,THNTO-2,,,,unmapped,36,30,0.0,48.75,28.697,physical_below_generation,20.053
+2024-10-04,T_THNTO-1,THNTO-1,,,,unmapped,36,32,0.0,48.75,29.49,physical_below_generation,19.26
+2024-10-04,T_EWHLW-1,EWHLW-1,,,,unmapped,4,4,0.0,21.5,5.927,,15.573
+2024-10-04,E_PIBUW-1,PIBUW-1,,,,unmapped,48,47,0.0,646.25,631.936,physical_inconsistent,14.313999999999965
+2024-10-04,T_GORDW-2,GORDW-2,,,,unmapped,48,41,0.0,140.93333333333334,129.80833333333334,physical_below_generation,11.125
+2024-10-04,E_CRGTW-1,CRGTW-1,,,,unmapped,48,47,0.0,31.5,22.978,physical_inconsistent,8.521999999999998
+2024-10-04,T_VKNGW-2,VKNGW-2,shetland_wind,Shetland Wind,Scotland,mapped,48,36,2.866666666666667,128.84166666666667,126.38933333333334,physical_below_generation,2.4523333333333284
+2024-10-04,T_SGRWO-5,SGRWO-5,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,48,0.0,476.29166666666663,497.11766666666665,,-20.826000000000022
+2024-10-04,T_SGRWO-2,SGRWO-2,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,48,0.0,294.1833333333334,315.3223333333333,,-21.138999999999896
+2024-10-04,T_SGRWO-4,SGRWO-4,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,48,0.0,248.825,286.06399999999996,,-37.238999999999976
+2024-10-04,T_SGRWO-3,SGRWO-3,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,48,0.0,325.2416666666667,369.3796666666667,,-44.138000000000034
+2024-10-04,T_SGRWO-1,SGRWO-1,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,48,0.0,629.8416666666667,706.7836666666667,,-76.94200000000001
+2024-10-04,T_SGRWO-6,SGRWO-6,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,48,0.0,398.7166666666667,491.34366666666665,,-92.62699999999995
+2024-10-05,T_WLNYO-3,WLNYO-3,,,,unmapped,48,0,0.0,5907.5,0.0,outage,5907.5
+2024-10-05,T_WLNYO-4,WLNYO-4,,,,unmapped,48,29,0.0,6045.5,435.473,physical_below_generation,5610.027
+2024-10-05,T_HOWBO-2,HOWBO-2,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,14,0.0,4598.75,228.14,physical_below_generation,4370.61
+2024-10-05,T_HOWBO-1,HOWBO-1,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,22,0.0,4613.5,416.231,physical_below_generation,4197.269
+2024-10-05,T_KLGLW-1,KLGLW-1,,,,unmapped,48,44,1.8666666666666667,4813.0,655.749,physical_below_generation,4157.251
+2024-10-05,T_BRBEO-1,BRBEO-1,,,,unmapped,48,24,0.0,4496.25,444.98299999999995,physical_below_generation,4051.267
+2024-10-05,T_HOWAO-1,HOWAO-1,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,14,0.0,4463.0,466.022,physical_below_generation,3996.978
+2024-10-05,T_HOWAO-2,HOWAO-2,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,24,0.0,4430.75,438.971,physical_below_generation,3991.779
+2024-10-05,T_HOWAO-3,HOWAO-3,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,24,0.0,4473.0,486.14200000000005,physical_below_generation,3986.858
+2024-10-05,T_MOWEO-3,MOWEO-3,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,2.083333333333333,3939.5,0.0,outage,3939.5
+2024-10-05,T_HOWBO-3,HOWBO-3,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,18,0.0,4079.25,280.14,physical_below_generation,3799.11
+2024-10-05,T_EAAO-2,EAAO-2,east_anglia_offshore,East Anglia Offshore,England/Wales,mapped,48,41,0.0,3983.5,508.959,physical_below_generation,3474.541
+2024-10-05,T_WDNSO-1,WDNSO-1,,,,unmapped,48,20,0.0,3467.5,187.52000000000004,physical_below_generation,3279.98
+2024-10-05,T_MOWEO-1,MOWEO-1,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,8.033333333333333,3123.0,0.0,outage,3123.0
+2024-10-05,T_WDNSO-2,WDNSO-2,,,,unmapped,48,33,0.0,3467.5,493.168,physical_below_generation,2974.332
+2024-10-05,T_WLNYO-2,WLNYO-2,,,,unmapped,48,36,0.0,3365.0,537.94,physical_below_generation,2827.06
+2024-10-05,T_MOWEO-2,MOWEO-2,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,6.000000000000001,2811.0,0.0,outage,2811.0
+2024-10-05,T_TKNWW-1,TKNWW-1,humber_offshore,Humber Offshore,England/Wales,mapped,48,7,0.0,2762.0,40.11099999999999,physical_below_generation,2721.889
+2024-10-05,T_WHILW-1,WHILW-1,,,,unmapped,48,20,0.0,2686.5,218.11599999999999,physical_below_generation,2468.384
+2024-10-05,T_MOWWO-1,MOWWO-1,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,0.0,2400.0,0.0,outage,2400.0
+2024-10-05,T_MOWWO-2,MOWWO-2,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,0.0,2348.0,0.0,outage,2348.0
+2024-10-05,T_WLNYW-1,WLNYW-1,,,,unmapped,48,34,0.0,2696.0,416.64,physical_below_generation,2279.36
+2024-10-05,T_TKNEW-1,TKNEW-1,humber_offshore,Humber Offshore,England/Wales,mapped,48,1,0.0,2253.0,4.675999999999998,physical_below_generation,2248.324
+2024-10-05,T_WTMSO-1,WTMSO-1,,,,unmapped,48,14,0.0,2263.75,87.02600000000001,physical_below_generation,2176.724
+2024-10-05,T_RCBKO-2,RCBKO-2,humber_offshore,Humber Offshore,England/Wales,mapped,48,20,0.0,2082.25,79.93599999999999,physical_below_generation,2002.314
+2024-10-05,T_SOKYW-1,SOKYW-1,,,,unmapped,48,0,0.0,1980.75,0.0,physical_below_generation,1980.75
+2024-10-05,T_RCBKO-1,RCBKO-1,humber_offshore,Humber Offshore,England/Wales,mapped,48,27,0.0,2103.5,137.54700000000003,physical_below_generation,1965.953
+2024-10-05,T_RMPNO-2,RMPNO-2,,,,unmapped,48,13,0.0,1857.0,27.281999999999996,physical_below_generation,1829.718
+2024-10-05,T_RMPNO-1,RMPNO-1,,,,unmapped,48,13,0.0,1810.5,27.889999999999997,physical_below_generation,1782.61
+2024-10-05,T_PNYCW-1,PNYCW-1,,,England/Wales,region_only,48,0,13.200000000000001,1534.0,0.0,physical_below_generation,1534.0
+2024-10-05,T_ARCHW-1,ARCHW-1,,,,unmapped,48,40,0.0,1581.0,162.73000000000002,physical_below_generation,1418.27
+2024-10-05,T_GYMR-15,GYMRO-15,north_wales_offshore,North Wales Offshore,England/Wales,mapped,48,35,0.0,1889.5,485.3,physical_below_generation,1404.2
+2024-10-05,T_GYMR-17,GYMRO-17,north_wales_offshore,North Wales Offshore,England/Wales,mapped,48,33,0.0,1606.0,264.63,physical_below_generation,1341.37
+2024-10-05,T_RRWW-1,RRWW-1,,,,unmapped,48,21,0.0,1443.0,127.273,physical_below_generation,1315.727
+2024-10-05,E_BURBO,BURBW-1,,,,unmapped,48,28,0.0,1515.25,226.697,physical_below_generation,1288.5529999999999
+2024-10-05,T_FALGW-1,FALGW-1,,,,unmapped,48,28,0.0,1520.25,240.65,physical_below_generation,1279.6
+2024-10-05,T_WHILW-2,WHILW-2,,,,unmapped,48,22,0.0,1387.5,140.59,physical_below_generation,1246.91
+2024-10-05,T_HMGTO-1,HMGTO-1,,,,unmapped,48,26,0.0,1398.5,175.716,physical_below_generation,1222.784
+2024-10-05,T_OMNDW-1,OMNDO-1,,,,unmapped,48,0,0.0,1100.25,0.0,physical_below_generation,1100.25
+2024-10-05,T_HMGTO-2,HMGTO-2,,,,unmapped,48,21,0.0,1190.5,118.262,physical_below_generation,1072.238
+2024-10-05,T_LNCSW-2,LNCSO-2,,,,unmapped,48,26,0.0,1184.75,130.852,physical_below_generation,1053.898
+2024-10-05,E_BTUIW-3,BTUIW-3,,,,unmapped,48,32,1.5666666666666667,1136.5,95.183,physical_below_generation,1041.317
+2024-10-05,T_BOWLW-1,BOWLW-1,,,,unmapped,48,31,0.0,1151.25,114.787,physical_below_generation,1036.463
+2024-10-05,T_RREW-1,RREW-1,,,,unmapped,48,25,0.0,1144.0,124.364,physical_below_generation,1019.636
+2024-10-05,T_LNCSW-1,LNCSO-1,,,,unmapped,48,26,0.0,1069.0,82.909,physical_below_generation,986.091
+2024-10-05,T_GYMR-26,GYMRO-26,north_wales_offshore,North Wales Offshore,England/Wales,mapped,48,24,0.0,1148.5,167.72,physical_below_generation,980.78
+2024-10-05,T_GYMR-28,GYMRO-28,north_wales_offshore,North Wales Offshore,England/Wales,mapped,48,32,0.0,1123.5,200.96,physical_below_generation,922.54
+2024-10-05,E_KINCW-1,KINCW-1,,,,unmapped,48,45,0.0,1065.25,150.827,physical_below_generation,914.423
+2024-10-05,T_KPMRW-1,KPMRW-1,,,,unmapped,48,27,0.0,1078.75,166.08,physical_below_generation,912.67
+2024-10-05,T_BLKWW-1,BLKWW-1,,,,unmapped,48,38,0.0,1053.0,164.678,physical_below_generation,888.322
+2024-10-05,T_AFTOW-1,AFTOW-1,,,,unmapped,48,7,0.0,838.5,12.128000000000002,physical_below_generation,826.372
+2024-10-05,T_MKHLW-1,MKHLW-1,,,,unmapped,48,28,0.0,898.5,78.37,physical_below_generation,820.13
+2024-10-05,T_DRSLW-1,DRSLW-1,,,,unmapped,48,28,2.666666666666667,1087.0,308.73799999999994,physical_below_generation,778.2620000000001
+2024-10-05,T_DDGNO-1,DDGNO-1,,,,unmapped,48,33,0.0,923.5,180.478,physical_below_generation,743.0219999999999
+2024-10-05,T_KENNW-1,KENNW-1,,,,unmapped,48,28,0.0,962.5,224.805,physical_below_generation,737.6949999999999
+2024-10-05,T_LARYW-3,LARYO-3,,,,unmapped,48,35,0.0,821.0,106.27,physical_below_generation,714.73
+2024-10-05,T_DDGNO-4,DDGNO-4,,,,unmapped,48,28,0.0,835.5,120.845,physical_below_generation,714.655
+2024-10-05,T_WISTW-2,WISTW-2,,,,unmapped,48,39,11.2,1329.0,623.394,physical_below_generation,705.606
+2024-10-05,T_LARYW-2,LARYO-2,,,,unmapped,48,33,0.0,801.0,99.34,physical_below_generation,701.66
+2024-10-05,T_DDGNO-3,DDGNO-3,,,,unmapped,48,35,0.0,888.0,193.06,physical_below_generation,694.94
+2024-10-05,T_LARYW-4,LARYO-4,,,,unmapped,48,33,0.0,782.0,92.26,physical_below_generation,689.74
+2024-10-05,T_AKGLW-3,AKGLW-3,,,,unmapped,48,41,0.0,989.75,308.73199999999997,physical_below_generation,681.018
+2024-10-05,T_LARYW-1,LARYO-1,,,,unmapped,48,38,0.0,788.0,107.50999999999999,physical_below_generation,680.49
+2024-10-05,T_MOWWO-4,MOWWO-4,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,0.0,647.5,0.0,outage,647.5
+2024-10-05,T_CRYRW-2,CRYRW-2,,,,unmapped,48,12,0.0,712.5,80.923,physical_below_generation,631.577
+2024-10-05,T_BLLA-1,BLLA-1,,,,unmapped,48,24,0.0,755.5,135.96,physical_below_generation,619.54
+2024-10-05,T_AKGLW-2,AKGLW-2,,,,unmapped,48,11,0.0,655.25,36.2,physical_below_generation,619.05
+2024-10-05,T_MIDMW-1,MIDMW-1,,,,unmapped,48,24,0.0,732.0,117.17,physical_below_generation,614.83
+2024-10-05,T_CRGHW-1,CRGHW-1,,,,unmapped,48,28,0.0,692.0,86.091,physical_below_generation,605.909
+2024-10-05,E_BTUIW-2,BTUIW-2,,,,unmapped,48,16,0.0,637.0,35.187,physical_below_generation,601.813
+2024-10-05,T_SHRSW-2,SHRSO-2,,,,unmapped,48,26,0.0,744.0,144.213,physical_below_generation,599.787
+2024-10-05,T_ACHRW-1,ACHRW-1,,,,unmapped,48,36,0.0,805.25,206.78300000000002,physical_below_generation,598.467
+2024-10-05,T_GANW-24,GAOFO-4,,,,unmapped,48,38,0.0,669.0,74.69000000000001,physical_below_generation,594.31
+2024-10-05,T_GANW-22,GAOFO-2,,,,unmapped,48,36,0.0,659.5,68.36,physical_below_generation,591.14
+2024-10-05,T_ABRBO-1,ABRBO-1,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,0,0.0,577.0,0.0,physical_below_generation,577.0
+2024-10-05,T_SHRSW-1,SHRSO-1,,,,unmapped,48,26,0.0,691.5,115.853,physical_below_generation,575.647
+2024-10-05,T_DDGNO-2,DDGNO-2,,,,unmapped,48,25,0.0,678.0,103.524,physical_below_generation,574.476
+2024-10-05,T_GANW-11,GAOFO-1,,,,unmapped,48,34,0.0,634.0,63.131,physical_below_generation,570.869
+2024-10-05,T_GANW-13,GAOFO-3,,,,unmapped,48,38,0.0,670.0,100.66,physical_below_generation,569.34
+2024-10-05,T_MILWW-1,MILWW-1,,,,unmapped,48,31,0.0,668.25,138.12,physical_below_generation,530.13
+2024-10-05,T_KYPEW-1,KYPEW-1,,,,unmapped,34,11,2.466666666666667,578.0,51.39599999999999,physical_below_generation,526.604
+2024-10-05,T_CGTHW-1,CGTHW-1,,,,unmapped,48,7,0.26666666666666666,550.5,33.25,physical_below_generation,517.25
+2024-10-05,T_DOREW-1,DOREW-1,,,,unmapped,42,22,2.1,852.5,390.102,physical_below_generation,462.398
+2024-10-05,T_WHIHW-1,WHIHW-1,,,,unmapped,48,14,1.7333333333333334,630.5,169.39,physical_inconsistent,461.11
+2024-10-05,T_DBAWO-1,DBAWO-1,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,0,0.0,440.0,0.0,outage,440.0
+2024-10-05,T_KILBW-1,KILBW-1,,,,unmapped,48,36,0.0,668.0,232.27500000000003,physical_below_generation,435.72499999999997
+2024-10-05,T_BLLA-2,BLLA-2,,,,unmapped,48,31,0.0,571.0,140.133,physical_below_generation,430.86699999999996
+2024-10-05,T_DOREW-2,DOREW-2,,,,unmapped,42,27,1.2666666666666666,722.5,292.872,physical_below_generation,429.628
+2024-10-05,E_HBHDW-1,HBHDW-1,,,,unmapped,48,40,0.0,577.25,148.526,physical_below_generation,428.724
+2024-10-05,T_HRSTW-1,HRSTW-1,,,,unmapped,48,27,0.0,514.5,104.17,physical_below_generation,410.33
+2024-10-05,T_BEINW-1,BEINW-1,,,,unmapped,48,40,0.0,790.0,383.66700000000003,physical_below_generation,406.33299999999997
+2024-10-05,T_SANQW-1,SANQW-1,,,,unmapped,48,27,2.7,599.75,200.076,physical_below_generation,399.674
+2024-10-05,T_COUWW-1,COUWW-1,,,,unmapped,48,11,0.0,402.0,4.472999999999998,physical_below_generation,397.527
+2024-10-05,T_TWSHW-1,TWSHW-1,,,,unmapped,48,41,3.866666666666667,826.75,440.52099999999996,physical_below_generation,386.22900000000004
+2024-10-05,T_GLWSW-1,GLWSW-1,,,,unmapped,48,24,0.0,558.25,186.9,physical_below_generation,371.35
+2024-10-05,T_DALQW-1,DALQW-1,,,,unmapped,48,27,0.0,579.25,213.469,physical_below_generation,365.781
+2024-10-05,E_ASHWW-1,ASHWW-1,,,,unmapped,48,42,0.0,459.0,98.28900000000002,physical_below_generation,360.711
+2024-10-05,T_WDRGW-1,WDRGW-1,,,,unmapped,48,45,3.583333333333333,993.5,635.201,physical_below_generation,358.299
+2024-10-05,T_STLGW-1,STLGW-1,,,,unmapped,48,6,0.0,370.94999999999993,29.102999999999998,physical_below_generation,341.8469999999999
+2024-10-05,E_GRGRW-1,GRGRW-1,,,,unmapped,48,34,0.0,443.0,106.11699999999999,physical_below_generation,336.88300000000004
+2024-10-05,T_DUNGW-1,DUNGW-1,,,,unmapped,48,8,0.0,361.45833333333337,44.084999999999994,physical_below_generation,317.3733333333334
+2024-10-05,T_STLGW-3,STLGW-3,,,,unmapped,48,3,0.0,314.7916666666667,23.551000000000002,physical_below_generation,291.2406666666667
+2024-10-05,T_GNFSW-1,GNFSW-1,east_anglia_offshore,East Anglia Offshore,England/Wales,mapped,48,5,0.0,295.5,7.369999999999997,physical_below_generation,288.13
+2024-10-05,T_CLDCW-1,CLDCW-1,,,Scotland,region_only,48,2,0.0,289.2916666666667,15.112000000000002,physical_below_generation,274.17966666666666
+2024-10-05,T_CREAW-1,CREAW-1,,,,unmapped,48,30,0.0,335.0,63.206,physical_below_generation,271.794
+2024-10-05,T_STLGW-2,STLGW-2,,,,unmapped,48,4,0.0,279.6166666666667,8.154,physical_below_generation,271.4626666666667
+2024-10-05,T_THNTO-1,THNTO-1,,,,unmapped,48,23,0.0,301.5,39.458,physical_below_generation,262.04200000000003
+2024-10-05,T_THNTO-2,THNTO-2,,,,unmapped,48,25,0.0,301.5,40.365,physical_below_generation,261.135
+2024-10-05,T_GNAPW-1,GNAPW-1,,,,unmapped,48,30,1.1333333333333333,406.0,149.696,physical_below_generation,256.304
+2024-10-05,T_CLDNW-1,CLDNW-1,,,Scotland,region_only,48,1,0.0,271.275,18.615000000000002,physical_below_generation,252.65999999999997
+2024-10-05,T_GNFSW-2,GNFSW-2,east_anglia_offshore,East Anglia Offshore,England/Wales,mapped,48,11,0.0,256.25,4.214000000000002,physical_below_generation,252.036
+2024-10-05,E_BRYBW-1,BRYBW-1,,,,unmapped,48,33,0.03333333333333333,339.75,90.77,physical_below_generation,248.98000000000002
+2024-10-05,T_ANSUW-1,ANSUW-1,,,,unmapped,48,17,0.0,259.75,16.117,physical_below_generation,243.633
+2024-10-05,E_CNCLW-1,CNCLW-1,,,,unmapped,48,32,0.0,320.0,88.324,physical_below_generation,231.676
+2024-10-05,T_BHLAW-1,BHLAW-1,,,,unmapped,48,2,0.0,237.24166666666667,7.206000000000001,physical_below_generation,230.03566666666669
+2024-10-05,T_FSDLW-1,FSDLW-1,,,,unmapped,48,0,0.0,223.5,0.0,physical_below_generation,223.5
+2024-10-05,E_HRHLW-1,HRHLW-1,,,,unmapped,48,38,1.4,426.5,235.414,physical_below_generation,191.086
+2024-10-05,E_BETHW-1,BETHW-1,,,,unmapped,48,27,0.0,226.5,49.367999999999995,physical_below_generation,177.132
+2024-10-05,T_HADHW-1,HADHW-1,,,,unmapped,48,1,0.0,177.66666666666669,1.232999999999997,physical_below_generation,176.43366666666668
+2024-10-05,T_DOUGW-1,DOUGW-1,,,,unmapped,48,2,0.0,173.75,1.8650000000000002,physical_below_generation,171.885
+2024-10-05,T_HALSW-1,HALSW-1,,,,unmapped,48,28,0.3833333333333333,272.0,109.22900000000001,physical_below_generation,162.771
+2024-10-05,T_BEATO-3,BEATO-3,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,2,0.0,180.60833333333332,20.221,physical_below_generation,160.38733333333332
+2024-10-05,T_DNLWW-1,DNLWW-1,,,,unmapped,48,22,0.0,181.0,22.406,physical_below_generation,158.594
+2024-10-05,E_HLTWW-1,HLTWW-1,,,,unmapped,48,18,0.0,181.5,27.576,physical_below_generation,153.924
+2024-10-05,T_BEATO-1,BEATO-1,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,3,0.0,155.025,14.762,physical_below_generation,140.263
+2024-10-05,T_SAKNW-1,SAKNW-1,,,,unmapped,48,40,0.6333333333333333,1033.0,902.803,physical_below_generation,130.197
+2024-10-05,T_STRNW-1,STRNW-1,,,,unmapped,48,6,0.0,134.13333333333333,4.306,physical_below_generation,129.8273333333333
+2024-10-05,E_BNWKW-1,BNWKW-1,,,,unmapped,48,25,0.0,149.25,26.009999999999998,physical_below_generation,123.24000000000001
+2024-10-05,T_EWHLW-1,EWHLW-1,,,,unmapped,48,28,0.0,144.0,26.006999999999998,physical_below_generation,117.993
+2024-10-05,T_CLDSW-1,CLDSW-1,,,,unmapped,48,1,0.0,121.875,5.800999999999998,physical_below_generation,116.074
+2024-10-05,E_BABAW-1,BABAW-1,,,,unmapped,48,37,0.1,196.75,80.828,physical_below_generation,115.922
+2024-10-05,T_GORDW-2,GORDW-2,,,,unmapped,48,19,0.3333333333333333,152.70833333333334,38.72266666666667,physical_below_generation,113.98566666666667
+2024-10-05,T_BDCHW-1,BDCHW-1,,,,unmapped,48,12,0.08333333333333333,124.0,17.783,physical_below_generation,106.217
+2024-10-05,T_MOWWO-3,MOWWO-3,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,10,0,0.0,99.0,0.0,outage,99.0
+2024-10-05,T_GRGBW-1,GRGBW-1,,,,unmapped,48,7,0.0,102.75,8.437000000000001,physical_below_generation,94.313
+2024-10-05,T_GRIFW-2,GRIFW-2,,,,unmapped,48,3,0.0,106.80833333333334,12.538,physical_below_generation,94.27033333333334
+2024-10-05,T_BEATO-4,BEATO-4,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,2,0.0,119.05000000000001,26.933999999999997,physical_below_generation,92.11600000000001
+2024-10-05,T_CRYRW-3,CRYRW-3,,,,unmapped,48,25,0.0,118.25,27.601999999999997,physical_below_generation,90.648
+2024-10-05,T_GRGBW-2,GRGBW-2,,,,unmapped,48,15,0.0,119.125,30.490000000000002,physical_below_generation,88.63499999999999
+2024-10-05,E_TULWW-1,TULWW-1,,,,unmapped,48,27,0.0,92.25,15.183,physical_below_generation,77.06700000000001
+2024-10-05,T_MYGPW-1,MYGPW-1,,,,unmapped,48,4,0.0,73.5,1.5099999999999998,physical_below_generation,71.99
+2024-10-05,E_CLFLW-1,CLFLW-1,,,,unmapped,48,27,0.0,88.0,17.314,physical_below_generation,70.686
+2024-10-05,T_GORDW-1,GORDW-1,,,,unmapped,48,2,0.0,71.48333333333333,0.8500000000000005,physical_below_generation,70.63333333333334
+2024-10-05,T_GRIFW-1,GRIFW-1,,,,unmapped,48,8,0.0,83.44166666666666,13.052,physical_below_generation,70.38966666666667
+2024-10-05,T_VKNGW-1,VKNGW-1,shetland_wind,Shetland Wind,Scotland,mapped,48,18,0.5,133.75,80.76066666666667,physical_below_generation,52.989333333333335
+2024-10-05,T_VKNGW-4,VKNGW-4,shetland_wind,Shetland Wind,Scotland,mapped,48,27,0.3666666666666667,108.85,55.95933333333333,physical_below_generation,52.89066666666666
+2024-10-05,T_VKNGW-2,VKNGW-2,shetland_wind,Shetland Wind,Scotland,mapped,48,26,0.41666666666666663,113.81666666666666,62.31633333333333,physical_below_generation,51.50033333333333
+2024-10-05,T_TDBNW-1,TDBNW-1,,,,unmapped,48,8,0.0,57.300000000000004,6.584,physical_below_generation,50.71600000000001
+2024-10-05,T_BEATO-2,BEATO-2,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,0.0,48.69166666666666,0.0,physical_below_generation,48.69166666666666
+2024-10-05,T_VKNGW-3,VKNGW-3,shetland_wind,Shetland Wind,Scotland,mapped,48,27,0.3833333333333333,126.64166666666668,88.54633333333334,physical_below_generation,38.09533333333334
+2024-10-05,T_SGRWO-1,SGRWO-1,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,30,19.316666666666666,1819.2916666666665,1790.8473333333334,physical_below_generation,28.444333333333134
+2024-10-05,T_SGRWO-4,SGRWO-4,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,38,1.9833333333333334,705.7083333333334,683.2583333333334,physical_below_generation,22.449999999999932
+2024-10-05,T_SGRWO-5,SGRWO-5,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,42,2.3833333333333333,753.6083333333333,741.8433333333332,physical_below_generation,11.7650000000001
+2024-10-05,E_CRGTW-1,CRGTW-1,,,,unmapped,48,48,0.0,33.25,29.119,,4.131
+2024-10-05,E_PIBUW-1,PIBUW-1,,,,unmapped,48,48,0.0,652.0,652.1780000000001,,-0.17800000000011096
+2024-10-05,T_SGRWO-2,SGRWO-2,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,39,1.1166666666666667,620.45,624.6146666666666,physical_below_generation,-4.164666666666562
+2024-10-05,T_SGRWO-3,SGRWO-3,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,38,2.3666666666666667,844.6333333333334,855.5536666666667,physical_below_generation,-10.920333333333247
+2024-10-05,T_SGRWO-6,SGRWO-6,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,37,7.116666666666667,1810.2,1825.202,physical_below_generation,-15.001999999999953
+2024-10-06,T_HOWBO-2,HOWBO-2,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,2,0.0,8709.75,16.830000000000013,physical_below_generation,8692.92
+2024-10-06,T_HOWBO-1,HOWBO-1,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,9,0.0,8740.25,250.91000000000003,physical_below_generation,8489.34
+2024-10-06,T_HOWAO-2,HOWAO-2,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,20,0.0,8458.5,249.03599999999994,physical_below_generation,8209.464
+2024-10-06,T_HOWAO-3,HOWAO-3,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,26,0.0,8396.25,239.99900000000002,physical_below_generation,8156.251
+2024-10-06,T_HOWAO-1,HOWAO-1,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,24,0.0,8331.75,240.45600000000002,physical_below_generation,8091.294
+2024-10-06,T_EAAO-2,EAAO-2,east_anglia_offshore,East Anglia Offshore,England/Wales,mapped,48,11,0.0,8160.0,88.19099999999997,physical_below_generation,8071.809
+2024-10-06,T_HOWBO-3,HOWBO-3,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,20,0.0,7697.0,239.95,physical_below_generation,7457.05
+2024-10-06,T_TKNWW-1,TKNWW-1,humber_offshore,Humber Offshore,England/Wales,mapped,48,22,0.0,6501.0,414.866,physical_below_generation,6086.134
+2024-10-06,T_TKNEW-1,TKNEW-1,humber_offshore,Humber Offshore,England/Wales,mapped,48,18,0.0,6370.5,391.534,physical_below_generation,5978.966
+2024-10-06,T_WLNYO-3,WLNYO-3,,,,unmapped,48,0,0.0,5394.5,0.0,outage,5394.5
+2024-10-06,T_WLNYO-4,WLNYO-4,,,,unmapped,48,27,0.0,5352.75,254.43199999999996,physical_below_generation,5098.318
+2024-10-06,T_MOWEO-3,MOWEO-3,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,0.0,4705.5,0.0,outage,4705.5
+2024-10-06,T_RCBKO-2,RCBKO-2,humber_offshore,Humber Offshore,England/Wales,mapped,48,5,0.0,3997.0,70.196,physical_below_generation,3926.804
+2024-10-06,T_MOWEO-1,MOWEO-1,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,1.7666666666666668,3849.0,0.0,outage,3849.0
+2024-10-06,T_MOWEO-2,MOWEO-2,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,0.0,3747.5,0.0,outage,3747.5
+2024-10-06,T_RCBKO-1,RCBKO-1,humber_offshore,Humber Offshore,England/Wales,mapped,48,19,0.0,3957.75,261.299,physical_below_generation,3696.451
+2024-10-06,T_BRBEO-1,BRBEO-1,,,,unmapped,48,29,0.0,3676.0,403.804,physical_below_generation,3272.196
+2024-10-06,T_RMPNO-2,RMPNO-2,,,,unmapped,48,29,0.0,3574.5,393.62,physical_below_generation,3180.88
+2024-10-06,T_RMPNO-1,RMPNO-1,,,,unmapped,48,30,0.0,3500.5,428.331,physical_below_generation,3072.169
+2024-10-06,T_MOWWO-1,MOWWO-1,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,0.0,3032.5,0.0,outage,3032.5
+2024-10-06,T_WTMSO-1,WTMSO-1,,,,unmapped,48,6,0.0,3002.0,68.92399999999999,physical_below_generation,2933.076
+2024-10-06,T_KLGLW-1,KLGLW-1,,,,unmapped,48,40,0.0,3248.5,323.048,physical_below_generation,2925.452
+2024-10-06,T_MOWWO-2,MOWWO-2,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,0.0,2819.0,0.0,outage,2819.0
+2024-10-06,T_WDNSO-1,WDNSO-1,,,,unmapped,48,23,0.0,3023.5,270.678,physical_below_generation,2752.822
+2024-10-06,T_WLNYO-2,WLNYO-2,,,,unmapped,48,36,0.0,2967.0,360.65000000000003,physical_below_generation,2606.35
+2024-10-06,T_LARYW-3,LARYO-3,,,,unmapped,48,23,0.0,2876.5,293.48,physical_below_generation,2583.02
+2024-10-06,T_LARYW-4,LARYO-4,,,,unmapped,48,21,0.0,2804.5,241.53,physical_below_generation,2562.97
+2024-10-06,T_WDNSO-2,WDNSO-2,,,,unmapped,48,34,0.0,3023.5,508.284,physical_below_generation,2515.216
+2024-10-06,T_LARYW-2,LARYO-2,,,,unmapped,48,24,0.0,2701.5,360.99,physical_below_generation,2340.51
+2024-10-06,T_LARYW-1,LARYO-1,,,,unmapped,48,26,0.0,2713.5,415.49,physical_below_generation,2298.01
+2024-10-06,T_DDGNO-1,DDGNO-1,,,,unmapped,48,38,0.0,2134.0,130.617,physical_below_generation,2003.383
+2024-10-06,T_SHRSW-2,SHRSO-2,,,,unmapped,48,18,0.0,2214.5,216.317,physical_below_generation,1998.183
+2024-10-06,T_HMGTO-1,HMGTO-1,,,,unmapped,48,11,0.0,2050.0,102.241,physical_below_generation,1947.759
+2024-10-06,T_WLNYW-1,WLNYW-1,,,,unmapped,48,36,0.0,2302.5,355.91999999999996,physical_below_generation,1946.58
+2024-10-06,T_DDGNO-3,DDGNO-3,,,,unmapped,48,25,0.0,2156.5,223.63,physical_below_generation,1932.87
+2024-10-06,T_DDGNO-4,DDGNO-4,,,,unmapped,48,10,0.0,1918.5,26.973,physical_below_generation,1891.527
+2024-10-06,T_GANW-13,GAOFO-3,,,,unmapped,48,22,0.0,1924.5,47.63999999999999,physical_below_generation,1876.86
+2024-10-06,T_HMGTO-2,HMGTO-2,,,,unmapped,48,9,0.0,1957.5,99.238,physical_below_generation,1858.262
+2024-10-06,T_GANW-11,GAOFO-1,,,,unmapped,48,15,0.0,1897.5,43.69499999999998,physical_below_generation,1853.805
+2024-10-06,T_LNCSW-2,LNCSO-2,,,,unmapped,48,10,0.0,1914.5,73.96799999999999,physical_below_generation,1840.532
+2024-10-06,T_GANW-22,GAOFO-2,,,,unmapped,48,47,0.0,1798.0,25.599999999999994,physical_below_generation,1772.4
+2024-10-06,T_GANW-24,GAOFO-4,,,,unmapped,48,42,0.0,1795.5,39.12999999999999,physical_below_generation,1756.3700000000001
+2024-10-06,T_LNCSW-1,LNCSO-1,,,,unmapped,48,9,0.0,1770.25,52.83,physical_below_generation,1717.42
+2024-10-06,T_SHRSW-1,SHRSO-1,,,,unmapped,48,24,0.0,1862.5,210.37199999999999,physical_below_generation,1652.128
+2024-10-06,T_DDGNO-2,DDGNO-2,,,,unmapped,48,8,0.0,1474.0,11.313000000000002,physical_below_generation,1462.687
+2024-10-06,T_GYMR-15,GYMRO-15,north_wales_offshore,North Wales Offshore,England/Wales,mapped,48,33,0.0,1779.0,491.48999999999995,physical_below_generation,1287.51
+2024-10-06,T_SOKYW-1,SOKYW-1,,,,unmapped,48,0,0.0,1213.75,0.0,physical_below_generation,1213.75
+2024-10-06,T_GYMR-17,GYMRO-17,north_wales_offshore,North Wales Offshore,England/Wales,mapped,48,41,0.0,1573.0,415.88,physical_below_generation,1157.12
+2024-10-06,T_THNTO-1,THNTO-1,,,,unmapped,48,2,0.0,1070.75,9.826999999999998,physical_below_generation,1060.923
+2024-10-06,T_THNTO-2,THNTO-2,,,,unmapped,48,3,0.0,1070.75,17.357999999999997,physical_below_generation,1053.392
+2024-10-06,T_MOWWO-4,MOWWO-4,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,0.0,1009.0,0.0,outage,1009.0
+2024-10-06,T_PNYCW-1,PNYCW-1,,,England/Wales,region_only,48,2,7.933333333333334,971.0,5.885,physical_below_generation,965.115
+2024-10-06,T_OMNDW-1,OMNDO-1,,,,unmapped,48,4,0.0,966.5,6.565,physical_below_generation,959.935
+2024-10-06,E_KINCW-1,KINCW-1,,,,unmapped,48,42,0.0,1070.25,147.034,physical_below_generation,923.216
+2024-10-06,T_GNFSW-1,GNFSW-1,east_anglia_offshore,East Anglia Offshore,England/Wales,mapped,48,18,0.0,1012.25,94.571,physical_below_generation,917.679
+2024-10-06,T_FALGW-1,FALGW-1,,,,unmapped,48,30,0.0,1130.25,265.33,physical_below_generation,864.9200000000001
+2024-10-06,T_GNFSW-2,GNFSW-2,east_anglia_offshore,East Anglia Offshore,England/Wales,mapped,48,10,0.0,846.25,21.483999999999998,physical_below_generation,824.766
+2024-10-06,T_ARCHW-1,ARCHW-1,,,,unmapped,48,32,0.0,916.0,113.46000000000001,physical_below_generation,802.54
+2024-10-06,T_DBAWO-1,DBAWO-1,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,0,0.0,791.5,0.0,outage,791.5
+2024-10-06,E_BURBO,BURBW-1,,,,unmapped,48,35,0.0,1051.5,282.994,physical_below_generation,768.506
+2024-10-06,T_GYMR-26,GYMRO-26,north_wales_offshore,North Wales Offshore,England/Wales,mapped,48,27,0.0,987.5,221.87,physical_below_generation,765.63
+2024-10-06,T_WHILW-1,WHILW-1,,,,unmapped,48,30,0.0,949.0,201.36200000000002,physical_below_generation,747.6379999999999
+2024-10-06,T_WISTW-2,WISTW-2,,,,unmapped,48,44,0.0,976.5,237.423,physical_below_generation,739.077
+2024-10-06,E_BTUIW-3,BTUIW-3,,,,unmapped,48,44,0.0,822.5,94.351,physical_below_generation,728.149
+2024-10-06,T_BOWLW-1,BOWLW-1,,,,unmapped,48,38,0.0,877.5,168.90900000000002,physical_below_generation,708.591
+2024-10-06,T_GYMR-28,GYMRO-28,north_wales_offshore,North Wales Offshore,England/Wales,mapped,48,30,0.0,923.5,220.59,physical_below_generation,702.91
+2024-10-06,T_RRWW-1,RRWW-1,,,,unmapped,48,27,0.0,707.5,66.93499999999999,physical_below_generation,640.565
+2024-10-06,T_MKHLW-1,MKHLW-1,,,,unmapped,48,31,0.0,663.5,43.120000000000005,physical_below_generation,620.38
+2024-10-06,T_SGRWO-2,SGRWO-2,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,33,2.1166666666666667,1033.4333333333334,436.8691166666666,physical_below_generation,596.5642166666668
+2024-10-06,T_ABRBO-1,ABRBO-1,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,0,0.0,584.0,0.0,physical_below_generation,584.0
+2024-10-06,T_WHILW-2,WHILW-2,,,,unmapped,48,28,0.0,658.0,78.723,physical_below_generation,579.277
+2024-10-06,T_DRSLW-1,DRSLW-1,,,,unmapped,48,21,0.0,651.5,78.26,physical_below_generation,573.24
+2024-10-06,T_SGRWO-5,SGRWO-5,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,30,3.716666666666667,1022.3583333333333,473.38500000000005,physical_below_generation,548.9733333333334
+2024-10-06,T_RREW-1,RREW-1,,,,unmapped,48,14,0.0,551.5,27.855000000000004,physical_below_generation,523.645
+2024-10-06,T_MOWWO-3,MOWWO-3,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,0.0,498.0,0.0,outage,498.0
+2024-10-06,T_AFTOW-1,AFTOW-1,,,,unmapped,48,18,0.0,486.0,23.037000000000003,physical_below_generation,462.963
+2024-10-06,T_DOREW-1,DOREW-1,,,,unmapped,42,18,1.3333333333333333,642.75,180.80900000000003,physical_below_generation,461.941
+2024-10-06,T_WDRGW-1,WDRGW-1,,,,unmapped,48,38,0.0,577.25,126.197,physical_below_generation,451.053
+2024-10-06,T_CRYRW-2,CRYRW-2,,,,unmapped,48,21,0.0,554.25,109.398,physical_below_generation,444.852
+2024-10-06,T_AKGLW-3,AKGLW-3,,,,unmapped,48,38,0.0,637.25,223.42899999999997,physical_below_generation,413.821
+2024-10-06,E_BTUIW-2,BTUIW-2,,,,unmapped,48,34,0.0,451.0,45.099000000000004,physical_below_generation,405.901
+2024-10-06,T_ACHRW-1,ACHRW-1,,,,unmapped,48,40,0.0,553.0,161.95600000000002,physical_below_generation,391.044
+2024-10-06,T_AKGLW-2,AKGLW-2,,,,unmapped,48,20,0.0,448.5,58.959999999999994,physical_below_generation,389.54
+2024-10-06,T_KENNW-1,KENNW-1,,,,unmapped,48,32,0.0,447.25,60.75,physical_below_generation,386.5
+2024-10-06,T_BLKWW-1,BLKWW-1,,,,unmapped,48,35,0.0,488.25,120.327,physical_below_generation,367.923
+2024-10-06,T_BEATO-1,BEATO-1,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,0.0,345.6,0.0,physical_below_generation,345.6
+2024-10-06,T_TWSHW-1,TWSHW-1,,,,unmapped,48,43,0.0,497.25,153.583,physical_below_generation,343.66700000000003
+2024-10-06,T_SANQW-1,SANQW-1,,,,unmapped,48,25,0.0,370.25,29.226,physical_below_generation,341.024
+2024-10-06,T_CRGHW-1,CRGHW-1,,,,unmapped,48,24,0.0,388.25,59.749,physical_below_generation,328.501
+2024-10-06,T_GRGBW-1,GRGBW-1,,,,unmapped,48,0,0.0,316.0083333333333,0.0,physical_below_generation,316.0083333333333
+2024-10-06,T_WHIHW-1,WHIHW-1,,,,unmapped,48,16,0.0,309.0,16.798000000000002,physical_below_generation,292.202
+2024-10-06,T_HRSTW-1,HRSTW-1,,,,unmapped,45,28,0.0,326.0,50.943000000000005,physical_below_generation,275.057
+2024-10-06,T_GNAPW-1,GNAPW-1,,,,unmapped,48,27,0.0,289.0,18.175,physical_below_generation,270.825
+2024-10-06,T_BEATO-2,BEATO-2,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,2,0.0,268.72499999999997,5.475999999999999,physical_below_generation,263.24899999999997
+2024-10-06,T_KILBW-1,KILBW-1,,,,unmapped,48,35,0.0,463.5,213.522,physical_below_generation,249.978
+2024-10-06,T_KYPEW-1,KYPEW-1,,,,unmapped,24,11,0.0,287.75,38.515,physical_below_generation,249.235
+2024-10-06,T_DOREW-2,DOREW-2,,,,unmapped,42,16,0.2833333333333333,327.25,82.85900000000001,physical_below_generation,244.391
+2024-10-06,T_BEINW-1,BEINW-1,,,,unmapped,48,32,0.0,332.0,87.618,physical_below_generation,244.382
+2024-10-06,T_HALSW-1,HALSW-1,,,,unmapped,48,35,0.7,330.0,91.67699999999999,physical_below_generation,238.323
+2024-10-06,T_GRGBW-2,GRGBW-2,,,,unmapped,48,0,0.0,232.78333333333336,0.0,physical_below_generation,232.78333333333336
+2024-10-06,T_BEATO-3,BEATO-3,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,1,0.0,229.24166666666665,11.957,physical_below_generation,217.28466666666665
+2024-10-06,T_SAKNW-1,SAKNW-1,,,,unmapped,48,31,0.0,289.25,73.274,physical_below_generation,215.976
+2024-10-06,T_COUWW-1,COUWW-1,,,,unmapped,48,29,0.0,240.0,40.391,physical_below_generation,199.609
+2024-10-06,T_MIDMW-1,MIDMW-1,,,,unmapped,48,29,0.0,228.75,39.529,physical_below_generation,189.221
+2024-10-06,E_BABAW-1,BABAW-1,,,,unmapped,48,28,0.0,245.75,57.298,physical_below_generation,188.452
+2024-10-06,T_CLDNW-1,CLDNW-1,,,Scotland,region_only,48,1,0.0,190.95,7.542,physical_below_generation,183.408
+2024-10-06,T_ANSUW-1,ANSUW-1,,,,unmapped,48,29,0.0,210.5,28.874,physical_below_generation,181.626
+2024-10-06,T_EWHLW-1,EWHLW-1,,,,unmapped,48,17,0.0,198.5,18.455,physical_below_generation,180.04500000000002
+2024-10-06,E_BNWKW-1,BNWKW-1,,,,unmapped,48,29,0.0,212.5,33.858000000000004,physical_below_generation,178.642
+2024-10-06,T_STLGW-3,STLGW-3,,,,unmapped,48,2,0.0,165.925,4.51,physical_below_generation,161.41500000000002
+2024-10-06,T_KPMRW-1,KPMRW-1,,,,unmapped,48,35,0.0,258.25,101.375,physical_below_generation,156.875
+2024-10-06,T_MILWW-1,MILWW-1,,,,unmapped,48,41,0.0,297.75,142.60000000000002,physical_below_generation,155.14999999999998
+2024-10-06,T_BEATO-4,BEATO-4,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,1,0.0,160.69166666666666,8.520000000000003,physical_below_generation,152.17166666666665
+2024-10-06,T_CLDCW-1,CLDCW-1,,,Scotland,region_only,48,2,0.0,159.45833333333337,9.049999999999999,physical_below_generation,150.40833333333336
+2024-10-06,T_CREAW-1,CREAW-1,,,,unmapped,48,28,0.0,216.75,66.825,physical_below_generation,149.925
+2024-10-06,T_BDCHW-1,BDCHW-1,,,,unmapped,48,23,0.0,170.5,21.395,physical_below_generation,149.105
+2024-10-06,T_DNLWW-1,DNLWW-1,,,,unmapped,48,19,0.0,165.5,20.720999999999997,physical_below_generation,144.779
+2024-10-06,T_VKNGW-4,VKNGW-4,shetland_wind,Shetland Wind,Scotland,mapped,48,4,0.6333333333333333,152.075,7.471666666666666,physical_below_generation,144.60333333333332
+2024-10-06,E_TULWW-1,TULWW-1,,,,unmapped,48,35,0.0,173.5,33.579,physical_below_generation,139.921
+2024-10-06,T_VKNGW-2,VKNGW-2,shetland_wind,Shetland Wind,Scotland,mapped,48,3,0.21666666666666667,155.18333333333334,23.905,physical_below_generation,131.27833333333334
+2024-10-06,E_HLTWW-1,HLTWW-1,,,,unmapped,48,18,0.0,147.5,16.671999999999997,physical_below_generation,130.828
+2024-10-06,T_VKNGW-1,VKNGW-1,shetland_wind,Shetland Wind,Scotland,mapped,48,9,0.36666666666666664,173.39166666666665,46.14600000000001,physical_below_generation,127.24566666666664
+2024-10-06,E_ASHWW-1,ASHWW-1,,,,unmapped,48,39,0.0,191.0,64.34100000000001,physical_below_generation,126.65899999999999
+2024-10-06,E_BRYBW-1,BRYBW-1,,,,unmapped,48,36,0.0,193.0,70.632,physical_below_generation,122.368
+2024-10-06,T_CGTHW-1,CGTHW-1,,,,unmapped,48,1,0.0,118.5,0.7999999999999998,physical_below_generation,117.7
+2024-10-06,T_STLGW-1,STLGW-1,,,,unmapped,48,0,0.0,113.45000000000002,0.0,physical_below_generation,113.45000000000002
+2024-10-06,T_FSDLW-1,FSDLW-1,,,,unmapped,48,0,0.0,108.0,0.0,physical_below_generation,108.0
+2024-10-06,E_HRHLW-1,HRHLW-1,,,,unmapped,48,26,0.0,134.0,30.572,physical_below_generation,103.428
+2024-10-06,T_BLLA-1,BLLA-1,,,,unmapped,42,20,0.0,137.5,36.044,physical_below_generation,101.456
+2024-10-06,E_HBHDW-1,HBHDW-1,,,,unmapped,48,39,0.0,209.0,109.023,physical_below_generation,99.977
+2024-10-06,T_BLLA-2,BLLA-2,,,,unmapped,43,25,0.0,109.5,23.944999999999997,physical_below_generation,85.555
+2024-10-06,T_DUNGW-1,DUNGW-1,,,,unmapped,48,1,0.0,89.36666666666666,5.112,physical_below_generation,84.25466666666667
+2024-10-06,T_STLGW-2,STLGW-2,,,,unmapped,48,1,0.0,82.55,0.19899999999999984,physical_below_generation,82.351
+2024-10-06,E_GRGRW-1,GRGRW-1,,,,unmapped,48,40,0.0,139.25,57.427,physical_below_generation,81.82300000000001
+2024-10-06,T_GRIFW-1,GRIFW-1,,,,unmapped,48,9,0.0,88.03333333333333,8.267999999999999,physical_below_generation,79.76533333333333
+2024-10-06,T_VKNGW-3,VKNGW-3,shetland_wind,Shetland Wind,Scotland,mapped,48,6,0.65,92.51666666666667,14.071666666666665,physical_below_generation,78.445
+2024-10-06,E_CNCLW-1,CNCLW-1,,,,unmapped,48,40,0.0,116.5,38.721000000000004,physical_below_generation,77.779
+2024-10-06,T_GRIFW-2,GRIFW-2,,,,unmapped,48,10,0.0,88.30833333333334,10.661999999999999,physical_below_generation,77.64633333333333
+2024-10-06,T_GLWSW-1,GLWSW-1,,,,unmapped,46,30,0.0,120.5,51.313,physical_below_generation,69.187
+2024-10-06,T_DOUGW-1,DOUGW-1,,,,unmapped,48,24,0.0,88.0,19.043,physical_below_generation,68.957
+2024-10-06,T_CRYRW-3,CRYRW-3,,,,unmapped,48,33,0.0,94.75,27.892,physical_below_generation,66.858
+2024-10-06,T_SGRWO-1,SGRWO-1,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,48,0.0,3354.55,3292.5584064285713,,61.99159357142889
+2024-10-06,T_DALQW-1,DALQW-1,,,,unmapped,48,34,0.0,202.25,141.088,physical_below_generation,61.162000000000006
+2024-10-06,T_GORDW-2,GORDW-2,,,,unmapped,48,17,0.41666666666666663,81.63333333333334,21.320666666666668,physical_below_generation,60.31266666666667
+2024-10-06,T_HADHW-1,HADHW-1,,,,unmapped,48,1,0.0,57.95833333333333,0.782,physical_below_generation,57.17633333333333
+2024-10-06,T_CLDSW-1,CLDSW-1,,,,unmapped,48,0,0.0,53.8,0.0,physical_below_generation,53.8
+2024-10-06,E_CLFLW-1,CLFLW-1,,,,unmapped,48,27,0.0,62.5,12.74,physical_below_generation,49.76
+2024-10-06,T_TDBNW-1,TDBNW-1,,,,unmapped,48,5,0.0,46.80833333333334,1.101,physical_below_generation,45.70733333333334
+2024-10-06,T_STRNW-1,STRNW-1,,,,unmapped,48,15,0.0,70.56666666666666,26.739,physical_below_generation,43.82766666666666
+2024-10-06,T_GORDW-1,GORDW-1,,,,unmapped,48,3,0.0,44.56666666666667,3.0349999999999997,physical_below_generation,41.53166666666667
+2024-10-06,T_MYGPW-1,MYGPW-1,,,,unmapped,47,13,0.0,43.0,3.8100000000000005,physical_below_generation,39.19
+2024-10-06,E_BETHW-1,BETHW-1,,,,unmapped,37,21,0.0,46.0,16.494999999999997,physical_below_generation,29.505000000000003
+2024-10-06,T_BHLAW-1,BHLAW-1,,,,unmapped,48,13,0.0,41.21666666666667,15.863666666666667,physical_below_generation,25.353
+2024-10-06,E_CRGTW-1,CRGTW-1,,,,unmapped,48,48,0.0,34.5,30.038,,4.462
+2024-10-06,E_PIBUW-1,PIBUW-1,,,,unmapped,48,48,0.0,452.75,452.94199999999995,,-0.19199999999995043
+2024-10-06,T_SGRWO-4,SGRWO-4,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,40,1.65,969.4916666666667,972.0753333333334,physical_below_generation,-2.5836666666667725
+2024-10-06,T_SGRWO-6,SGRWO-6,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,40,11.5,3533.4416666666666,3571.0526666666665,physical_below_generation,-37.610999999999876
+2024-10-06,T_SGRWO-3,SGRWO-3,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,48,0.0,1499.6666666666665,1541.1846666666665,,-41.51800000000003
+2024-10-07,T_EAAO-2,EAAO-2,east_anglia_offshore,East Anglia Offshore,England/Wales,mapped,48,19,0.0,7404.5,707.171,physical_below_generation,6697.329
+2024-10-07,T_HOWAO-2,HOWAO-2,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,19,0.0,6106.5,295.126,physical_below_generation,5811.374
+2024-10-07,T_HOWAO-3,HOWAO-3,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,17,0.0,5937.5,192.73200000000003,physical_below_generation,5744.768
+2024-10-07,T_HOWBO-2,HOWBO-2,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,15,0.0,5937.75,307.84,physical_below_generation,5629.91
+2024-10-07,T_HOWAO-1,HOWAO-1,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,25,0.0,6085.25,519.462,physical_below_generation,5565.7880000000005
+2024-10-07,T_HOWBO-1,HOWBO-1,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,20,0.0,5937.75,457.18100000000004,physical_below_generation,5480.5689999999995
+2024-10-07,T_HOWBO-3,HOWBO-3,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,18,0.0,5105.25,289.03,physical_below_generation,4816.22
+2024-10-07,T_MOWEO-3,MOWEO-3,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,42,0,0.0,3922.0,0.0,outage,3922.0
+2024-10-07,T_MOWEO-2,MOWEO-2,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,43,0,1.6333333333333333,3760.633333333333,0.0,outage,3760.633333333333
+2024-10-07,T_MOWWO-1,MOWWO-1,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,0.0,3696.0,0.0,outage,3696.0
+2024-10-07,T_MOWEO-1,MOWEO-1,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,43,0,7.2,3637.0,0.0,outage,3637.0
+2024-10-07,T_MOWWO-2,MOWWO-2,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,0.0,3381.0,0.0,outage,3381.0
+2024-10-07,T_TKNWW-1,TKNWW-1,humber_offshore,Humber Offshore,England/Wales,mapped,48,5,0.0,3341.0,40.794999999999995,physical_below_generation,3300.205
+2024-10-07,T_TKNEW-1,TKNEW-1,humber_offshore,Humber Offshore,England/Wales,mapped,48,10,0.0,3174.0,55.26599999999999,physical_below_generation,3118.734
+2024-10-07,T_RCBKO-1,RCBKO-1,humber_offshore,Humber Offshore,England/Wales,mapped,48,27,0.0,3352.75,435.65700000000004,physical_below_generation,2917.093
+2024-10-07,T_RCBKO-2,RCBKO-2,humber_offshore,Humber Offshore,England/Wales,mapped,48,28,0.0,3310.0,439.924,physical_below_generation,2870.076
+2024-10-07,T_RMPNO-1,RMPNO-1,,,,unmapped,48,28,0.0,2968.0,266.034,physical_below_generation,2701.966
+2024-10-07,T_RMPNO-2,RMPNO-2,,,,unmapped,48,28,0.0,2974.0,335.29100000000005,physical_below_generation,2638.709
+2024-10-07,T_WLNYO-3,WLNYO-3,,,,unmapped,48,0,0.0,1896.25,0.0,outage,1896.25
+2024-10-07,T_LARYW-3,LARYO-3,,,,unmapped,48,27,0.0,1859.5,273.51,physical_below_generation,1585.99
+2024-10-07,T_LARYW-4,LARYO-4,,,,unmapped,48,22,0.0,1718.5,198.81,physical_below_generation,1519.69
+2024-10-07,T_LARYW-2,LARYO-2,,,,unmapped,48,24,0.0,1764.0,256.28,physical_below_generation,1507.72
+2024-10-07,T_LARYW-1,LARYO-1,,,,unmapped,48,32,0.0,1814.0,314.42999999999995,physical_below_generation,1499.5700000000002
+2024-10-07,T_WLNYO-4,WLNYO-4,,,,unmapped,48,36,0.0,1718.5,388.493,physical_below_generation,1330.007
+2024-10-07,T_WTMSO-1,WTMSO-1,,,,unmapped,48,15,0.0,1405.25,80.155,physical_below_generation,1325.095
+2024-10-07,T_MOWWO-4,MOWWO-4,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,0.0,1299.5,0.0,outage,1299.5
+2024-10-07,T_GANW-13,GAOFO-3,,,,unmapped,48,40,0.0,1528.0,251.38,physical_below_generation,1276.62
+2024-10-07,T_GANW-11,GAOFO-1,,,,unmapped,48,38,0.0,1461.0,221.912,physical_below_generation,1239.088
+2024-10-07,T_GANW-22,GAOFO-2,,,,unmapped,48,39,0.0,1457.0,231.7,physical_below_generation,1225.3
+2024-10-07,T_GANW-24,GAOFO-4,,,,unmapped,48,39,0.0,1405.5,202.08999999999997,physical_inconsistent,1203.41
+2024-10-07,T_DDGNO-1,DDGNO-1,,,,unmapped,48,26,0.0,1270.5,141.482,physical_below_generation,1129.018
+2024-10-07,T_DDGNO-3,DDGNO-3,,,,unmapped,48,28,0.0,1271.5,166.29,physical_below_generation,1105.21
+2024-10-07,T_SHRSW-2,SHRSO-2,,,,unmapped,48,21,0.0,1294.0,232.15299999999996,physical_below_generation,1061.847
+2024-10-07,T_BRBEO-1,BRBEO-1,,,,unmapped,48,23,0.0,1174.25,112.55799999999999,physical_below_generation,1061.692
+2024-10-07,T_SHRSW-1,SHRSO-1,,,,unmapped,48,22,0.0,1315.5,256.415,physical_below_generation,1059.085
+2024-10-07,T_LNCSW-2,LNCSO-2,,,,unmapped,48,34,0.0,1356.0,323.13000000000005,physical_below_generation,1032.87
+2024-10-07,T_DDGNO-4,DDGNO-4,,,,unmapped,48,19,0.0,1096.0,77.762,physical_below_generation,1018.238
+2024-10-07,T_LNCSW-1,LNCSO-1,,,,unmapped,48,34,0.0,1230.0,282.582,physical_below_generation,947.418
+2024-10-07,T_HMGTO-1,HMGTO-1,,,,unmapped,48,27,0.0,1038.0,139.009,physical_below_generation,898.991
+2024-10-07,T_DDGNO-2,DDGNO-2,,,,unmapped,48,17,0.0,964.5,68.136,physical_below_generation,896.364
+2024-10-07,T_PNYCW-1,PNYCW-1,,,England/Wales,region_only,48,4,0.0,836.75,3.540000000000001,physical_below_generation,833.21
+2024-10-07,T_WDNSO-1,WDNSO-1,,,,unmapped,48,19,0.0,866.5,109.646,physical_below_generation,756.854
+2024-10-07,T_THNTO-1,THNTO-1,,,,unmapped,48,7,0.0,736.75,21.106,physical_below_generation,715.644
+2024-10-07,T_THNTO-2,THNTO-2,,,,unmapped,48,8,0.0,736.75,27.413,physical_below_generation,709.337
+2024-10-07,T_WLNYO-2,WLNYO-2,,,,unmapped,48,37,0.0,858.75,189.76099999999997,physical_below_generation,668.989
+2024-10-07,T_HMGTO-2,HMGTO-2,,,,unmapped,48,23,0.0,768.0,103.046,physical_below_generation,664.954
+2024-10-07,T_WDNSO-2,WDNSO-2,,,,unmapped,48,33,0.0,866.5,211.46999999999997,physical_below_generation,655.03
+2024-10-07,T_DBAWO-1,DBAWO-1,dogger_hornsea_offshore,Dogger and Hornsea Offshore,England/Wales,mapped,48,0,0.0,636.0,0.0,outage,636.0
+2024-10-07,T_MOWWO-3,MOWWO-3,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,0,0.0,615.0,0.0,outage,615.0
+2024-10-07,T_KILBW-1,KILBW-1,,,,unmapped,48,32,0.0,812.75,207.32800000000003,physical_below_generation,605.422
+2024-10-07,T_GNFSW-1,GNFSW-1,east_anglia_offshore,East Anglia Offshore,England/Wales,mapped,48,22,0.0,670.0,116.417,physical_below_generation,553.583
+2024-10-07,T_KLGLW-1,KLGLW-1,,,,unmapped,48,36,0.0,696.5,176.64999999999998,physical_below_generation,519.85
+2024-10-07,T_WLNYW-1,WLNYW-1,,,,unmapped,48,34,0.0,571.5,127.531,physical_below_generation,443.969
+2024-10-07,T_GNFSW-2,GNFSW-2,east_anglia_offshore,East Anglia Offshore,England/Wales,mapped,48,17,0.0,480.25,63.596999999999994,physical_below_generation,416.653
+2024-10-07,T_CREAW-1,CREAW-1,,,,unmapped,48,25,0.0,509.75,136.68,physical_below_generation,373.07
+2024-10-07,T_RRWW-1,RRWW-1,,,,unmapped,48,28,0.0,442.0,89.576,physical_below_generation,352.424
+2024-10-07,E_BABAW-1,BABAW-1,,,,unmapped,48,39,0.0,426.0,90.179,physical_below_generation,335.821
+2024-10-07,T_GYMR-17,GYMRO-17,north_wales_offshore,North Wales Offshore,England/Wales,mapped,48,33,0.0,475.5,151.37,physical_below_generation,324.13
+2024-10-07,T_GYMR-15,GYMRO-15,north_wales_offshore,North Wales Offshore,England/Wales,mapped,48,37,0.0,441.0,130.11,physical_below_generation,310.89
+2024-10-07,T_RREW-1,RREW-1,,,,unmapped,48,9,0.0,297.0,16.476,physical_below_generation,280.524
+2024-10-07,E_KINCW-1,KINCW-1,,,,unmapped,46,40,0.0,403.0,124.943,physical_below_generation,278.057
+2024-10-07,T_BEATO-2,BEATO-2,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,8,0.0,365.4,91.985,physical_below_generation,273.41499999999996
+2024-10-07,T_HALSW-1,HALSW-1,,,,unmapped,48,31,0.6333333333333333,396.0,138.26899999999998,physical_below_generation,257.731
+2024-10-07,E_BURBO,BURBW-1,,,,unmapped,48,25,0.0,292.5,35.353,physical_below_generation,257.147
+2024-10-07,T_BOWLW-1,BOWLW-1,,,,unmapped,48,31,0.0,293.25,56.995000000000005,physical_below_generation,236.255
+2024-10-07,T_OMNDW-1,OMNDO-1,,,,unmapped,48,19,0.0,274.0,42.42,physical_below_generation,231.57999999999998
+2024-10-07,T_BDCHW-1,BDCHW-1,,,,unmapped,48,23,0.0,230.0,26.057000000000002,physical_below_generation,203.94299999999998
+2024-10-07,T_ABRBO-1,ABRBO-1,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,8,0.0,202.75,6.318,physical_below_generation,196.432
+2024-10-07,T_SOKYW-1,SOKYW-1,,,,unmapped,48,3,0.0,190.0,6.880000000000001,physical_below_generation,183.12
+2024-10-07,E_BNWKW-1,BNWKW-1,,,,unmapped,48,35,0.0,209.25,39.675,physical_below_generation,169.575
+2024-10-07,T_VKNGW-1,VKNGW-1,shetland_wind,Shetland Wind,Scotland,mapped,48,8,1.3,178.76666666666665,14.375333333333334,physical_below_generation,164.3913333333333
+2024-10-07,T_GYMR-28,GYMRO-28,north_wales_offshore,North Wales Offshore,England/Wales,mapped,48,34,0.0,271.5,112.07,physical_below_generation,159.43
+2024-10-07,T_GYMR-26,GYMRO-26,north_wales_offshore,North Wales Offshore,England/Wales,mapped,48,39,0.0,259.0,120.74,physical_below_generation,138.26
+2024-10-07,T_VKNGW-2,VKNGW-2,shetland_wind,Shetland Wind,Scotland,mapped,48,8,1.6166666666666667,151.68333333333334,13.427999999999994,physical_below_generation,138.25533333333334
+2024-10-07,T_GRGBW-1,GRGBW-1,,,,unmapped,48,2,0.0,144.68333333333334,8.796999999999997,physical_below_generation,135.88633333333334
+2024-10-07,T_BEATO-4,BEATO-4,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,2,0.0,170.98333333333335,35.435,physical_below_generation,135.54833333333335
+2024-10-07,T_BEATO-1,BEATO-1,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,1,0.0,149.3,13.821000000000002,physical_below_generation,135.479
+2024-10-07,T_ARCHW-1,ARCHW-1,,,,unmapped,48,35,0.0,176.5,45.379999999999995,physical_below_generation,131.12
+2024-10-07,T_VKNGW-3,VKNGW-3,shetland_wind,Shetland Wind,Scotland,mapped,48,10,0.31666666666666665,138.375,15.997333333333332,physical_below_generation,122.37766666666667
+2024-10-07,T_GRGBW-2,GRGBW-2,,,,unmapped,48,1,0.0,114.05000000000001,2.2749999999999986,physical_below_generation,111.775
+2024-10-07,T_BEATO-3,BEATO-3,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,48,1,0.0,125.62499999999999,18.351,physical_below_generation,107.27399999999999
+2024-10-07,T_GORDW-2,GORDW-2,,,,unmapped,48,8,0.4,117.64166666666668,11.826666666666666,physical_below_generation,105.81500000000001
+2024-10-07,T_VKNGW-4,VKNGW-4,shetland_wind,Shetland Wind,Scotland,mapped,48,7,0.25,117.25,12.489666666666668,physical_below_generation,104.76033333333334
+2024-10-07,T_WISTW-2,WISTW-2,,,,unmapped,48,30,0.0,170.0,66.029,physical_below_generation,103.971
+2024-10-07,T_STRNW-1,STRNW-1,,,,unmapped,48,5,0.0,105.575,3.936,physical_below_generation,101.63900000000001
+2024-10-07,E_BTUIW-3,BTUIW-3,,,,unmapped,48,46,0.30000000000000004,159.5,61.247,physical_below_generation,98.253
+2024-10-07,T_FALGW-1,FALGW-1,,,,unmapped,48,40,0.0,242.25,151.04,physical_below_generation,91.21000000000001
+2024-10-07,E_BRYBW-1,BRYBW-1,,,,unmapped,48,23,0.0,120.0,36.899,physical_below_generation,83.101
+2024-10-07,T_AKGLW-3,AKGLW-3,,,,unmapped,48,38,0.0,130.0,53.126999999999995,physical_below_generation,76.873
+2024-10-07,T_DRSLW-1,DRSLW-1,,,,unmapped,48,23,0.0,95.0,22.622999999999998,physical_below_generation,72.37700000000001
+2024-10-07,T_GORDW-1,GORDW-1,,,,unmapped,48,0,0.0,68.725,0.0,physical_below_generation,68.725
+2024-10-07,T_AKGLW-2,AKGLW-2,,,,unmapped,48,37,0.0,107.0,43.256,physical_below_generation,63.744
+2024-10-07,T_CLDCW-1,CLDCW-1,,,Scotland,region_only,48,11,0.0,75.56666666666666,12.370934782608696,physical_below_generation,63.19573188405796
+2024-10-07,T_BLKWW-1,BLKWW-1,,,,unmapped,48,34,0.0,135.5,75.786,physical_below_generation,59.714
+2024-10-07,T_TWSHW-1,TWSHW-1,,,,unmapped,48,37,0.0,151.0,92.15,physical_below_generation,58.849999999999994
+2024-10-07,T_CLDNW-1,CLDNW-1,,,Scotland,region_only,48,9,0.0,80.89166666666667,22.27146739130435,physical_below_generation,58.62019927536232
+2024-10-07,T_EWHLW-1,EWHLW-1,,,,unmapped,44,28,0.0,74.0,19.070999999999998,physical_below_generation,54.929
+2024-10-07,E_HLTWW-1,HLTWW-1,,,,unmapped,41,14,0.0,60.0,6.012,physical_below_generation,53.988
+2024-10-07,T_HRSTW-1,HRSTW-1,,,,unmapped,33,19,0.0,81.0,28.711000000000002,physical_below_generation,52.289
+2024-10-07,T_DOREW-1,DOREW-1,,,,unmapped,33,30,0.15,186.15,134.201,physical_below_generation,51.94900000000001
+2024-10-07,E_BTUIW-2,BTUIW-2,,,,unmapped,48,28,0.0,61.0,12.14,physical_below_generation,48.86
+2024-10-07,T_AFTOW-1,AFTOW-1,,,,unmapped,48,12,0.0,55.0,6.2620000000000005,physical_below_generation,48.738
+2024-10-07,T_HADHW-1,HADHW-1,,,,unmapped,48,7,0.0,58.875,11.11,physical_below_generation,47.765
+2024-10-07,T_DOREW-2,DOREW-2,,,,unmapped,34,30,0.1,122.1,79.54699999999998,physical_below_generation,42.55300000000001
+2024-10-07,T_WHIHW-1,WHIHW-1,,,,unmapped,48,22,0.0,76.25,34.803000000000004,physical_below_generation,41.446999999999996
+2024-10-07,T_GNAPW-1,GNAPW-1,,,,unmapped,48,35,0.0,64.0,25.837000000000003,physical_below_generation,38.163
+2024-10-07,T_WDRGW-1,WDRGW-1,,,,unmapped,48,38,0.0,103.5,65.76,physical_below_generation,37.739999999999995
+2024-10-07,T_CRYRW-2,CRYRW-2,,,,unmapped,37,25,0.0,56.25,21.526000000000003,physical_below_generation,34.724
+2024-10-07,T_MKHLW-1,MKHLW-1,,,,unmapped,26,13,0.0,43.0,9.306000000000001,physical_below_generation,33.694
+2024-10-07,T_MIDMW-1,MIDMW-1,,,,unmapped,45,30,0.0,61.0,27.875999999999998,physical_below_generation,33.124
+2024-10-07,E_CNCLW-1,CNCLW-1,,,,unmapped,48,27,0.0,57.5,25.339,physical_below_generation,32.161
+2024-10-07,T_COUWW-1,COUWW-1,,,,unmapped,48,29,0.0,46.0,14.706,physical_below_generation,31.294
+2024-10-07,T_SANQW-1,SANQW-1,,,,unmapped,40,12,0.0,41.0,9.827000000000002,physical_below_generation,31.173
+2024-10-07,E_ASHWW-1,ASHWW-1,,,,unmapped,48,34,0.0,49.75,20.835,physical_below_generation,28.915
+2024-10-07,T_ACHRW-1,ACHRW-1,,,,unmapped,48,41,0.0,103.75,78.70400000000001,physical_below_generation,25.045999999999992
+2024-10-07,T_KENNW-1,KENNW-1,,,,unmapped,28,26,0.16666666666666669,57.25,35.699999999999996,physical_below_generation,21.550000000000004
+2024-10-07,T_CLDSW-1,CLDSW-1,,,,unmapped,48,5,0.0,25.166666666666664,3.753,physical_below_generation,21.413666666666664
+2024-10-07,T_CRGHW-1,CRGHW-1,,,,unmapped,44,37,0.0,46.5,28.881,physical_below_generation,17.619
+2024-10-07,E_TULWW-1,TULWW-1,,,,unmapped,48,34,0.0,41.25,24.283,physical_below_generation,16.967
+2024-10-07,T_ANSUW-1,ANSUW-1,,,,unmapped,48,43,0.0,33.25,16.345,physical_below_generation,16.905
+2024-10-07,E_HBHDW-1,HBHDW-1,,,,unmapped,48,41,0.0,53.5,37.17,physical_below_generation,16.33
+2024-10-07,T_CGTHW-1,CGTHW-1,,,,unmapped,48,21,0.0,25.25,9.397,physical_below_generation,15.853
+2024-10-07,T_KPMRW-1,KPMRW-1,,,,unmapped,46,38,0.0,54.5,38.776,physical_below_generation,15.723999999999997
+2024-10-07,E_HRHLW-1,HRHLW-1,,,,unmapped,27,8,0.0,19.0,3.6340000000000003,physical_below_generation,15.366
+2024-10-07,T_SGRWO-6,SGRWO-6,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,23,0.0,76.42500000000001,63.260333333333335,physical_below_generation,13.164666666666676
+2024-10-07,T_SGRWO-4,SGRWO-4,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,45,25,0.0,94.70000000000002,81.62541485507248,physical_below_generation,13.07458514492754
+2024-10-07,T_SGRWO-5,SGRWO-5,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,38,20,0.26666666666666666,30.63333333333333,19.65556884057971,physical_below_generation,10.977764492753618
+2024-10-07,T_FSDLW-1,FSDLW-1,,,,unmapped,35,1,0.0,10.75,0.026999999999999996,physical_below_generation,10.723
+2024-10-07,E_BETHW-1,BETHW-1,,,,unmapped,28,24,0.0,20.0,9.437,physical_below_generation,10.563
+2024-10-07,T_MYGPW-1,MYGPW-1,,,,unmapped,28,13,0.0,14.0,3.89,physical_below_generation,10.11
+2024-10-07,T_KYPEW-1,KYPEW-1,,,,unmapped,12,6,0.11666666666666667,16.25,6.2139999999999995,physical_below_generation,10.036000000000001
+2024-10-07,T_SGRWO-3,SGRWO-3,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,45,25,0.0,42.633333333333326,33.80159135597825,physical_below_generation,8.831741977355072
+2024-10-07,T_MILWW-1,MILWW-1,,,,unmapped,44,39,0.0,33.25,24.819999999999997,physical_below_generation,8.430000000000003
+2024-10-07,T_CRYRW-3,CRYRW-3,,,,unmapped,38,33,0.0,25.5,17.313,physical_below_generation,8.187000000000001
+2024-10-07,T_DALQW-1,DALQW-1,,,,unmapped,43,42,0.0,76.25,68.491,physical_below_generation,7.759
+2024-10-07,T_BHLAW-1,BHLAW-1,,,,unmapped,31,20,0.0,21.40833333333333,13.764333333333333,physical_below_generation,7.643999999999998
+2024-10-07,T_STLGW-1,STLGW-1,,,,unmapped,13,0,0.0,7.483333333333333,0.0,physical_below_generation,7.483333333333333
+2024-10-07,T_STLGW-2,STLGW-2,,,,unmapped,19,2,0.0,7.841666666666668,0.397,physical_below_generation,7.444666666666667
+2024-10-07,T_STLGW-3,STLGW-3,,,,unmapped,19,0,0.0,7.325,0.0,physical_below_generation,7.325
+2024-10-07,T_GLWSW-1,GLWSW-1,,,,unmapped,45,41,0.0,38.5,31.472999999999995,physical_below_generation,7.027000000000005
+2024-10-07,E_CRGTW-1,CRGTW-1,,,,unmapped,48,44,0.0,24.5,17.897,physical_below_generation,6.6030000000000015
+2024-10-07,T_DUNGW-1,DUNGW-1,,,,unmapped,37,13,0.0,17.35833333333333,11.071666666666667,physical_below_generation,6.2866666666666635
+2024-10-07,T_GRIFW-2,GRIFW-2,,,,unmapped,10,2,0.0,7.133333333333333,1.1090000000000002,physical_below_generation,6.024333333333333
+2024-10-07,T_SGRWO-2,SGRWO-2,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,46,29,0.0,39.34166666666667,34.44379492753623,physical_below_generation,4.897871739130437
+2024-10-07,T_GRIFW-1,GRIFW-1,,,,unmapped,7,1,0.0,4.575,0.04800000000000004,physical_below_generation,4.527
+2024-10-07,T_WHILW-2,WHILW-2,,,,unmapped,22,19,0.0,21.0,17.75,physical_below_generation,3.25
+2024-10-07,T_DOUGW-1,DOUGW-1,,,,unmapped,37,27,0.0,18.75,15.589999999999998,physical_below_generation,3.160000000000002
+2024-10-07,T_SAKNW-1,SAKNW-1,,,,unmapped,16,12,0.0,19.25,17.676000000000002,physical_below_generation,1.573999999999998
+2024-10-07,E_CLFLW-1,CLFLW-1,,,,unmapped,3,0,0.0,1.5,0.0,physical_below_generation,1.5
+2024-10-07,T_DNLWW-1,DNLWW-1,,,,unmapped,7,7,0.0,5.0,3.561,,1.439
+2024-10-07,T_BLLA-2,BLLA-2,,,,unmapped,18,16,0.0,10.0,8.762,physical_below_generation,1.2379999999999995
+2024-10-07,T_EDINW-1,EDINW-1,,,,unmapped,12,12,0.0,3.0,2.636,,0.3639999999999999
+2024-10-07,E_GRGRW-1,GRGRW-1,,,,unmapped,46,42,0.0,24.75,25.077,physical_below_generation,-0.32700000000000173
+2024-10-07,T_BLLA-1,BLLA-1,,,,unmapped,14,13,0.0,10.0,10.462,physical_below_generation,-0.46199999999999974
+2024-10-07,T_BEINW-1,BEINW-1,,,,unmapped,48,48,0.0,63.0,63.881,,-0.8810000000000002
+2024-10-07,E_PIBUW-1,PIBUW-1,,,,unmapped,48,48,0.0,246.75,247.697,,-0.9470000000000027
+2024-10-07,T_SGRWO-1,SGRWO-1,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,48,24,0.0,62.266666666666666,72.89940642857142,physical_below_generation,-10.632739761904759
+2024-10-07,T_WHILW-1,WHILW-1,,,,unmapped,19,17,0.0,13.5,32.457,physical_below_generation,-18.957
