@@ -44,6 +44,7 @@ from exploration_plan import backtest_plan_frame, dataset_plan_frame, drift_moni
 from gb_topology import cluster_hub_matrix, interconnector_hub_frame, reachability_frame, route_hub_frame
 from history_store import ingest_truth_csv_tree_to_sqlite, upsert_truth_frames_to_sqlite
 from physical_constraints import assumption_frame, compute_netbacks
+from truth_store_focus import materialize_truth_store_source_focus, read_truth_store_source_focus
 from weather_history import materialize_weather_history
 
 # Optional: .env support
@@ -521,6 +522,28 @@ def main() -> int:
         help="Recursively ingest BMU truth CSV outputs from a directory tree into the SQLite truth store, then exit",
     )
     parser.add_argument(
+        "--materialize-truth-store-source-focus",
+        action="store_true",
+        help="Build store-backed source-completeness focus tables from the SQLite truth store, then exit",
+    )
+    parser.add_argument(
+        "--show-truth-store-source-focus",
+        action="store_true",
+        help="Print the store-backed source-completeness focus summary from the SQLite truth store, then exit",
+    )
+    parser.add_argument(
+        "--source-focus-status",
+        default="fail_warn",
+        choices=("all", "fail", "fail_warn"),
+        help="Status filter for truth-store source focus views: all, fail, or fail_warn",
+    )
+    parser.add_argument(
+        "--source-focus-limit",
+        type=int,
+        default=15,
+        help="Maximum number of source-focus family rows to print",
+    )
+    parser.add_argument(
         "--materialize-weather-history",
         action="store_true",
         help="Fetch and save anchor, cluster, and parent-region weather history, then exit",
@@ -629,6 +652,40 @@ def main() -> int:
                         f"{row['table_name']}: files={int(row['files_loaded'])} "
                         f"rows_loaded={int(row['rows_loaded'])} table_rows={int(row['table_row_count'])}"
                     )
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
+    if args.materialize_truth_store_source_focus or args.show_truth_store_source_focus:
+        if not args.truth_store_db_path:
+            raise SystemExit(
+                "--materialize-truth-store-source-focus and --show-truth-store-source-focus require --truth-store-db-path"
+            )
+        try:
+            frames = materialize_truth_store_source_focus(args.truth_store_db_path)
+            if args.materialize_truth_store_source_focus:
+                print(f"[store=sqlite] Materialized source-focus tables in {args.truth_store_db_path}")
+                for table_name, frame in frames.items():
+                    print(f"{table_name}: rows={len(frame)}")
+            if args.show_truth_store_source_focus:
+                filtered = read_truth_store_source_focus(
+                    db_path=args.truth_store_db_path,
+                    status_mode=args.source_focus_status,
+                )
+                print("Source Focus Daily")
+                daily = filtered["fact_source_completeness_focus_daily"]
+                if daily.empty:
+                    print("No matching source-focus days.")
+                else:
+                    print(daily.to_string(index=False))
+                print()
+                print("Source Focus Families")
+                family = filtered["fact_source_completeness_focus_family_daily"].head(args.source_focus_limit)
+                if family.empty:
+                    print("No matching source-focus families.")
+                else:
+                    print(family.to_string(index=False))
             return 0
         except Exception as exc:
             print(f"ERROR: {exc}", file=sys.stderr)
