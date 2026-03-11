@@ -6,6 +6,12 @@ from truth_store_forensics import (
     build_fact_family_dispatch_forensic_bmu_daily,
     build_fact_family_dispatch_forensic_daily,
     build_fact_family_dispatch_forensic_half_hourly,
+    build_fact_family_physical_forensic_bmu_daily,
+    build_fact_family_physical_forensic_daily,
+    build_fact_family_physical_forensic_half_hourly,
+    build_fact_family_publication_audit_bmu_daily,
+    build_fact_family_publication_audit_daily,
+    build_fact_family_support_evidence_half_hourly,
 )
 
 
@@ -182,6 +188,229 @@ class TruthStoreForensicsTests(unittest.TestCase):
         captured = frame[frame["dispatch_truth_flag"]].iloc[0]
         self.assertEqual(candidate["half_hour_forensic_state"], "no_window_source_gap")
         self.assertEqual(captured["half_hour_forensic_state"], "captured_dispatch")
+
+    def test_build_family_physical_forensic_daily_detects_positive_zero_boalf_gap(self) -> None:
+        physical = pd.DataFrame(
+            [
+                {
+                    "settlement_date": "2024-10-02",
+                    "settlement_period": 1,
+                    "elexon_bm_unit": "T_HOWAO-1",
+                    "pn_mwh": 20.0,
+                    "qpn_mwh": 5.0,
+                    "mils_mwh": 4.0,
+                    "mels_mwh": 22.0,
+                    "generation_mwh": 5.0,
+                    "physical_baseline_source_dataset": "PN",
+                    "physical_baseline_mwh": 20.0,
+                    "physical_consistency_flag": True,
+                    "counterfactual_valid_flag": True,
+                },
+                {
+                    "settlement_date": "2024-10-02",
+                    "settlement_period": 1,
+                    "elexon_bm_unit": "T_HOWBO-1",
+                    "pn_mwh": 18.0,
+                    "qpn_mwh": 4.0,
+                    "mils_mwh": 3.0,
+                    "mels_mwh": 19.0,
+                    "generation_mwh": 4.0,
+                    "physical_baseline_source_dataset": "PN",
+                    "physical_baseline_mwh": 18.0,
+                    "physical_consistency_flag": True,
+                    "counterfactual_valid_flag": True,
+                },
+            ]
+        )
+
+        truth = self.truth.copy()
+        truth["sentinel_pair_available_flag"] = False
+        frame = build_fact_family_physical_forensic_daily(
+            physical,
+            truth,
+            self.source_gap_family,
+            family_keys=["HOWAO", "HOWBO"],
+        )
+        howao = frame[frame["bmu_family_key"] == "HOWAO"].iloc[0]
+        self.assertEqual(howao["physical_forensic_state"], "positive_zero_boalf_negative_bid_gap")
+        self.assertEqual(int(howao["positive_zero_boalf_gap_row_count"]), 1)
+        self.assertEqual(int(howao["positive_zero_boalf_negative_bid_gap_row_count"]), 1)
+
+    def test_build_family_physical_forensic_bmu_daily_flags_sentinel_gap(self) -> None:
+        physical = pd.DataFrame(
+            [
+                {
+                    "settlement_date": "2024-10-02",
+                    "settlement_period": 1,
+                    "elexon_bm_unit": "T_HOWBO-1",
+                    "pn_mwh": 18.0,
+                    "qpn_mwh": 4.0,
+                    "mils_mwh": 3.0,
+                    "mels_mwh": 19.0,
+                    "generation_mwh": 4.0,
+                    "physical_baseline_source_dataset": "PN",
+                    "physical_baseline_mwh": 18.0,
+                    "physical_consistency_flag": True,
+                    "counterfactual_valid_flag": True,
+                }
+            ]
+        )
+        truth = self.truth[self.truth["elexon_bm_unit"] == "T_HOWBO-1"].copy()
+        truth["sentinel_pair_available_flag"] = True
+        frame = build_fact_family_physical_forensic_bmu_daily(
+            physical,
+            truth,
+            self.source_gap_family,
+            family_keys=["HOWBO"],
+        )
+        first = frame.iloc[0]
+        self.assertEqual(first["bmu_physical_forensic_state"], "positive_zero_boalf_negative_bid_gap")
+        self.assertEqual(int(first["positive_zero_boalf_sentinel_gap_row_count"]), 1)
+
+    def test_build_family_physical_forensic_half_hourly_labels_positive_zero_boalf_gap(self) -> None:
+        physical = pd.DataFrame(
+            [
+                {
+                    "settlement_date": "2024-10-02",
+                    "settlement_period": 1,
+                    "elexon_bm_unit": "T_HOWAO-1",
+                    "pn_mwh": 20.0,
+                    "qpn_mwh": 5.0,
+                    "mils_mwh": 4.0,
+                    "mels_mwh": 22.0,
+                    "generation_mwh": 5.0,
+                    "physical_baseline_source_dataset": "PN",
+                    "physical_baseline_mwh": 20.0,
+                    "physical_consistency_flag": True,
+                    "counterfactual_valid_flag": True,
+                },
+                {
+                    "settlement_date": "2024-10-02",
+                    "settlement_period": 2,
+                    "elexon_bm_unit": "T_HOWAO-2",
+                    "pn_mwh": 12.0,
+                    "qpn_mwh": 12.0,
+                    "mils_mwh": 10.0,
+                    "mels_mwh": 14.0,
+                    "generation_mwh": 10.0,
+                    "physical_baseline_source_dataset": "PN",
+                    "physical_baseline_mwh": 12.0,
+                    "physical_consistency_flag": True,
+                    "counterfactual_valid_flag": True,
+                },
+            ]
+        )
+        truth = self.truth[self.truth["bmu_family_key"] == "HOWAO"].copy()
+        truth["sentinel_pair_available_flag"] = False
+        frame = build_fact_family_physical_forensic_half_hourly(
+            physical,
+            truth,
+            self.source_gap_family,
+            family_keys=["HOWAO"],
+        )
+        gap_row = frame[frame["elexon_bm_unit"] == "T_HOWAO-1"].iloc[0]
+        captured_row = frame[frame["elexon_bm_unit"] == "T_HOWAO-2"].iloc[0]
+        self.assertEqual(gap_row["physical_half_hour_forensic_state"], "positive_zero_boalf_negative_bid_gap")
+        self.assertEqual(captured_row["physical_half_hour_forensic_state"], "captured_dispatch_present")
+
+    def test_build_family_publication_audit_daily_marks_support_case(self) -> None:
+        physical = pd.DataFrame(
+            [
+                {
+                    "settlement_date": "2024-10-02",
+                    "settlement_period": 1,
+                    "elexon_bm_unit": "T_HOWAO-1",
+                    "pn_mwh": 20.0,
+                    "qpn_mwh": 5.0,
+                    "mils_mwh": 4.0,
+                    "mels_mwh": 22.0,
+                    "generation_mwh": 5.0,
+                    "physical_baseline_source_dataset": "PN",
+                    "physical_baseline_mwh": 20.0,
+                    "physical_consistency_flag": True,
+                    "counterfactual_valid_flag": True,
+                }
+            ]
+        )
+        truth = self.truth[self.truth["elexon_bm_unit"] == "T_HOWAO-1"].copy()
+        truth["sentinel_pair_available_flag"] = False
+        frame = build_fact_family_publication_audit_daily(
+            physical,
+            truth,
+            self.source_gap_family,
+            family_keys=["HOWAO"],
+        )
+        first = frame.iloc[0]
+        self.assertEqual(first["publication_audit_state"], "physical_without_boalf_negative_bid")
+        self.assertEqual(first["support_question_code"], "query_missing_boalf_with_negative_bid_and_physical_gap")
+        self.assertEqual(int(first["physical_without_boalf_half_hour_count"]), 1)
+
+    def test_build_family_publication_audit_bmu_daily_detects_dynamic_limit_case(self) -> None:
+        physical = pd.DataFrame(
+            [
+                {
+                    "settlement_date": "2024-10-02",
+                    "settlement_period": 1,
+                    "elexon_bm_unit": "T_HOWBO-1",
+                    "pn_mwh": 18.0,
+                    "qpn_mwh": 4.0,
+                    "mils_mwh": 3.0,
+                    "mels_mwh": 9.0,
+                    "generation_mwh": 4.0,
+                    "physical_baseline_source_dataset": "PN",
+                    "physical_baseline_mwh": 18.0,
+                    "physical_consistency_flag": True,
+                    "counterfactual_valid_flag": True,
+                }
+            ]
+        )
+        truth = self.truth[self.truth["elexon_bm_unit"] == "T_HOWBO-1"].copy()
+        truth["negative_bid_available_flag"] = False
+        truth["sentinel_pair_available_flag"] = False
+        frame = build_fact_family_publication_audit_bmu_daily(
+            physical,
+            truth,
+            self.source_gap_family,
+            family_keys=["HOWBO"],
+        )
+        first = frame.iloc[0]
+        self.assertEqual(first["bmu_publication_audit_state"], "availability_like_dynamic_limit")
+        self.assertEqual(first["support_question_code"], "query_dynamic_limit_change_without_boalf")
+
+    def test_build_family_support_evidence_half_hourly_creates_support_case_key(self) -> None:
+        physical = pd.DataFrame(
+            [
+                {
+                    "settlement_date": "2024-10-02",
+                    "settlement_period": 1,
+                    "elexon_bm_unit": "T_HOWBO-1",
+                    "pn_mwh": 18.0,
+                    "qpn_mwh": 4.0,
+                    "mils_mwh": 3.0,
+                    "mels_mwh": 19.0,
+                    "generation_mwh": 4.0,
+                    "physical_baseline_source_dataset": "PN",
+                    "physical_baseline_mwh": 18.0,
+                    "physical_consistency_flag": True,
+                    "counterfactual_valid_flag": True,
+                }
+            ]
+        )
+        truth = self.truth[self.truth["elexon_bm_unit"] == "T_HOWBO-1"].copy()
+        truth["sentinel_bid_pair_count"] = 1
+        truth["sentinel_offer_pair_count"] = 6
+        truth["sentinel_pair_count"] = 7
+        truth["sentinel_pair_available_flag"] = True
+        frame = build_fact_family_support_evidence_half_hourly(
+            physical,
+            truth,
+            self.source_gap_family,
+            family_keys=["HOWBO"],
+        )
+        first = frame.iloc[0]
+        self.assertEqual(first["publication_audit_state"], "physical_without_boalf_sentinel_bod_present")
+        self.assertTrue(str(first["support_case_key"]).startswith("HOWBO:2024-10-02:T_HOWBO-1:SP1"))
+        self.assertEqual(first["support_question_code"], "query_bod_sentinel_and_missing_boalf")
 
 
 if __name__ == "__main__":

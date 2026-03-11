@@ -149,7 +149,7 @@ Key behavior:
      --source-focus-limit 20
     ```
 
-16. Materialize and inspect targeted family dispatch forensics from the SQLite store. By default this scopes to Hornsea family keys `HOWAO,HOWBO`:
+16. Materialize and inspect targeted family dispatch and physical forensics from the SQLite store. By default this scopes to Hornsea family keys `HOWAO,HOWBO`:
 
     ```bash
     python inline_arbitrage_live.py ^
@@ -158,6 +158,16 @@ Key behavior:
       --truth-store-db-path bmu_truth_store.sqlite ^
       --forensic-family-keys HOWAO,HOWBO ^
       --forensic-limit 20
+    ```
+
+17. Export a support-ready Hornsea publication-audit packet from the SQLite store:
+
+    ```bash
+    python inline_arbitrage_live.py ^
+      --materialize-truth-store-family-forensics ^
+      --truth-store-db-path bmu_truth_store.sqlite ^
+      --forensic-family-keys HOWAO,HOWBO ^
+      --forensic-output-dir hornsea_support_extract
     ```
 
 12. Materialize observed weather history for anchors, clusters, and parent regions:
@@ -217,6 +227,12 @@ Key behavior:
 - `fact_bmu_bid_offer_half_hourly` is not dispatch truth. It is an evidence layer from `BOD`
   that flags negative bid availability and carries price diagnostics so PN-QPN gaps can be used
   as a second dispatch-evidence tier without pretending `BOD` is an acceptance feed.
+- Raw `BOD` and `BOALF` fetches are now clipped back to the requested local-day UTC window after
+  retrieval, so next-day settlement-period 1 rows no longer leak into a daily pull when the Elexon
+  endpoint treats the `to` bound as inclusive.
+- `fact_bmu_bid_offer_half_hourly` now carries explicit sentinel diagnostics for suspect source
+  values such as `bid <= -9999` or `offer >= 9999`. Those pairs are preserved for audit, but they
+  are excluded from `negative_bid_available_flag` and from downstream dispatch inference by default.
 - On March 10, 2026, the Elexon v1 endpoint returned data for `BOALF` while the plain `BOAL`
   path returned `404`, so the dispatch materializer is standardized on `BOALF`.
 - On the same March 10, 2026 probe, `BOD` returned rows for wind BMUs while `NTO` and `NTB`
@@ -272,18 +288,41 @@ Key behavior:
 - The same store pass now also materializes store-backed dispatch-source gap tables:
   - `fact_dispatch_source_gap_daily`
   - `fact_dispatch_source_gap_family_daily`
+- The same store pass now also materializes store-backed publication-anomaly ranking tables:
+  - `fact_publication_anomaly_daily`
+  - `fact_publication_anomaly_family_daily`
 - The repo now also materializes targeted store-backed family forensics tables:
   - `fact_family_dispatch_forensic_daily`
   - `fact_family_dispatch_forensic_bmu_daily`
   - `fact_family_dispatch_forensic_half_hourly`
+- The same scoped family-forensics pass now also materializes physical PN/QPN/MILS/MELS surfaces:
+  - `fact_family_physical_forensic_daily`
+  - `fact_family_physical_forensic_bmu_daily`
+  - `fact_family_physical_forensic_half_hourly`
+- The same scoped family-forensics pass now also materializes publication-audit and support-extract surfaces:
+  - `fact_family_publication_audit_daily`
+  - `fact_family_publication_audit_bmu_daily`
+  - `fact_family_support_evidence_half_hourly`
 - Those focus tables turn the stored QA surfaces into ranked next actions, so the next dispatch-source
   pass can target the remaining fail and warn days directly from SQLite rather than from stitched CSVs.
 - The new source-gap tables are narrower: they rank days and BMU families where `negative_bid_available_flag`
   plus `physical_dispatch_down_gap_mwh` indicate missing dispatch evidence, and split that gap into
   `same_bmu_window`, `family_window`, and `no_window` scopes so source expansion is auditable.
+- The publication-anomaly tables sit beside the source-gap tables, not inside truth. They rank days and
+  BMU families where `physical_dispatch_down_gap_mwh` exists with no published `BOALF`, then split that
+  anomaly into `sentinel_bod_present`, `negative_bid_without_boalf`, `dynamic_limit_like_without_boalf`,
+  and residual `physical_without_boalf` buckets.
 - The family-forensics tables are narrower again: they are a scoped inspection surface keyed by a forensic family
   scope such as `HOWAO+HOWBO`, and they break the chosen families down at daily, BMU-daily, and half-hourly
   grain so a Hornsea-first forensic pass can inspect evidence without auto-promoting those rows into dispatch truth.
+- The physical-forensics tables are specifically for questions like “is the Hornsea miss visible in PN/QPN/MILS/MELS
+  even when BOALF is empty?” They keep positive `PN-QPN` gaps, zero-BOALF rows, valid negative-bid rows, and sentinel
+  bid artifacts separate so source issues do not get hidden inside one aggregate number.
+- The publication-audit tables sit one level above that evidence tape: they classify scoped family-days and BMUs as
+  `physical_without_boalf`, `physical_without_boalf_negative_bid`, or `availability_like_dynamic_limit`, and they
+  attach a support question code instead of silently folding those rows back into truth.
+- The support-evidence extract is the support-ready packet. It keeps row-level `PN/QPN/MILS/MELS`, generation,
+  BOALF lower bound, BOD sentinel diagnostics, and the recommended support question together in one scoped CSV export.
 - `precision_profile_include` now keys off the wind-only QA target, not the mixed raw NESO total.
 - The weather-calibrated tier now uses observed weather history from capacity-weighted anchor points.
   It still does not replace a valid physical-baseline row, and it is still a first pass rather than

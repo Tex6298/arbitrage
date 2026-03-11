@@ -1,0 +1,9 @@
+settlement_date,elexon_bm_unit,national_grid_bm_unit,cluster_key,cluster_label,parent_region,mapping_status,dispatch_half_hour_count,lost_energy_estimate_half_hour_count,accepted_down_delta_mwh_lower_bound,dispatch_down_mwh_lower_bound,lost_energy_mwh,primary_dispatch_block_reason,dispatch_minus_lost_energy_gap_mwh
+2024-10-02,T_SHRSW-1,SHRSO-1,,,,unmapped,4,3,5.8999999999999995,207.96666666666667,10.176000000000002,physical_below_generation,197.79066666666665
+2024-10-02,E_BTUIW-3,BTUIW-3,,,,unmapped,5,4,0.36666666666666664,43.86666666666667,12.302999999999999,physical_below_generation,31.56366666666667
+2024-10-02,T_KYPEW-1,KYPEW-1,,,,unmapped,5,5,0.5333333333333333,44.0,26.14,,17.86
+2024-10-02,T_SGRWO-2,SGRWO-2,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,2,2,0.18333333333333332,30.683333333333334,18.197300000000002,,12.486033333333332
+2024-10-02,T_SGRWO-5,SGRWO-5,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,1,1,0.13333333333333333,0.13333333333333333,12.0912,,-11.957866666666668
+2024-10-02,T_SGRWO-6,SGRWO-6,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,1,1,10.266666666666666,10.266666666666666,37.5985,,-27.331833333333336
+2024-10-02,T_SGRWO-1,SGRWO-1,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,1,1,7.216666666666668,7.216666666666668,39.1653,,-31.948633333333333
+2024-10-02,T_PNYCW-1,PNYCW-1,,,England/Wales,region_only,1,1,2.033333333333333,2.033333333333333,57.11125,,-55.07791666666667

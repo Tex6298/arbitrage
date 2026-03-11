@@ -18,6 +18,8 @@ from bmu_generation import ElexonError, build_dim_bmu_asset, fetch_bmu_reference
 ELEXON_BASE = "https://data.elexon.co.uk/bmrs/api/v1"
 LONDON_TZ = ZoneInfo("Europe/London")
 UTC = dt.timezone.utc
+SENTINEL_BID_FLOOR_GBP_PER_MWH = -9999.0
+SENTINEL_OFFER_CEILING_GBP_PER_MWH = 9999.0
 
 
 def _fetch_json(url: str) -> list[dict]:
@@ -51,6 +53,28 @@ def _rfc3339_utc(value: dt.datetime) -> str:
 def _chunked(values: Sequence[str], size: int) -> Iterable[List[str]]:
     for index in range(0, len(values), size):
         yield list(values[index : index + size])
+
+
+def clip_raw_dispatch_rows_to_requested_window(
+    frame: pd.DataFrame,
+    start_utc: dt.datetime,
+    end_utc: dt.datetime,
+) -> pd.DataFrame:
+    if frame.empty:
+        return frame.copy()
+
+    prepared = frame.copy()
+    if {"timeFrom", "timeTo"}.issubset(prepared.columns):
+        time_from = pd.to_datetime(prepared["timeFrom"], utc=True, errors="coerce")
+        time_to = pd.to_datetime(prepared["timeTo"], utc=True, errors="coerce")
+        overlap_mask = time_to.gt(pd.Timestamp(start_utc)) & time_from.lt(pd.Timestamp(end_utc))
+        prepared = prepared[overlap_mask].copy()
+
+    if "settlementDate" in prepared.columns:
+        settlement_date = pd.to_datetime(prepared["settlementDate"], errors="coerce").dt.date
+        prepared = prepared[settlement_date.notna()].copy()
+
+    return prepared.reset_index(drop=True)
 
 
 def _build_half_hour_interval_frame(start_date: dt.date, end_date: dt.date) -> pd.DataFrame:
@@ -125,6 +149,9 @@ def fetch_boalf_acceptances(
             if not rows:
                 continue
             frame = pd.DataFrame(rows)
+            frame = clip_raw_dispatch_rows_to_requested_window(frame, start_utc=start_utc, end_utc=end_utc)
+            if frame.empty:
+                continue
             frame["source_local_day"] = day.isoformat()
             frames.append(frame)
         day += dt.timedelta(days=1)
@@ -160,6 +187,9 @@ def fetch_bod_bid_offers(
             if not rows:
                 continue
             frame = pd.DataFrame(rows)
+            frame = clip_raw_dispatch_rows_to_requested_window(frame, start_utc=start_utc, end_utc=end_utc)
+            if frame.empty:
+                continue
             frame["source_local_day"] = day.isoformat()
             frames.append(frame)
         day += dt.timedelta(days=1)
@@ -512,7 +542,14 @@ def build_fact_bmu_bid_offer_half_hourly(
         "parent_region",
         "bid_offer_pair_count",
         "negative_bid_pair_count",
+        "valid_negative_bid_pair_count",
         "negative_bid_available_flag",
+        "sentinel_bid_pair_count",
+        "sentinel_offer_pair_count",
+        "sentinel_pair_count",
+        "sentinel_bid_available_flag",
+        "sentinel_offer_available_flag",
+        "sentinel_pair_available_flag",
         "minimum_bid_gbp_per_mwh",
         "maximum_bid_gbp_per_mwh",
         "most_negative_bid_gbp_per_mwh",
@@ -546,7 +583,11 @@ def build_fact_bmu_bid_offer_half_hourly(
     frame["pair_id"] = pd.to_numeric(frame["pair_id"], errors="coerce")
     frame["offer_gbp_per_mwh"] = pd.to_numeric(frame["offer_gbp_per_mwh"], errors="coerce")
     frame["bid_gbp_per_mwh"] = pd.to_numeric(frame["bid_gbp_per_mwh"], errors="coerce")
+    frame["sentinel_bid_flag"] = frame["bid_gbp_per_mwh"] <= SENTINEL_BID_FLOOR_GBP_PER_MWH
+    frame["sentinel_offer_flag"] = frame["offer_gbp_per_mwh"] >= SENTINEL_OFFER_CEILING_GBP_PER_MWH
+    frame["sentinel_pair_flag"] = frame["sentinel_bid_flag"] | frame["sentinel_offer_flag"]
     frame["negative_bid_flag"] = frame["bid_gbp_per_mwh"] < 0
+    frame["valid_negative_bid_flag"] = frame["negative_bid_flag"] & ~frame["sentinel_pair_flag"]
     frame["source_key"] = "BOD"
     frame["source_label"] = "Elexon bid-offer data"
     frame["target_is_proxy"] = False
@@ -602,6 +643,10 @@ def build_fact_bmu_bid_offer_half_hourly(
         .agg(
             bid_offer_pair_count=("pair_id", "count"),
             negative_bid_pair_count=("negative_bid_flag", "sum"),
+            valid_negative_bid_pair_count=("valid_negative_bid_flag", "sum"),
+            sentinel_bid_pair_count=("sentinel_bid_flag", "sum"),
+            sentinel_offer_pair_count=("sentinel_offer_flag", "sum"),
+            sentinel_pair_count=("sentinel_pair_flag", "sum"),
             minimum_bid_gbp_per_mwh=("bid_gbp_per_mwh", "min"),
             maximum_bid_gbp_per_mwh=("bid_gbp_per_mwh", "max"),
             minimum_offer_gbp_per_mwh=("offer_gbp_per_mwh", "min"),
@@ -620,7 +665,10 @@ def build_fact_bmu_bid_offer_half_hourly(
             ),
         )
     )
-    aggregated["negative_bid_available_flag"] = aggregated["negative_bid_pair_count"] > 0
+    aggregated["negative_bid_available_flag"] = aggregated["valid_negative_bid_pair_count"] > 0
+    aggregated["sentinel_bid_available_flag"] = aggregated["sentinel_bid_pair_count"] > 0
+    aggregated["sentinel_offer_available_flag"] = aggregated["sentinel_offer_pair_count"] > 0
+    aggregated["sentinel_pair_available_flag"] = aggregated["sentinel_pair_count"] > 0
     return aggregated[keep_columns].sort_values(["interval_start_utc", "elexon_bm_unit"]).reset_index(drop=True)
 
 

@@ -889,6 +889,13 @@ def _ensure_truth_diagnostic_columns(frame: pd.DataFrame) -> pd.DataFrame:
         "counterfactual_valid_flag": False,
         "negative_bid_available_flag": False,
         "negative_bid_pair_count": 0,
+        "valid_negative_bid_pair_count": 0,
+        "sentinel_bid_pair_count": 0,
+        "sentinel_offer_pair_count": 0,
+        "sentinel_pair_count": 0,
+        "sentinel_bid_available_flag": False,
+        "sentinel_offer_available_flag": False,
+        "sentinel_pair_available_flag": False,
         "dispatch_acceptance_window_flag": False,
         "family_day_dispatch_window_flag": False,
         "family_day_dispatch_expansion_eligible_flag": False,
@@ -1900,18 +1907,52 @@ def build_fact_bmu_curtailment_truth_half_hourly(
         "settlement_period",
         "elexon_bm_unit",
         "negative_bid_pair_count",
+        "valid_negative_bid_pair_count",
         "negative_bid_available_flag",
+        "sentinel_bid_pair_count",
+        "sentinel_offer_pair_count",
+        "sentinel_pair_count",
+        "sentinel_bid_available_flag",
+        "sentinel_offer_available_flag",
+        "sentinel_pair_available_flag",
         "most_negative_bid_gbp_per_mwh",
         "least_negative_bid_gbp_per_mwh",
     ]
     if fact_bmu_bid_offer_half_hourly.empty:
         frame["negative_bid_pair_count"] = 0
+        frame["valid_negative_bid_pair_count"] = 0
         frame["negative_bid_available_flag"] = False
+        frame["sentinel_bid_pair_count"] = 0
+        frame["sentinel_offer_pair_count"] = 0
+        frame["sentinel_pair_count"] = 0
+        frame["sentinel_bid_available_flag"] = False
+        frame["sentinel_offer_available_flag"] = False
+        frame["sentinel_pair_available_flag"] = False
         frame["most_negative_bid_gbp_per_mwh"] = np.nan
         frame["least_negative_bid_gbp_per_mwh"] = np.nan
     else:
+        bid_offer_frame = fact_bmu_bid_offer_half_hourly.copy()
+        for column in bid_offer_columns:
+            if column not in bid_offer_frame.columns:
+                if column in {
+                    "negative_bid_pair_count",
+                    "valid_negative_bid_pair_count",
+                    "sentinel_bid_pair_count",
+                    "sentinel_offer_pair_count",
+                    "sentinel_pair_count",
+                }:
+                    bid_offer_frame[column] = 0
+                elif column in {
+                    "negative_bid_available_flag",
+                    "sentinel_bid_available_flag",
+                    "sentinel_offer_available_flag",
+                    "sentinel_pair_available_flag",
+                }:
+                    bid_offer_frame[column] = False
+                else:
+                    bid_offer_frame[column] = np.nan
         frame = frame.merge(
-            fact_bmu_bid_offer_half_hourly[bid_offer_columns],
+            bid_offer_frame[bid_offer_columns],
             on=["settlement_date", "settlement_period", "elexon_bm_unit"],
             how="left",
         )
@@ -1948,7 +1989,18 @@ def build_fact_bmu_curtailment_truth_half_hourly(
     frame["pn_mwh"] = pd.to_numeric(frame["pn_mwh"], errors="coerce")
     frame["qpn_mwh"] = pd.to_numeric(frame["qpn_mwh"], errors="coerce")
     frame["negative_bid_pair_count"] = pd.to_numeric(frame["negative_bid_pair_count"], errors="coerce").fillna(0).astype(int)
+    frame["valid_negative_bid_pair_count"] = pd.to_numeric(
+        frame["valid_negative_bid_pair_count"], errors="coerce"
+    ).fillna(0).astype(int)
+    frame["sentinel_bid_pair_count"] = pd.to_numeric(frame["sentinel_bid_pair_count"], errors="coerce").fillna(0).astype(int)
+    frame["sentinel_offer_pair_count"] = pd.to_numeric(
+        frame["sentinel_offer_pair_count"], errors="coerce"
+    ).fillna(0).astype(int)
+    frame["sentinel_pair_count"] = pd.to_numeric(frame["sentinel_pair_count"], errors="coerce").fillna(0).astype(int)
     frame["negative_bid_available_flag"] = _coerce_bool_series(frame["negative_bid_available_flag"])
+    frame["sentinel_bid_available_flag"] = _coerce_bool_series(frame["sentinel_bid_available_flag"])
+    frame["sentinel_offer_available_flag"] = _coerce_bool_series(frame["sentinel_offer_available_flag"])
+    frame["sentinel_pair_available_flag"] = _coerce_bool_series(frame["sentinel_pair_available_flag"])
     frame["most_negative_bid_gbp_per_mwh"] = pd.to_numeric(frame["most_negative_bid_gbp_per_mwh"], errors="coerce")
     frame["least_negative_bid_gbp_per_mwh"] = pd.to_numeric(frame["least_negative_bid_gbp_per_mwh"], errors="coerce")
     frame["physical_dispatch_down_gap_mwh"] = (
@@ -2073,6 +2125,13 @@ def build_fact_bmu_curtailment_truth_half_hourly(
         "family_day_dispatch_expansion_applied_flag",
         "negative_bid_available_flag",
         "negative_bid_pair_count",
+        "valid_negative_bid_pair_count",
+        "sentinel_bid_pair_count",
+        "sentinel_offer_pair_count",
+        "sentinel_pair_count",
+        "sentinel_bid_available_flag",
+        "sentinel_offer_available_flag",
+        "sentinel_pair_available_flag",
         "most_negative_bid_gbp_per_mwh",
         "least_negative_bid_gbp_per_mwh",
         "availability_state",

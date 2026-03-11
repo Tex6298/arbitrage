@@ -48,6 +48,7 @@ from truth_store_forensics import (
     forensic_scope_key_for_family_keys,
     materialize_truth_store_family_forensics,
     read_truth_store_family_forensics,
+    write_family_support_extract_csvs,
 )
 from truth_store_focus import materialize_truth_store_source_focus, read_truth_store_source_focus
 from weather_history import materialize_weather_history
@@ -578,6 +579,10 @@ def main() -> int:
         help="Maximum number of forensic BMU or half-hour rows to print",
     )
     parser.add_argument(
+        "--forensic-output-dir",
+        help="Optional directory for scoped family publication-audit and support-extract CSVs",
+    )
+    parser.add_argument(
         "--materialize-weather-history",
         action="store_true",
         help="Fetch and save anchor, cluster, and parent-region weather history, then exit",
@@ -734,15 +739,29 @@ def main() -> int:
                     print("No matching dispatch source-gap families.")
                 else:
                     print(gap_family.to_string(index=False))
+                print()
+                print("Publication Anomalies Daily")
+                anomaly_daily = filtered["fact_publication_anomaly_daily"]
+                if anomaly_daily.empty:
+                    print("No matching publication-anomaly days.")
+                else:
+                    print(anomaly_daily.to_string(index=False))
+                print()
+                print("Publication Anomalies Families")
+                anomaly_family = filtered["fact_publication_anomaly_family_daily"].head(args.source_focus_limit)
+                if anomaly_family.empty:
+                    print("No matching publication-anomaly families.")
+                else:
+                    print(anomaly_family.to_string(index=False))
             return 0
         except Exception as exc:
             print(f"ERROR: {exc}", file=sys.stderr)
             return 1
 
-    if args.materialize_truth_store_family_forensics or args.show_truth_store_family_forensics:
+    if args.materialize_truth_store_family_forensics or args.show_truth_store_family_forensics or args.forensic_output_dir:
         if not args.truth_store_db_path:
             raise SystemExit(
-                "--materialize-truth-store-family-forensics and --show-truth-store-family-forensics require --truth-store-db-path"
+                "--materialize-truth-store-family-forensics, --show-truth-store-family-forensics, and --forensic-output-dir require --truth-store-db-path"
             )
         forensic_start = parse_bmu_iso_date(args.forensic_start).isoformat() if args.forensic_start else None
         forensic_end = parse_bmu_iso_date(args.forensic_end).isoformat() if args.forensic_end else None
@@ -761,13 +780,16 @@ def main() -> int:
                 )
                 for table_name, frame in frames.items():
                     print(f"{table_name}: rows={len(frame)}")
-            if args.show_truth_store_family_forensics:
+            filtered = None
+            if args.show_truth_store_family_forensics or args.forensic_output_dir:
                 filtered = read_truth_store_family_forensics(
                     db_path=args.truth_store_db_path,
                     family_keys=args.forensic_family_keys,
                     start_date=forensic_start,
                     end_date=forensic_end,
                 )
+            if args.show_truth_store_family_forensics:
+                assert filtered is not None
                 print(f"Family Dispatch Forensics Daily ({scope_key})")
                 daily = filtered["fact_family_dispatch_forensic_daily"]
                 if daily.empty:
@@ -788,6 +810,59 @@ def main() -> int:
                     print("No matching forensic half-hour rows.")
                 else:
                     print(half_hourly.to_string(index=False))
+                print()
+                print(f"Family Physical Forensics Daily ({scope_key})")
+                physical_daily = filtered["fact_family_physical_forensic_daily"]
+                if physical_daily.empty:
+                    print("No matching physical forensic daily rows.")
+                else:
+                    print(physical_daily.to_string(index=False))
+                print()
+                print(f"Family Physical Forensics BMU Daily ({scope_key})")
+                physical_bmu_daily = filtered["fact_family_physical_forensic_bmu_daily"].head(args.forensic_limit)
+                if physical_bmu_daily.empty:
+                    print("No matching physical forensic BMU rows.")
+                else:
+                    print(physical_bmu_daily.to_string(index=False))
+                print()
+                print(f"Family Physical Forensics Half-Hourly ({scope_key})")
+                physical_half_hourly = filtered["fact_family_physical_forensic_half_hourly"].head(args.forensic_limit)
+                if physical_half_hourly.empty:
+                    print("No matching physical forensic half-hour rows.")
+                else:
+                    print(physical_half_hourly.to_string(index=False))
+                print()
+                print(f"Family Publication Audit Daily ({scope_key})")
+                publication_daily = filtered["fact_family_publication_audit_daily"]
+                if publication_daily.empty:
+                    print("No matching publication-audit daily rows.")
+                else:
+                    print(publication_daily.to_string(index=False))
+                print()
+                print(f"Family Publication Audit BMU Daily ({scope_key})")
+                publication_bmu_daily = filtered["fact_family_publication_audit_bmu_daily"].head(args.forensic_limit)
+                if publication_bmu_daily.empty:
+                    print("No matching publication-audit BMU rows.")
+                else:
+                    print(publication_bmu_daily.to_string(index=False))
+                print()
+                print(f"Family Support Evidence Half-Hourly ({scope_key})")
+                support_half_hourly = filtered["fact_family_support_evidence_half_hourly"].head(args.forensic_limit)
+                if support_half_hourly.empty:
+                    print("No matching support-evidence half-hour rows.")
+                else:
+                    print(support_half_hourly.to_string(index=False))
+            if args.forensic_output_dir:
+                assert filtered is not None
+                written = write_family_support_extract_csvs(
+                    frames=filtered,
+                    output_dir=args.forensic_output_dir,
+                    family_keys=args.forensic_family_keys,
+                )
+                print()
+                print(f"Support extract CSVs ({scope_key})")
+                for table_name, path in written.items():
+                    print(f"{table_name}: path={path}")
             return 0
         except Exception as exc:
             print(f"ERROR: {exc}", file=sys.stderr)

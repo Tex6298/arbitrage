@@ -5,6 +5,8 @@ import pandas as pd
 from truth_store_focus import (
     build_fact_dispatch_source_gap_daily,
     build_fact_dispatch_source_gap_family_daily,
+    build_fact_publication_anomaly_daily,
+    build_fact_publication_anomaly_family_daily,
     build_fact_source_completeness_focus_daily,
     build_fact_source_completeness_focus_family_daily,
 )
@@ -297,6 +299,213 @@ class TruthStoreFocusTests(unittest.TestCase):
         self.assertEqual(second["bmu_family_key"], "KYPEW")
         self.assertEqual(second["family_source_gap_next_action"], "expand_dispatch_source_beyond_family_window")
         self.assertEqual(int(second["day_family_rank_by_source_gap"]), 2)
+
+    def test_build_publication_anomaly_daily_ranks_days_and_states(self) -> None:
+        daily_focus = pd.DataFrame(
+            [
+                {
+                    "settlement_date": "2024-10-02",
+                    "qa_reconciliation_status": "fail",
+                    "recoverability_audit_state": "source_limited",
+                    "next_action": "add_dispatch_source",
+                    "remaining_qa_shortfall_mwh": 100.0,
+                },
+                {
+                    "settlement_date": "2024-10-03",
+                    "qa_reconciliation_status": "warn",
+                    "recoverability_audit_state": "counterfactual_or_definition_limited",
+                    "next_action": "counterfactual_or_target_audit",
+                    "remaining_qa_shortfall_mwh": 20.0,
+                },
+            ]
+        )
+        truth = pd.DataFrame(
+            [
+                {
+                    "settlement_date": "2024-10-02",
+                    "settlement_period": 1,
+                    "elexon_bm_unit": "T_HOWAO-1",
+                    "bmu_family_key": "HOWAO",
+                    "bmu_family_label": "Hornsea",
+                    "cluster_key": "dogger_hornsea_offshore",
+                    "cluster_label": "Dogger and Hornsea Offshore",
+                    "parent_region": "England/Wales",
+                    "mapping_status": "mapped",
+                    "accepted_down_delta_mwh_lower_bound": 0.0,
+                    "dispatch_down_evidence_mwh_lower_bound": 0.0,
+                    "physical_dispatch_down_gap_mwh": 20.0,
+                    "negative_bid_available_flag": True,
+                    "sentinel_pair_available_flag": False,
+                    "lost_energy_mwh": 0.0,
+                },
+                {
+                    "settlement_date": "2024-10-02",
+                    "settlement_period": 2,
+                    "elexon_bm_unit": "T_HOWBO-1",
+                    "bmu_family_key": "HOWBO",
+                    "bmu_family_label": "Hornsea",
+                    "cluster_key": "dogger_hornsea_offshore",
+                    "cluster_label": "Dogger and Hornsea Offshore",
+                    "parent_region": "England/Wales",
+                    "mapping_status": "mapped",
+                    "accepted_down_delta_mwh_lower_bound": 0.0,
+                    "dispatch_down_evidence_mwh_lower_bound": 0.0,
+                    "physical_dispatch_down_gap_mwh": 30.0,
+                    "negative_bid_available_flag": False,
+                    "sentinel_pair_available_flag": True,
+                    "lost_energy_mwh": 0.0,
+                },
+                {
+                    "settlement_date": "2024-10-03",
+                    "settlement_period": 1,
+                    "elexon_bm_unit": "T_MOWEO-1",
+                    "bmu_family_key": "MOWEO",
+                    "bmu_family_label": "Moray East",
+                    "cluster_key": "moray_firth_offshore",
+                    "cluster_label": "Moray Firth Offshore",
+                    "parent_region": "Scotland",
+                    "mapping_status": "mapped",
+                    "accepted_down_delta_mwh_lower_bound": 0.0,
+                    "dispatch_down_evidence_mwh_lower_bound": 0.0,
+                    "physical_dispatch_down_gap_mwh": 12.0,
+                    "negative_bid_available_flag": False,
+                    "sentinel_pair_available_flag": False,
+                    "lost_energy_mwh": 0.0,
+                },
+            ]
+        )
+        physical = pd.DataFrame(
+            [
+                {
+                    "settlement_date": "2024-10-02",
+                    "settlement_period": 1,
+                    "elexon_bm_unit": "T_HOWAO-1",
+                    "pn_mwh": 20.0,
+                    "qpn_mwh": 0.0,
+                    "mils_mwh": 0.0,
+                    "mels_mwh": 22.0,
+                },
+                {
+                    "settlement_date": "2024-10-02",
+                    "settlement_period": 2,
+                    "elexon_bm_unit": "T_HOWBO-1",
+                    "pn_mwh": 30.0,
+                    "qpn_mwh": 0.0,
+                    "mils_mwh": 0.0,
+                    "mels_mwh": 35.0,
+                },
+                {
+                    "settlement_date": "2024-10-03",
+                    "settlement_period": 1,
+                    "elexon_bm_unit": "T_MOWEO-1",
+                    "pn_mwh": 18.0,
+                    "qpn_mwh": 6.0,
+                    "mils_mwh": 0.0,
+                    "mels_mwh": 10.0,
+                },
+            ]
+        )
+
+        frame = build_fact_publication_anomaly_daily(truth, physical, daily_focus)
+        first = frame[frame["settlement_date"] == "2024-10-02"].iloc[0]
+        second = frame[frame["settlement_date"] == "2024-10-03"].iloc[0]
+
+        self.assertAlmostEqual(float(first["publication_anomaly_candidate_mwh_lower_bound"]), 50.0)
+        self.assertEqual(first["publication_anomaly_dominant_state"], "sentinel_bod_present")
+        self.assertEqual(first["publication_anomaly_next_action"], "support_query_bod_sentinel_and_boalf_publication")
+        self.assertAlmostEqual(float(first["publication_anomaly_share_of_remaining_qa_shortfall"]), 0.5)
+        self.assertEqual(int(first["publication_anomaly_family_count"]), 2)
+
+        self.assertEqual(second["publication_anomaly_dominant_state"], "dynamic_limit_like_without_boalf")
+        self.assertEqual(second["publication_anomaly_next_action"], "inspect_dynamic_limit_publication")
+
+    def test_build_publication_anomaly_family_daily_ranks_family_days(self) -> None:
+        daily = pd.DataFrame(
+            [
+                {
+                    "settlement_date": "2024-10-02",
+                    "qa_reconciliation_status": "fail",
+                    "recoverability_audit_state": "source_limited",
+                    "next_action": "add_dispatch_source",
+                    "remaining_qa_shortfall_mwh": 100.0,
+                    "publication_anomaly_next_action": "support_query_bod_sentinel_and_boalf_publication",
+                }
+            ]
+        )
+        truth = pd.DataFrame(
+            [
+                {
+                    "settlement_date": "2024-10-02",
+                    "settlement_period": 1,
+                    "elexon_bm_unit": "T_HOWAO-1",
+                    "bmu_family_key": "HOWAO",
+                    "bmu_family_label": "Hornsea",
+                    "cluster_key": "dogger_hornsea_offshore",
+                    "cluster_label": "Dogger and Hornsea Offshore",
+                    "parent_region": "England/Wales",
+                    "mapping_status": "mapped",
+                    "accepted_down_delta_mwh_lower_bound": 0.0,
+                    "dispatch_down_evidence_mwh_lower_bound": 0.0,
+                    "physical_dispatch_down_gap_mwh": 20.0,
+                    "negative_bid_available_flag": True,
+                    "sentinel_pair_available_flag": False,
+                    "lost_energy_mwh": 0.0,
+                },
+                {
+                    "settlement_date": "2024-10-02",
+                    "settlement_period": 2,
+                    "elexon_bm_unit": "T_HOWBO-1",
+                    "bmu_family_key": "HOWBO",
+                    "bmu_family_label": "Hornsea",
+                    "cluster_key": "dogger_hornsea_offshore",
+                    "cluster_label": "Dogger and Hornsea Offshore",
+                    "parent_region": "England/Wales",
+                    "mapping_status": "mapped",
+                    "accepted_down_delta_mwh_lower_bound": 0.0,
+                    "dispatch_down_evidence_mwh_lower_bound": 0.0,
+                    "physical_dispatch_down_gap_mwh": 30.0,
+                    "negative_bid_available_flag": False,
+                    "sentinel_pair_available_flag": True,
+                    "lost_energy_mwh": 0.0,
+                },
+            ]
+        )
+        physical = pd.DataFrame(
+            [
+                {
+                    "settlement_date": "2024-10-02",
+                    "settlement_period": 1,
+                    "elexon_bm_unit": "T_HOWAO-1",
+                    "pn_mwh": 20.0,
+                    "qpn_mwh": 0.0,
+                    "mils_mwh": 0.0,
+                    "mels_mwh": 22.0,
+                },
+                {
+                    "settlement_date": "2024-10-02",
+                    "settlement_period": 2,
+                    "elexon_bm_unit": "T_HOWBO-1",
+                    "pn_mwh": 30.0,
+                    "qpn_mwh": 0.0,
+                    "mils_mwh": 0.0,
+                    "mels_mwh": 35.0,
+                },
+            ]
+        )
+
+        frame = build_fact_publication_anomaly_family_daily(truth, physical, daily)
+        first = frame.iloc[0]
+        second = frame.iloc[1]
+
+        self.assertEqual(first["bmu_family_key"], "HOWBO")
+        self.assertEqual(first["publication_anomaly_dominant_state"], "sentinel_bod_present")
+        self.assertEqual(first["family_publication_anomaly_next_action"], "support_query_bod_sentinel_and_boalf_publication")
+        self.assertEqual(int(first["day_family_rank_by_publication_anomaly"]), 1)
+        self.assertAlmostEqual(float(first["publication_anomaly_share_of_day_total"]), 0.6)
+
+        self.assertEqual(second["bmu_family_key"], "HOWAO")
+        self.assertEqual(second["publication_anomaly_dominant_state"], "negative_bid_without_boalf")
+        self.assertEqual(second["family_publication_anomaly_next_action"], "support_query_missing_published_boalf")
 
 
 if __name__ == "__main__":
