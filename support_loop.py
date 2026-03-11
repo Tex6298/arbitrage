@@ -176,11 +176,7 @@ def _select_support_families(
         .head(top_families_per_day)
         .reset_index(drop=True)
     )
-    prepared["support_case_family_rank"] = (
-        prepared.groupby("settlement_date")["publication_anomaly_candidate_mwh_lower_bound"]
-        .rank(method="dense", ascending=False)
-        .astype("Int64")
-    )
+    prepared["support_case_family_rank"] = prepared["day_family_rank_by_publication_anomaly"].astype("Int64")
     return prepared[columns + ["support_case_family_rank"]].reset_index(drop=True)
 
 
@@ -205,6 +201,7 @@ def build_fact_support_case_daily(
         "recoverability_audit_state",
         "next_action",
         "publication_anomaly_next_action",
+        "publication_anomaly_priority_rank",
         "publication_anomaly_candidate_mwh_lower_bound",
         "publication_anomaly_dominant_state",
         "publication_anomaly_family_count",
@@ -212,6 +209,8 @@ def build_fact_support_case_daily(
         "publication_anomaly_distinct_bmu_count",
         "publication_anomaly_share_of_remaining_qa_shortfall",
         "remaining_qa_shortfall_mwh",
+        "support_question_code",
+        "support_recommended_action",
         "selected_family_count",
     ]
     if selected_support_days.empty:
@@ -232,6 +231,22 @@ def build_fact_support_case_daily(
     daily["support_status_mode"] = status_mode
     daily["support_top_days"] = top_days
     daily["support_top_families_per_day"] = top_families_per_day
+    daily["support_question_code"] = _ensure_string_column(daily, "publication_anomaly_dominant_state").map(
+        {
+            "sentinel_bod_present": "query_bod_sentinel_and_missing_boalf",
+            "negative_bid_without_boalf": "query_missing_boalf_with_negative_bid_and_physical_gap",
+            "dynamic_limit_like_without_boalf": "query_dynamic_limit_change_without_boalf",
+            "physical_without_boalf": "query_physical_gap_without_boalf",
+        }
+    ).fillna("no_support_case")
+    daily["support_recommended_action"] = daily["support_question_code"].map(
+        {
+            "query_bod_sentinel_and_missing_boalf": "ask_elexon_about_suspect_bod_sentinel_and_missing_published_boalf",
+            "query_missing_boalf_with_negative_bid_and_physical_gap": "ask_elexon_why_physical_gap_and_negative_bid_exist_without_published_boalf",
+            "query_dynamic_limit_change_without_boalf": "ask_elexon_whether_dynamic_limit_changes_can_occur_without_published_boalf",
+            "query_physical_gap_without_boalf": "ask_elexon_why_physical_gap_exists_without_published_boalf",
+        }
+    ).fillna("no_support_escalation")
     return daily[columns].sort_values(["support_case_day_rank", "settlement_date"]).reset_index(drop=True)
 
 
@@ -267,6 +282,8 @@ def build_fact_support_case_family_daily(
         "parent_region",
         "mapping_status",
         "publication_anomaly_candidate_mwh_lower_bound",
+        "publication_anomaly_share_of_day_total",
+        "publication_anomaly_share_of_remaining_qa_shortfall",
         "publication_anomaly_dominant_state",
         "day_family_rank_by_publication_anomaly",
         "support_question_code",
@@ -734,4 +751,3 @@ def materialize_truth_store_support_loop(
             support_batch_id=support_batch_id,
         )
     return support_batch_id, frames, summary_markdown, written_paths
-

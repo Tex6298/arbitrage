@@ -44,6 +44,13 @@ from exploration_plan import backtest_plan_frame, dataset_plan_frame, drift_moni
 from gb_topology import cluster_hub_matrix, interconnector_hub_frame, reachability_frame, route_hub_frame
 from history_store import ingest_truth_csv_tree_to_sqlite, upsert_truth_frames_to_sqlite
 from physical_constraints import assumption_frame, compute_netbacks
+from support_loop import (
+    SUPPORT_CASE_DAILY_TABLE,
+    SUPPORT_CASE_FAMILY_TABLE,
+    SUPPORT_CASE_HALF_HOURLY_TABLE,
+    SUPPORT_SUMMARY_FILENAME,
+    materialize_truth_store_support_loop,
+)
 from truth_store_forensics import (
     forensic_scope_key_for_family_keys,
     materialize_truth_store_family_forensics,
@@ -583,6 +590,44 @@ def main() -> int:
         help="Optional directory for scoped family publication-audit and support-extract CSVs",
     )
     parser.add_argument(
+        "--materialize-truth-store-support-loop",
+        action="store_true",
+        help="Build store-backed publication-anomaly support-case tables from the SQLite truth store, then exit",
+    )
+    parser.add_argument(
+        "--show-truth-store-support-loop",
+        action="store_true",
+        help="Print the store-backed support-case batch summary from the SQLite truth store, then exit",
+    )
+    parser.add_argument(
+        "--support-output-dir",
+        help="Optional directory for ranked support-case CSVs and a Markdown support dossier",
+    )
+    parser.add_argument(
+        "--support-status",
+        default="fail_warn",
+        choices=("all", "fail", "fail_warn"),
+        help="Status filter for support-loop selection: all, fail, or fail_warn",
+    )
+    parser.add_argument(
+        "--support-top-days",
+        type=int,
+        default=7,
+        help="Maximum number of support-ready days to include in the support batch",
+    )
+    parser.add_argument(
+        "--support-top-families-per-day",
+        type=int,
+        default=5,
+        help="Maximum number of support-ready family-days to include per selected day",
+    )
+    parser.add_argument(
+        "--support-half-hour-limit",
+        type=int,
+        default=20,
+        help="Maximum number of support half-hour evidence rows to print",
+    )
+    parser.add_argument(
         "--materialize-weather-history",
         action="store_true",
         help="Fetch and save anchor, cluster, and parent-region weather history, then exit",
@@ -978,6 +1023,69 @@ def main() -> int:
                         f"{row['table_name']}: rows_loaded={int(row['rows_loaded'])} "
                         f"table_rows={int(row['table_row_count'])}"
                     )
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
+    if args.materialize_truth_store_support_loop or args.show_truth_store_support_loop or args.support_output_dir:
+        if not args.truth_store_db_path:
+            raise SystemExit(
+                "--materialize-truth-store-support-loop, --show-truth-store-support-loop, and --support-output-dir require --truth-store-db-path"
+            )
+        try:
+            support_batch_id, frames, summary_markdown, written_paths = materialize_truth_store_support_loop(
+                db_path=args.truth_store_db_path,
+                status_mode=args.support_status,
+                top_days=args.support_top_days,
+                top_families_per_day=args.support_top_families_per_day,
+                output_dir=args.support_output_dir,
+            )
+            if args.materialize_truth_store_support_loop:
+                print(
+                    f"[store=sqlite] Materialized support-loop tables in {args.truth_store_db_path} "
+                    f"for batch={support_batch_id}"
+                )
+                for table_name in [
+                    SUPPORT_CASE_DAILY_TABLE,
+                    SUPPORT_CASE_FAMILY_TABLE,
+                    SUPPORT_CASE_HALF_HOURLY_TABLE,
+                ]:
+                    print(f"{table_name}: rows={len(frames[table_name])}")
+            if args.show_truth_store_support_loop:
+                print(f"Support Case Daily ({support_batch_id})")
+                daily = frames[SUPPORT_CASE_DAILY_TABLE]
+                if daily.empty:
+                    print("No support-selected days.")
+                else:
+                    print(daily.to_string(index=False))
+                print()
+                print(f"Support Case Family Daily ({support_batch_id})")
+                family = frames[SUPPORT_CASE_FAMILY_TABLE]
+                if family.empty:
+                    print("No support-selected family-days.")
+                else:
+                    print(family.to_string(index=False))
+                print()
+                print(f"Support Case Half-Hourly ({support_batch_id})")
+                half_hourly = frames[SUPPORT_CASE_HALF_HOURLY_TABLE].head(args.support_half_hour_limit)
+                if half_hourly.empty:
+                    print("No support-selected half-hour rows.")
+                else:
+                    print(half_hourly.to_string(index=False))
+                print()
+                print("Support Case Summary Preview")
+                preview_lines = summary_markdown.strip().splitlines()
+                print("\n".join(preview_lines[: min(len(preview_lines), 60)]))
+            if args.support_output_dir:
+                for name in [
+                    SUPPORT_CASE_DAILY_TABLE,
+                    SUPPORT_CASE_FAMILY_TABLE,
+                    SUPPORT_CASE_HALF_HOURLY_TABLE,
+                    SUPPORT_SUMMARY_FILENAME,
+                ]:
+                    if name in written_paths:
+                        print(f"{name}: {written_paths[name]}")
             return 0
         except Exception as exc:
             print(f"ERROR: {exc}", file=sys.stderr)
