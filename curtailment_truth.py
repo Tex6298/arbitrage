@@ -1543,10 +1543,11 @@ def build_fact_bmu_family_shortfall_daily(frame: pd.DataFrame) -> pd.DataFrame:
         grouped["positive_dispatch_gap_mwh"],
         grouped["day_remaining_qa_shortfall_mwh"],
     )
-    return grouped[columns].sort_values(
+    grouped = grouped.sort_values(
         ["settlement_date", "positive_dispatch_gap_mwh", "dispatch_down_mwh_lower_bound"],
         ascending=[True, False, False],
     ).reset_index(drop=True)
+    return grouped[columns]
 
 
 def build_fact_bmu_curtailment_truth_half_hourly(
