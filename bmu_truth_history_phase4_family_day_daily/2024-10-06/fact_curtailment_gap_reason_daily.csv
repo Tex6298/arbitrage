@@ -1,0 +1,3 @@
+settlement_date,lost_energy_block_reason,dispatch_half_hour_count,distinct_bmu_count,accepted_down_delta_mwh_lower_bound,dispatch_down_mwh_lower_bound,lost_energy_mwh,share_of_dispatch_rows,share_of_dispatch_down_mwh_lower_bound
+2024-10-06,estimated,63,14,32.766666666666666,1414.283333333333,1251.8492035209256,0.9545454545454546,0.9996348129299784
+2024-10-06,physical_below_generation,3,2,0.5166666666666666,0.5166666666666666,0.0,0.045454545454545456,0.00036518707002167563

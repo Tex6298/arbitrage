@@ -42,6 +42,7 @@ from curtailment_truth import materialize_bmu_curtailment_truth
 from curtailment_signals import materialize_curtailed_history, parse_iso_date
 from exploration_plan import backtest_plan_frame, dataset_plan_frame, drift_monitor_plan_frame, map_layer_plan_frame
 from gb_topology import cluster_hub_matrix, interconnector_hub_frame, reachability_frame, route_hub_frame
+from history_store import ingest_truth_csv_tree_to_sqlite, upsert_truth_frames_to_sqlite
 from physical_constraints import assumption_frame, compute_netbacks
 from weather_history import materialize_weather_history
 
@@ -512,6 +513,14 @@ def main() -> int:
         help="Export profile for the truth table: all, precision, or research",
     )
     parser.add_argument(
+        "--truth-store-db-path",
+        help="SQLite path for deduped BMU truth tables and QA outputs",
+    )
+    parser.add_argument(
+        "--fill-truth-store-from-dir",
+        help="Recursively ingest BMU truth CSV outputs from a directory tree into the SQLite truth store, then exit",
+    )
+    parser.add_argument(
         "--materialize-weather-history",
         action="store_true",
         help="Fetch and save anchor, cluster, and parent-region weather history, then exit",
@@ -600,6 +609,30 @@ def main() -> int:
             print("Drift monitor plan")
             print(drift_monitor_plan_frame().to_string(index=False))
         return 0
+
+    if args.fill_truth_store_from_dir:
+        if not args.truth_store_db_path:
+            raise SystemExit("--fill-truth-store-from-dir requires --truth-store-db-path")
+        try:
+            summary = ingest_truth_csv_tree_to_sqlite(
+                root_dir=args.fill_truth_store_from_dir,
+                db_path=args.truth_store_db_path,
+            )
+            print(
+                f"[store=sqlite] Ingested truth CSV tree from {args.fill_truth_store_from_dir} into {args.truth_store_db_path}"
+            )
+            if summary.empty:
+                print("No recognized truth CSV tables were found.")
+            else:
+                for _, row in summary.iterrows():
+                    print(
+                        f"{row['table_name']}: files={int(row['files_loaded'])} "
+                        f"rows_loaded={int(row['rows_loaded'])} table_rows={int(row['table_row_count'])}"
+                    )
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
 
     if args.materialize_curtailment_history:
         if not args.history_year or not args.history_start or not args.history_end:
@@ -703,6 +736,14 @@ def main() -> int:
             for table_name, frame in frames.items():
                 output_path = os.path.join(args.truth_output_dir, f"{table_name}.csv")
                 print(f"{table_name}: rows={len(frame)} path={output_path}")
+            if args.truth_store_db_path:
+                summary = upsert_truth_frames_to_sqlite(frames, args.truth_store_db_path)
+                print(f"[store=sqlite] Upserted truth tables into {args.truth_store_db_path}")
+                for _, row in summary.iterrows():
+                    print(
+                        f"{row['table_name']}: rows_loaded={int(row['rows_loaded'])} "
+                        f"table_rows={int(row['table_row_count'])}"
+                    )
             return 0
         except Exception as exc:
             print(f"ERROR: {exc}", file=sys.stderr)

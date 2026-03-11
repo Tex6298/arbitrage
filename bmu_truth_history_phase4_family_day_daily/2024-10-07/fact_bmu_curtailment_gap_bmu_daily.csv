@@ -1,0 +1,16 @@
+settlement_date,elexon_bm_unit,national_grid_bm_unit,cluster_key,cluster_label,parent_region,mapping_status,dispatch_half_hour_count,lost_energy_estimate_half_hour_count,accepted_down_delta_mwh_lower_bound,dispatch_down_mwh_lower_bound,lost_energy_mwh,primary_dispatch_block_reason,dispatch_minus_lost_energy_gap_mwh
+2024-10-07,T_MOWEO-2,MOWEO-2,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,14,14,1.6333333333333333,1246.1333333333334,183.96800000000005,,1062.1653333333334
+2024-10-07,T_MOWEO-3,MOWEO-3,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,12,12,0.0,1195.0,169.09399999999997,,1025.906
+2024-10-07,T_MOWEO-1,MOWEO-1,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,12,12,7.2,1056.5,267.242,,789.258
+2024-10-07,T_HALSW-1,HALSW-1,,,,unmapped,3,3,0.6333333333333333,30.0,19.713,,10.286999999999999
+2024-10-07,T_KENNW-1,KENNW-1,,,,unmapped,11,10,0.16666666666666669,18.566666666666666,11.754999999999999,physical_below_generation,6.811666666666667
+2024-10-07,T_GORDW-2,GORDW-2,,,,unmapped,2,2,0.4,12.391666666666667,6.778666666666667,,5.613
+2024-10-07,E_BTUIW-3,BTUIW-3,,,,unmapped,11,11,0.3,30.5,26.538,,3.9619999999999997
+2024-10-07,T_DOREW-1,DOREW-1,,,,unmapped,2,1,0.15,5.65,3.6109999999999998,physical_below_generation,2.0390000000000006
+2024-10-07,T_KYPEW-1,KYPEW-1,,,,unmapped,8,6,0.11666666666666667,6.833333333333333,6.214,physical_below_generation,0.6193333333333326
+2024-10-07,T_DOREW-2,DOREW-2,,,,unmapped,1,0,0.1,0.1,0.0,physical_below_generation,0.1
+2024-10-07,T_SGRWO-5,SGRWO-5,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,3,3,0.26666666666666666,1.3083333333333333,13.472216666666666,,-12.163883333333333
+2024-10-07,T_VKNGW-4,VKNGW-4,shetland_wind,Shetland Wind,Scotland,mapped,3,3,0.25,6.25,43.2558,,-37.0058
+2024-10-07,T_VKNGW-3,VKNGW-3,shetland_wind,Shetland Wind,Scotland,mapped,5,5,0.31666666666666665,9.083333333333334,52.020266666666664,,-42.93693333333333
+2024-10-07,T_VKNGW-1,VKNGW-1,shetland_wind,Shetland Wind,Scotland,mapped,9,8,1.3,4.933333333333334,50.69813333333334,physical_below_generation,-45.76480000000001
+2024-10-07,T_VKNGW-2,VKNGW-2,shetland_wind,Shetland Wind,Scotland,mapped,11,10,1.6166666666666665,5.616666666666667,86.81179999999999,physical_below_generation,-81.19513333333333

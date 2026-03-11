@@ -118,6 +118,26 @@ Key behavior:
 
    That same run now also writes daily QA tables that explain the reconciliation gap against GB truth.
 
+13. Upsert deduped BMU truth outputs into a SQLite store while materializing:
+
+   ```bash
+   python inline_arbitrage_live.py ^
+     --materialize-bmu-curtailment-truth ^
+     --truth-start 2024-10-01 ^
+     --truth-end 2024-10-03 ^
+     --truth-output-dir bmu_truth_history ^
+     --truth-store-db-path bmu_truth_store.sqlite ^
+     --truth-profile all
+   ```
+
+14. Backfill an existing tree of daily truth CSV outputs into the same SQLite store:
+
+   ```bash
+   python inline_arbitrage_live.py ^
+     --fill-truth-store-from-dir bmu_truth_history_phase4_family_day_daily ^
+     --truth-store-db-path bmu_truth_store.sqlite
+   ```
+
 12. Materialize observed weather history for anchors, clusters, and parent regions:
 
    ```bash
@@ -221,6 +241,9 @@ Key behavior:
 - `fact_bmu_curtailment_truth_half_hourly` now carries both reconciliation layers:
   - raw-context fields: `gb_daily_raw_constraint_total_mwh`, `raw_reconciliation_*`
   - precision-gate fields: `gb_daily_qa_target_mwh`, `qa_reconciliation_*`
+- The BMU truth materializer can now upsert its 11 output tables into a SQLite store using
+  `--truth-store-db-path`, and `--fill-truth-store-from-dir` can backfill a tree of daily CSV drops
+  into that same deduped store without relying on one giant weekly CSV export.
 - `precision_profile_include` now keys off the wind-only QA target, not the mixed raw NESO total.
 - The weather-calibrated tier now uses observed weather history from capacity-weighted anchor points.
   It still does not replace a valid physical-baseline row, and it is still a first pass rather than
