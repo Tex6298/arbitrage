@@ -98,8 +98,9 @@ def remaining_workstreams() -> List[str]:
     return [
         "Replace the seed cluster registry in asset_mapping.py with confirmed wind farm, node, and ownership metadata.",
         "Add curtailment or redispatch signals so the model distinguishes generic spreads from forced-export conditions.",
-        "Replace the coarse hub reachability matrix in gb_topology.py with explicit transfer gates from clusters to interconnector landings.",
-        "Add cross-border capacity, outage, and auction constraints for each route leg.",
+        "Materialize fact_gb_transfer_gate_hourly so the coarse hub reachability matrix becomes an hourly cluster-to-hub deliverability gate.",
+        "Materialize fact_interconnector_flow_hourly so route scoring can see observed cable loading and direction by hour.",
+        "Materialize fact_interconnector_capacity_hourly so route scoring can see tradable headroom, outages, and ATC or NTC constraints by hour.",
         "Replace static leg fees and losses with connector-specific parameters and time-varying availability.",
     ]
 

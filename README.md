@@ -356,6 +356,11 @@ Key behavior:
 - `weather_history.py` now materializes:
   - `fact_weather_hourly`
 - `fact_weather_hourly` carries observed anchor weather plus capacity-weighted cluster and parent-region aggregates.
+- The repo does not yet materialize the network-deliverability layer. In particular, the SQLite store still has no:
+  - `fact_interconnector_flow_hourly`
+  - `fact_interconnector_capacity_hourly`
+  - `fact_gb_transfer_gate_hourly`
+- That means the current truth and route stack can tell you where curtailed wind and route opportunity may exist, but not yet whether the internal GB network and the interconnector itself had usable hourly headroom.
 - `fact_bmu_curtailment_truth_half_hourly` is tiered, not flattened. It keeps:
   - `dispatch_only` rows when dispatch truth exists but a lost-energy estimate is not valid
   - `physical_baseline` rows when PN or QPN provides a valid half-hour counterfactual
@@ -491,6 +496,9 @@ Key behavior:
 
 - Replace the seed asset registry with confirmed wind farm, node, and owner metadata
 - Turn the topology scaffold into actual transfer gates between clusters and hubs
+- Materialize `fact_gb_transfer_gate_hourly` so cluster-to-hub deliverability is an hourly data surface instead of a static reachability assumption
+- Materialize `fact_interconnector_flow_hourly` so route scoring can see whether the cable was already physically busy
+- Materialize `fact_interconnector_capacity_hourly` so route scoring can distinguish physical flow from tradable headroom, outages, and constrained availability
 - Add forecast weather history and feature versioning so weather forecast error can be backtested
 - Improve dispatch-to-lost-energy capture against the wind-only QA target before relying on the precision profile
 - Start with a cluster-point time-slider map, then add hub arcs and error/drift layers
