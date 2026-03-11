@@ -8,12 +8,14 @@ from bmu_availability import build_fact_bmu_availability_half_hourly
 from bmu_dispatch import build_fact_bmu_bid_offer_half_hourly, build_fact_bmu_dispatch_acceptance_half_hourly
 from bmu_physical import build_fact_bmu_physical_position_half_hourly
 from bmu_truth_utils import build_half_hour_interval_frame
-from curtailment_signals import add_constraint_qa_columns
+from curtailment_signals import CONSTRAINT_QA_TARGET_DEFINITION, add_constraint_qa_columns
 from curtailment_truth import (
+    build_fact_bmu_family_shortfall_daily,
     build_fact_dispatch_alignment_bmu_daily,
     build_fact_dispatch_alignment_daily,
     build_fact_bmu_curtailment_gap_bmu_daily,
     build_fact_bmu_curtailment_truth_half_hourly,
+    build_fact_constraint_target_audit_daily,
     build_fact_curtailment_gap_reason_daily,
     build_fact_curtailment_reconciliation_daily,
     filter_truth_profile,
@@ -282,6 +284,37 @@ class CurtailmentTruthTests(unittest.TestCase):
         )
         first_row = fact[fact["settlement_period"] == 1].iloc[0]
         self.assertEqual(first_row["availability_state"], "unknown")
+
+    def test_partial_remit_downgrades_to_unknown_before_truth_override(self) -> None:
+        dim = sample_dim_bmu_asset()
+        raw_remit = pd.DataFrame(
+            [
+                {
+                    "mrid": "1",
+                    "revisionNumber": 1,
+                    "publishTime": "2024-09-30T22:00:00Z",
+                    "eventStatus": "active",
+                    "eventStartTime": "2024-09-30T23:00:00Z",
+                    "eventEndTime": "2024-09-30T23:30:00Z",
+                    "affectedUnit": "T_TEST-1",
+                    "availableCapacity": 10.0,
+                    "normalCapacity": 20.0,
+                    "unavailableCapacity": 10.0,
+                }
+            ]
+        )
+        fact = build_fact_bmu_availability_half_hourly(
+            dim_bmu_asset=dim,
+            raw_remit_frame=raw_remit,
+            raw_uou_frame=pd.DataFrame(),
+            start_date=dt.date(2024, 10, 1),
+            end_date=dt.date(2024, 10, 1),
+            remit_fetch_ok=True,
+        )
+        first_row = fact[fact["settlement_period"] == 1].iloc[0]
+        self.assertTrue(bool(first_row["remit_partial_availability_flag"]))
+        self.assertEqual(first_row["availability_state"], "unknown")
+        self.assertEqual(first_row["availability_confidence"], "medium")
 
     def test_weather_history_aggregates_anchor_weights(self) -> None:
         anchor_weather = pd.DataFrame(
@@ -722,6 +755,101 @@ class CurtailmentTruthTests(unittest.TestCase):
         self.assertEqual(set(precision["settlement_period"]), {1, 2})
         self.assertEqual(set(research["settlement_period"]), {1})
 
+    def test_partial_remit_can_be_overridden_when_available_capacity_supports_counterfactual(self) -> None:
+        dim = sample_dim_bmu_asset()
+        base_day = dt.date(2024, 10, 1)
+        generation = pd.DataFrame(
+            [
+                {
+                    "settlement_date": base_day,
+                    "settlement_period": 1,
+                    "elexon_bm_unit": "T_TEST-1",
+                    "generation_mwh": 4.0,
+                }
+            ]
+        )
+        dispatch = pd.DataFrame(
+            [
+                {
+                    "settlement_date": base_day,
+                    "settlement_period": 1,
+                    "elexon_bm_unit": "T_TEST-1",
+                    "accepted_down_delta_mwh_lower_bound": 2.0,
+                    "accepted_up_delta_mwh_lower_bound": 0.0,
+                    "dispatch_down_flag": True,
+                    "dispatch_up_flag": False,
+                    "acceptance_event_count": 1,
+                    "distinct_acceptance_number_count": 1,
+                }
+            ]
+        )
+        physical = pd.DataFrame(
+            [
+                {
+                    "settlement_date": base_day,
+                    "settlement_period": 1,
+                    "elexon_bm_unit": "T_TEST-1",
+                    "physical_baseline_source_dataset": "PN",
+                    "physical_baseline_mwh": 6.0,
+                    "physical_consistency_flag": True,
+                    "counterfactual_method": "pn_qpn_physical_max",
+                    "counterfactual_valid_flag": True,
+                }
+            ]
+        )
+        availability = pd.DataFrame(
+            [
+                {
+                    "settlement_date": base_day,
+                    "settlement_period": 1,
+                    "elexon_bm_unit": "T_TEST-1",
+                    "remit_active_flag": True,
+                    "remit_partial_availability_flag": True,
+                    "remit_max_available_capacity_mw": 12.5,
+                    "remit_max_unavailable_capacity_mw": 7.5,
+                    "remit_normal_capacity_mw": 20.0,
+                    "availability_state": "unknown",
+                    "availability_confidence": "medium",
+                    "uou_output_usable_mw": np.nan,
+                }
+            ]
+        )
+        constraints = add_constraint_qa_columns(
+            pd.DataFrame(
+                [
+                    {
+                        "date": base_day,
+                        "total_curtailment_mwh": 2.0,
+                        "voltage_constraints_volume_mwh": 2.0,
+                        "thermal_constraints_volume_mwh": 0.0,
+                        "increasing_system_inertia_volume_mwh": 0.0,
+                        "reducing_largest_loss_volume_mwh": 0.0,
+                    }
+                ]
+            )
+        )
+
+        fact = build_fact_bmu_curtailment_truth_half_hourly(
+            dim_bmu_asset=dim,
+            fact_bmu_generation_half_hourly=generation,
+            fact_bmu_dispatch_acceptance_half_hourly=dispatch,
+            fact_bmu_physical_position_half_hourly=physical,
+            fact_bmu_availability_half_hourly=availability,
+            fact_constraint_daily=constraints,
+            fact_weather_hourly=pd.DataFrame(),
+            start_date=base_day,
+            end_date=base_day,
+        )
+        first_row = fact.iloc[0]
+        self.assertEqual(first_row["availability_state_raw"], "unknown")
+        self.assertEqual(first_row["availability_state"], "available")
+        self.assertTrue(bool(first_row["availability_override_flag"]))
+        self.assertEqual(
+            first_row["availability_override_reason"],
+            "remit_partial_available_capacity_supports_counterfactual",
+        )
+        self.assertTrue(bool(first_row["lost_energy_estimate_flag"]))
+
     def test_reconciliation_diagnostics_explain_dispatch_gap(self) -> None:
         dim = sample_dim_bmu_asset()
         base_day = dt.date(2024, 10, 1)
@@ -948,6 +1076,17 @@ class CurtailmentTruthTests(unittest.TestCase):
         self.assertEqual(dispatch_alignment_bmu_daily.iloc[0]["dispatch_alignment_state"], "partially_blocked")
         self.assertAlmostEqual(float(dispatch_alignment_bmu_daily.iloc[0]["blocked_dispatch_down_mwh_lower_bound"]), 5.5)
 
+        constraint_audit_daily = build_fact_constraint_target_audit_daily(fact, constraints)
+        self.assertEqual(len(constraint_audit_daily), 1)
+        self.assertEqual(constraint_audit_daily.iloc[0]["qa_primary_driver"], "voltage_dominant")
+        self.assertEqual(constraint_audit_daily.iloc[0]["recoverability_audit_state"], "overcaptured_or_definition_mismatch")
+
+        family_shortfall_daily = build_fact_bmu_family_shortfall_daily(fact)
+        self.assertEqual(len(family_shortfall_daily), 1)
+        self.assertEqual(family_shortfall_daily.iloc[0]["bmu_family_key"], "TEST")
+        self.assertEqual(family_shortfall_daily.iloc[0]["bmu_family_label"], "TEST")
+        self.assertAlmostEqual(float(family_shortfall_daily.iloc[0]["dispatch_minus_lost_energy_gap_mwh"]), 5.5)
+
     def test_missing_qa_target_keeps_precision_profile_conservative(self) -> None:
         dim = sample_dim_bmu_asset()
         generation = pd.DataFrame(
@@ -1046,6 +1185,49 @@ class CurtailmentTruthTests(unittest.TestCase):
 
         dispatch_alignment_daily = build_fact_dispatch_alignment_daily(legacy_view)
         self.assertEqual(dispatch_alignment_daily.iloc[0]["dispatch_alignment_inference"], "qa_target_missing")
+
+    def test_constraint_target_audit_backfills_qa_columns_from_raw_constraints(self) -> None:
+        fact = pd.DataFrame(
+            [
+                {
+                    "settlement_date": dt.date(2024, 10, 1),
+                    "dispatch_truth_flag": True,
+                    "lost_energy_estimate_flag": True,
+                    "accepted_down_delta_mwh_lower_bound": 2.0,
+                    "dispatch_down_evidence_mwh_lower_bound": 2.0,
+                    "lost_energy_mwh": 1.0,
+                    "elexon_bm_unit": "T_TEST-1",
+                    "qa_target_definition": CONSTRAINT_QA_TARGET_DEFINITION,
+                    "gb_daily_qa_target_mwh": 2.0,
+                    "qa_reconciliation_status": "pass",
+                    "gb_daily_estimated_lost_energy_mwh": 1.0,
+                    "gb_daily_raw_constraint_total_mwh": 2.0,
+                    "raw_reconciliation_status": "warn",
+                    "gb_daily_truth_curtailment_mwh": 2.0,
+                    "reconciliation_status": "warn",
+                    "mapping_status": "mapped",
+                    "truth_tier": "physical_baseline",
+                    "availability_state": "available",
+                    "counterfactual_valid_flag": True,
+                    "lost_energy_block_reason": "estimated",
+                }
+            ]
+        )
+        raw_constraints = pd.DataFrame(
+            [
+                {
+                    "date": dt.date(2024, 10, 1),
+                    "total_curtailment_mwh": 10.0,
+                    "voltage_constraints_volume_mwh": 8.0,
+                    "thermal_constraints_volume_mwh": 2.0,
+                    "increasing_system_inertia_volume_mwh": 0.0,
+                    "reducing_largest_loss_volume_mwh": 0.0,
+                }
+            ]
+        )
+        audit = build_fact_constraint_target_audit_daily(fact, raw_constraints)
+        self.assertEqual(audit.iloc[0]["qa_primary_driver"], "voltage_dominant")
+        self.assertAlmostEqual(float(audit.iloc[0]["qa_voltage_share_of_target"]), 0.8)
 
 
 if __name__ == "__main__":

@@ -27,7 +27,7 @@ from bmu_generation import (
 )
 from bmu_physical import build_fact_bmu_physical_position_half_hourly, fetch_balancing_physical
 from bmu_truth_utils import build_bmu_interval_spine
-from curtailment_signals import CONSTRAINT_QA_TARGET_DEFINITION, fetch_constraint_daily
+from curtailment_signals import CONSTRAINT_QA_TARGET_DEFINITION, add_constraint_qa_columns, fetch_constraint_daily
 from weather_history import build_fact_weather_hourly
 
 
@@ -38,6 +38,32 @@ WEATHER_METHODS = {
     "parent_region_weather_power_curve",
 }
 PHYSICAL_DISPATCH_EXPANSION_WINDOW_PERIODS = 2
+BMU_FAMILY_LABELS = {
+    "ABRBO": "Aberdeen Offshore",
+    "BEATO": "Beatrice",
+    "BTUIW": "Beinn Tharsuinn",
+    "CLDCW": "Clyde Central",
+    "CLDNW": "Clyde North",
+    "DBAWO": "Dogger Bank A",
+    "DBBWO": "Dogger Bank B",
+    "DBCWO": "Dogger Bank C",
+    "EAAO": "East Anglia",
+    "GNFSW": "Gunfleet Sands",
+    "GYMRO": "Gwynt y Mor",
+    "HOWAO": "Hornsea",
+    "HOWBO": "Hornsea",
+    "KLGLW": "Kildrummy",
+    "KYPEW": "Kype Muir",
+    "MOWEO": "Moray East",
+    "MOWWO": "Moray West",
+    "PNYCW": "Pen y Cymoedd",
+    "RCBKO": "Race Bank",
+    "SGRWO": "Seagreen",
+    "SHRSW": "Sheirds",
+    "TKNEW": "Triton Knoll",
+    "TKNWW": "Triton Knoll",
+    "VKNGW": "Viking",
+}
 
 
 def _scheme_year_label(value: dt.date) -> str:
@@ -323,6 +349,53 @@ def _apply_weather_calibration(
     return frame
 
 
+def _apply_availability_overrides(frame: pd.DataFrame) -> pd.DataFrame:
+    frame["availability_state_raw"] = frame["availability_state"]
+    frame["availability_confidence_raw"] = frame["availability_confidence"]
+    frame["availability_override_flag"] = False
+    frame["availability_override_reason"] = pd.NA
+
+    generation_mw_equivalent = pd.to_numeric(frame["generation_mwh"], errors="coerce") * 2.0
+    counterfactual_mw_equivalent = pd.to_numeric(frame["counterfactual_mwh"], errors="coerce") * 2.0
+    positive_generation_mask = generation_mw_equivalent > 1.0
+    remit_supported_mask = (
+        frame["availability_state_raw"].eq("unknown")
+        & frame["remit_partial_availability_flag"].fillna(False).astype(bool)
+        & positive_generation_mask
+        & counterfactual_mw_equivalent.notna()
+        & pd.to_numeric(frame["remit_max_available_capacity_mw"], errors="coerce").notna()
+        & (pd.to_numeric(frame["remit_max_available_capacity_mw"], errors="coerce") + 1.0 >= counterfactual_mw_equivalent)
+    )
+    uou_supported_mask = (
+        ~remit_supported_mask
+        & frame["availability_state_raw"].ne("available")
+        & positive_generation_mask
+        & counterfactual_mw_equivalent.notna()
+        & pd.to_numeric(frame["uou_output_usable_mw"], errors="coerce").notna()
+        & (pd.to_numeric(frame["uou_output_usable_mw"], errors="coerce") + 1.0 >= counterfactual_mw_equivalent)
+    )
+    generation_conflict_mask = (
+        ~remit_supported_mask
+        & ~uou_supported_mask
+        & frame["availability_state_raw"].eq("outage")
+        & positive_generation_mask
+    )
+
+    frame.loc[remit_supported_mask | uou_supported_mask, "availability_state"] = "available"
+    frame.loc[remit_supported_mask | uou_supported_mask, "availability_confidence"] = "medium"
+    frame.loc[generation_conflict_mask, "availability_state"] = "unknown"
+    frame.loc[generation_conflict_mask, "availability_confidence"] = "low"
+    frame.loc[remit_supported_mask | uou_supported_mask | generation_conflict_mask, "availability_override_flag"] = True
+    frame.loc[remit_supported_mask, "availability_override_reason"] = (
+        "remit_partial_available_capacity_supports_counterfactual"
+    )
+    frame.loc[uou_supported_mask, "availability_override_reason"] = "uou_supports_counterfactual"
+    frame.loc[generation_conflict_mask, "availability_override_reason"] = (
+        "remit_outage_conflicts_with_observed_generation"
+    )
+    return frame
+
+
 def _safe_target_ratio(numerator: pd.Series, denominator: pd.Series) -> pd.Series:
     return pd.Series(
         np.where(
@@ -349,6 +422,36 @@ def _append_lineage_token(frame: pd.DataFrame, mask: pd.Series, token: str) -> N
         token,
         current_subset + f"|{token}",
     )
+
+
+def _coerce_bool_series(values: pd.Series) -> pd.Series:
+    return pd.Series(values, copy=False).astype("boolean").fillna(False).astype(bool)
+
+
+def _derive_bmu_family_key(values: pd.Series) -> pd.Series:
+    normalized = pd.Series(values, copy=False).fillna("").astype(str).str.upper().str.strip()
+    normalized = normalized.str.removeprefix("T_").str.removeprefix("E_")
+    family = normalized.str.split("-", n=1).str[0].str.strip()
+    family = family.where(family.ne(""), pd.NA)
+    return family
+
+
+def _ensure_bmu_family_columns(frame: pd.DataFrame) -> pd.DataFrame:
+    prepared = frame.copy()
+    if "bmu_family_key" not in prepared.columns:
+        prepared["bmu_family_key"] = _derive_bmu_family_key(prepared.get("elexon_bm_unit", pd.Series(index=prepared.index)))
+        missing_mask = prepared["bmu_family_key"].isna() & prepared.get("national_grid_bm_unit", pd.Series(index=prepared.index)).notna()
+        if bool(missing_mask.any()):
+            prepared.loc[missing_mask, "bmu_family_key"] = _derive_bmu_family_key(
+                prepared.loc[missing_mask, "national_grid_bm_unit"]
+            )
+    if "bmu_family_label" not in prepared.columns:
+        prepared["bmu_family_label"] = prepared["bmu_family_key"].map(BMU_FAMILY_LABELS)
+        prepared["bmu_family_label"] = prepared["bmu_family_label"].where(
+            prepared["bmu_family_label"].notna(),
+            prepared["bmu_family_key"],
+        )
+    return prepared
 
 
 def _build_reconciliation_view(
@@ -558,6 +661,8 @@ def _ensure_truth_diagnostic_columns(frame: pd.DataFrame) -> pd.DataFrame:
         "negative_bid_pair_count": 0,
         "dispatch_acceptance_window_flag": False,
         "dispatch_truth_source_tier": "none",
+        "remit_partial_availability_flag": False,
+        "availability_override_flag": False,
     }
     for column, default_value in defaults.items():
         if column not in prepared.columns:
@@ -581,6 +686,9 @@ def _ensure_truth_diagnostic_columns(frame: pd.DataFrame) -> pd.DataFrame:
         "weather_wind_speed_100m_ms",
         "most_negative_bid_gbp_per_mwh",
         "least_negative_bid_gbp_per_mwh",
+        "availability_override_reason",
+        "availability_state_raw",
+        "availability_confidence_raw",
     ]
     for column in nullable_columns:
         if column not in prepared.columns:
@@ -761,6 +869,150 @@ def build_fact_curtailment_reconciliation_daily(frame: pd.DataFrame) -> pd.DataF
         np.nan,
     )
     return grouped.sort_values("settlement_date").reset_index(drop=True)
+
+
+def build_fact_constraint_target_audit_daily(
+    frame: pd.DataFrame,
+    fact_constraint_daily: pd.DataFrame,
+) -> pd.DataFrame:
+    columns = [
+        "settlement_date",
+        "qa_target_definition",
+        "qa_wind_voltage_positive_mwh",
+        "qa_wind_thermal_positive_mwh",
+        "qa_wind_relevant_positive_mwh",
+        "qa_inertia_positive_mwh",
+        "qa_largest_loss_positive_mwh",
+        "qa_voltage_share_of_target",
+        "qa_thermal_share_of_target",
+        "qa_primary_driver",
+        "gb_daily_estimated_lost_energy_mwh",
+        "dispatch_down_mwh_lower_bound",
+        "remaining_qa_shortfall_mwh",
+        "dispatch_coverage_ratio_vs_qa_target",
+        "lost_energy_capture_ratio_vs_qa_target",
+        "estimated_dispatch_share_of_total_dispatch",
+        "blocked_dispatch_share_of_total_dispatch",
+        "unmapped_dispatch_share_of_total_dispatch",
+        "dispatch_alignment_inference",
+        "recoverability_audit_state",
+    ]
+    if frame.empty:
+        return pd.DataFrame(columns=columns)
+
+    reconciliation = build_fact_curtailment_reconciliation_daily(frame)
+    alignment = build_fact_dispatch_alignment_daily(frame)
+    audit = reconciliation.merge(
+        alignment[
+            [
+                "settlement_date",
+                "estimated_dispatch_share_of_total_dispatch",
+                "blocked_dispatch_share_of_total_dispatch",
+                "unmapped_dispatch_share_of_total_dispatch",
+                "dispatch_alignment_inference",
+            ]
+        ],
+        on="settlement_date",
+        how="left",
+    )
+    if fact_constraint_daily.empty:
+        for column in (
+            "qa_wind_voltage_positive_mwh",
+            "qa_wind_thermal_positive_mwh",
+            "qa_wind_relevant_positive_mwh",
+            "qa_inertia_positive_mwh",
+            "qa_largest_loss_positive_mwh",
+        ):
+            audit[column] = np.nan
+    else:
+        source = fact_constraint_daily.copy()
+        if "date" in source.columns:
+            source = source.rename(columns={"date": "settlement_date"})
+        if any(
+            column not in source.columns
+            for column in (
+                "qa_target_definition",
+                "qa_wind_voltage_positive_mwh",
+                "qa_wind_thermal_positive_mwh",
+                "qa_wind_relevant_positive_mwh",
+                "qa_inertia_positive_mwh",
+                "qa_largest_loss_positive_mwh",
+            )
+        ):
+            source = add_constraint_qa_columns(source)
+        for column in (
+            "qa_target_definition",
+            "qa_wind_voltage_positive_mwh",
+            "qa_wind_thermal_positive_mwh",
+            "qa_wind_relevant_positive_mwh",
+            "qa_inertia_positive_mwh",
+            "qa_largest_loss_positive_mwh",
+        ):
+            if column not in source.columns:
+                source[column] = np.nan if column != "qa_target_definition" else pd.NA
+        audit = audit.merge(
+            source[
+                [
+                    "settlement_date",
+                    "qa_target_definition",
+                    "qa_wind_voltage_positive_mwh",
+                    "qa_wind_thermal_positive_mwh",
+                    "qa_wind_relevant_positive_mwh",
+                    "qa_inertia_positive_mwh",
+                    "qa_largest_loss_positive_mwh",
+                ]
+            ],
+            on=["settlement_date", "qa_target_definition"],
+            how="left",
+        )
+
+    audit["qa_voltage_share_of_target"] = _safe_target_ratio(
+        audit["qa_wind_voltage_positive_mwh"],
+        audit["qa_wind_relevant_positive_mwh"],
+    )
+    audit["qa_thermal_share_of_target"] = _safe_target_ratio(
+        audit["qa_wind_thermal_positive_mwh"],
+        audit["qa_wind_relevant_positive_mwh"],
+    )
+    audit["qa_primary_driver"] = np.select(
+        [
+            audit["qa_wind_relevant_positive_mwh"].isna(),
+            audit["qa_wind_relevant_positive_mwh"].le(0),
+            audit["qa_voltage_share_of_target"].ge(0.6),
+            audit["qa_thermal_share_of_target"].ge(0.6),
+        ],
+        [
+            "qa_target_missing",
+            "no_positive_wind_target",
+            "voltage_dominant",
+            "thermal_dominant",
+        ],
+        default="mixed",
+    )
+    audit["remaining_qa_shortfall_mwh"] = (
+        audit["gb_daily_qa_target_mwh"] - audit["gb_daily_estimated_lost_energy_mwh"]
+    )
+    audit["recoverability_audit_state"] = np.select(
+        [
+            audit["gb_daily_qa_target_mwh"].isna(),
+            audit["dispatch_alignment_inference"].eq("dispatch_source_shortfall_inferred")
+            & audit["dispatch_coverage_ratio_vs_qa_target"].lt(0.5),
+            audit["dispatch_coverage_ratio_vs_qa_target"].ge(0.5)
+            & audit["lost_energy_capture_ratio_vs_qa_target"].lt(0.5),
+            audit["lost_energy_capture_ratio_vs_qa_target"].ge(0.5)
+            & audit["lost_energy_capture_ratio_vs_qa_target"].lt(1.0),
+            audit["lost_energy_capture_ratio_vs_qa_target"].ge(1.0),
+        ],
+        [
+            "qa_target_missing",
+            "source_limited",
+            "counterfactual_or_definition_limited",
+            "partially_recovered",
+            "overcaptured_or_definition_mismatch",
+        ],
+        default="mixed",
+    )
+    return audit[columns].sort_values("settlement_date").reset_index(drop=True)
 
 
 def build_fact_dispatch_alignment_daily(frame: pd.DataFrame) -> pd.DataFrame:
@@ -1210,6 +1462,93 @@ def build_fact_bmu_curtailment_gap_bmu_daily(frame: pd.DataFrame) -> pd.DataFram
     ).reset_index(drop=True)
 
 
+def build_fact_bmu_family_shortfall_daily(frame: pd.DataFrame) -> pd.DataFrame:
+    columns = [
+        "settlement_date",
+        "bmu_family_key",
+        "bmu_family_label",
+        "cluster_key",
+        "cluster_label",
+        "parent_region",
+        "mapping_status",
+        "distinct_bmu_count",
+        "dispatch_half_hour_count",
+        "lost_energy_estimate_half_hour_count",
+        "accepted_down_delta_mwh_lower_bound",
+        "physical_dispatch_down_increment_mwh_lower_bound",
+        "dispatch_down_mwh_lower_bound",
+        "lost_energy_mwh",
+        "dispatch_minus_lost_energy_gap_mwh",
+        "share_of_day_dispatch_gap",
+        "share_of_day_remaining_qa_shortfall",
+        "primary_dispatch_block_reason",
+    ]
+    if frame.empty:
+        return pd.DataFrame(columns=columns)
+
+    prepared = _ensure_truth_diagnostic_columns(frame)
+    prepared = _ensure_bmu_family_columns(prepared)
+    dispatch = prepared[prepared["dispatch_truth_flag"]].copy()
+    if dispatch.empty:
+        return pd.DataFrame(columns=columns)
+
+    grouped = dispatch.groupby(
+        [
+            "settlement_date",
+            "bmu_family_key",
+            "bmu_family_label",
+        ],
+        as_index=False,
+        dropna=False,
+    ).agg(
+        cluster_key=("cluster_key", _first_mode),
+        cluster_label=("cluster_label", _first_mode),
+        parent_region=("parent_region", _first_mode),
+        mapping_status=("mapping_status", _first_mode),
+        distinct_bmu_count=("elexon_bm_unit", "nunique"),
+        dispatch_half_hour_count=("dispatch_truth_flag", lambda values: int(pd.Series(values).fillna(False).astype(bool).sum())),
+        lost_energy_estimate_half_hour_count=("lost_energy_estimate_flag", lambda values: int(pd.Series(values).fillna(False).astype(bool).sum())),
+        accepted_down_delta_mwh_lower_bound=("accepted_down_delta_mwh_lower_bound", lambda values: float(pd.Series(values).fillna(0.0).sum())),
+        physical_dispatch_down_increment_mwh_lower_bound=(
+            "physical_dispatch_down_increment_mwh_lower_bound",
+            lambda values: float(pd.Series(values).fillna(0.0).sum()),
+        ),
+        dispatch_down_mwh_lower_bound=("dispatch_down_evidence_mwh_lower_bound", lambda values: float(pd.Series(values).fillna(0.0).sum())),
+        lost_energy_mwh=("lost_energy_mwh", lambda values: float(pd.Series(values).fillna(0.0).sum())),
+        primary_dispatch_block_reason=(
+            "lost_energy_block_reason",
+            lambda values: _first_mode(pd.Series(values)[pd.Series(values).ne("estimated")]),
+        ),
+        gb_daily_qa_target_mwh=("gb_daily_qa_target_mwh", "max"),
+        gb_daily_estimated_lost_energy_mwh=("gb_daily_estimated_lost_energy_mwh", "max"),
+    )
+    grouped["dispatch_minus_lost_energy_gap_mwh"] = (
+        grouped["dispatch_down_mwh_lower_bound"] - grouped["lost_energy_mwh"]
+    )
+    grouped["positive_dispatch_gap_mwh"] = grouped["dispatch_minus_lost_energy_gap_mwh"].clip(lower=0.0)
+    day_totals = grouped.groupby("settlement_date", as_index=False).agg(
+        total_day_dispatch_gap_mwh=("positive_dispatch_gap_mwh", "sum"),
+        day_qa_target_mwh=("gb_daily_qa_target_mwh", "max"),
+        day_estimated_lost_energy_mwh=("gb_daily_estimated_lost_energy_mwh", "max"),
+    )
+    day_totals["day_remaining_qa_shortfall_mwh"] = (
+        day_totals["day_qa_target_mwh"] - day_totals["day_estimated_lost_energy_mwh"]
+    )
+    grouped = grouped.merge(day_totals, on="settlement_date", how="left")
+    grouped["share_of_day_dispatch_gap"] = _safe_target_ratio(
+        grouped["positive_dispatch_gap_mwh"],
+        grouped["total_day_dispatch_gap_mwh"],
+    )
+    grouped["share_of_day_remaining_qa_shortfall"] = _safe_target_ratio(
+        grouped["positive_dispatch_gap_mwh"],
+        grouped["day_remaining_qa_shortfall_mwh"],
+    )
+    return grouped[columns].sort_values(
+        ["settlement_date", "positive_dispatch_gap_mwh", "dispatch_down_mwh_lower_bound"],
+        ascending=[True, False, False],
+    ).reset_index(drop=True)
+
+
 def build_fact_bmu_curtailment_truth_half_hourly(
     dim_bmu_asset: pd.DataFrame,
     fact_bmu_generation_half_hourly: pd.DataFrame,
@@ -1302,6 +1641,10 @@ def build_fact_bmu_curtailment_truth_half_hourly(
         "settlement_period",
         "elexon_bm_unit",
         "remit_active_flag",
+        "remit_partial_availability_flag",
+        "remit_max_available_capacity_mw",
+        "remit_max_unavailable_capacity_mw",
+        "remit_normal_capacity_mw",
         "availability_state",
         "availability_confidence",
         "uou_output_usable_mw",
@@ -1325,9 +1668,7 @@ def build_fact_bmu_curtailment_truth_half_hourly(
     frame["pn_mwh"] = pd.to_numeric(frame["pn_mwh"], errors="coerce")
     frame["qpn_mwh"] = pd.to_numeric(frame["qpn_mwh"], errors="coerce")
     frame["negative_bid_pair_count"] = pd.to_numeric(frame["negative_bid_pair_count"], errors="coerce").fillna(0).astype(int)
-    frame["negative_bid_available_flag"] = (
-        frame["negative_bid_available_flag"].where(frame["negative_bid_available_flag"].notna(), False).astype(bool)
-    )
+    frame["negative_bid_available_flag"] = _coerce_bool_series(frame["negative_bid_available_flag"])
     frame["most_negative_bid_gbp_per_mwh"] = pd.to_numeric(frame["most_negative_bid_gbp_per_mwh"], errors="coerce")
     frame["least_negative_bid_gbp_per_mwh"] = pd.to_numeric(frame["least_negative_bid_gbp_per_mwh"], errors="coerce")
     frame["physical_dispatch_down_gap_mwh"] = (
@@ -1353,11 +1694,11 @@ def build_fact_bmu_curtailment_truth_half_hourly(
         )
     )
     positive_physical_gap_mask = (
-        frame["counterfactual_valid_flag"].where(frame["counterfactual_valid_flag"].notna(), False).astype(bool)
+        _coerce_bool_series(frame["counterfactual_valid_flag"])
         & frame["generation_mwh"].notna()
         & frame["physical_baseline_mwh"].notna()
         & (frame["physical_baseline_mwh"] > frame["generation_mwh"] + 1e-6)
-        & frame["physical_consistency_flag"].where(frame["physical_consistency_flag"].notna(), False).astype(bool)
+        & _coerce_bool_series(frame["physical_consistency_flag"])
     )
     physical_inference_mask = (
         frame["negative_bid_available_flag"]
@@ -1387,17 +1728,22 @@ def build_fact_bmu_curtailment_truth_half_hourly(
         default="none",
     )
     frame["dispatch_truth_flag"] = frame["dispatch_down_evidence_mwh_lower_bound"] > 0
-    frame["remit_active_flag"] = frame["remit_active_flag"].where(frame["remit_active_flag"].notna(), False).astype(bool)
+    frame["remit_active_flag"] = _coerce_bool_series(frame["remit_active_flag"])
+    frame["remit_partial_availability_flag"] = _coerce_bool_series(frame["remit_partial_availability_flag"])
+    frame["remit_max_available_capacity_mw"] = pd.to_numeric(frame["remit_max_available_capacity_mw"], errors="coerce")
+    frame["remit_max_unavailable_capacity_mw"] = pd.to_numeric(
+        frame["remit_max_unavailable_capacity_mw"], errors="coerce"
+    )
+    frame["remit_normal_capacity_mw"] = pd.to_numeric(frame["remit_normal_capacity_mw"], errors="coerce")
     frame["availability_state"] = frame["availability_state"].fillna("unknown")
     frame["availability_confidence"] = frame["availability_confidence"].fillna("low")
 
     frame["counterfactual_method"] = frame["counterfactual_method"].fillna("none")
     frame["counterfactual_mwh"] = pd.to_numeric(frame["physical_baseline_mwh"], errors="coerce")
-    frame["counterfactual_valid_flag"] = (
-        frame["counterfactual_valid_flag"].where(frame["counterfactual_valid_flag"].notna(), False).astype(bool)
-    )
+    frame["counterfactual_valid_flag"] = _coerce_bool_series(frame["counterfactual_valid_flag"])
 
     frame = _apply_weather_calibration(frame, fact_weather_hourly=fact_weather_hourly)
+    frame = _apply_availability_overrides(frame)
 
     frame["truth_tier"] = "dispatch_only"
     frame.loc[
@@ -1452,6 +1798,7 @@ def build_fact_bmu_curtailment_truth_half_hourly(
         frame["physical_dispatch_down_increment_mwh_lower_bound"].gt(0),
         "balancing_physical",
     )
+    frame = _ensure_bmu_family_columns(frame)
 
     keep_columns = [
         "settlement_date",
@@ -1462,6 +1809,8 @@ def build_fact_bmu_curtailment_truth_half_hourly(
         "interval_end_utc",
         "elexon_bm_unit",
         "national_grid_bm_unit",
+        "bmu_family_key",
+        "bmu_family_label",
         "cluster_key",
         "cluster_label",
         "parent_region",
@@ -1479,8 +1828,16 @@ def build_fact_bmu_curtailment_truth_half_hourly(
         "most_negative_bid_gbp_per_mwh",
         "least_negative_bid_gbp_per_mwh",
         "availability_state",
+        "availability_state_raw",
         "remit_active_flag",
+        "remit_partial_availability_flag",
+        "remit_max_available_capacity_mw",
+        "remit_max_unavailable_capacity_mw",
+        "remit_normal_capacity_mw",
         "availability_confidence",
+        "availability_confidence_raw",
+        "availability_override_flag",
+        "availability_override_reason",
         "counterfactual_method",
         "counterfactual_mwh",
         "counterfactual_valid_flag",
@@ -1623,6 +1980,10 @@ def materialize_bmu_curtailment_truth(
     fact_curtailment_reconciliation_daily = build_fact_curtailment_reconciliation_daily(
         fact_bmu_curtailment_truth_half_hourly_all
     )
+    fact_constraint_target_audit_daily = build_fact_constraint_target_audit_daily(
+        fact_bmu_curtailment_truth_half_hourly_all,
+        fact_constraint_daily=fact_constraint_daily,
+    )
     fact_dispatch_alignment_daily = build_fact_dispatch_alignment_daily(
         fact_bmu_curtailment_truth_half_hourly_all
     )
@@ -1633,6 +1994,9 @@ def materialize_bmu_curtailment_truth(
         fact_bmu_curtailment_truth_half_hourly_all
     )
     fact_bmu_curtailment_gap_bmu_daily = build_fact_bmu_curtailment_gap_bmu_daily(
+        fact_bmu_curtailment_truth_half_hourly_all
+    )
+    fact_bmu_family_shortfall_daily = build_fact_bmu_family_shortfall_daily(
         fact_bmu_curtailment_truth_half_hourly_all
     )
     fact_bmu_curtailment_truth_half_hourly = filter_truth_profile(
@@ -1646,10 +2010,12 @@ def materialize_bmu_curtailment_truth(
         "fact_bmu_availability_half_hourly": fact_bmu_availability_half_hourly,
         "fact_bmu_curtailment_truth_half_hourly": fact_bmu_curtailment_truth_half_hourly,
         "fact_curtailment_reconciliation_daily": fact_curtailment_reconciliation_daily,
+        "fact_constraint_target_audit_daily": fact_constraint_target_audit_daily,
         "fact_dispatch_alignment_daily": fact_dispatch_alignment_daily,
         "fact_dispatch_alignment_bmu_daily": fact_dispatch_alignment_bmu_daily,
         "fact_curtailment_gap_reason_daily": fact_curtailment_gap_reason_daily,
         "fact_bmu_curtailment_gap_bmu_daily": fact_bmu_curtailment_gap_bmu_daily,
+        "fact_bmu_family_shortfall_daily": fact_bmu_family_shortfall_daily,
     }
     target_dir = Path(output_dir)
     target_dir.mkdir(parents=True, exist_ok=True)

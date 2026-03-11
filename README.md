@@ -186,10 +186,12 @@ Key behavior:
   - `fact_bmu_availability_half_hourly`
   - `fact_bmu_curtailment_truth_half_hourly`
   - `fact_curtailment_reconciliation_daily`
+  - `fact_constraint_target_audit_daily`
   - `fact_dispatch_alignment_daily`
   - `fact_dispatch_alignment_bmu_daily`
   - `fact_curtailment_gap_reason_daily`
   - `fact_bmu_curtailment_gap_bmu_daily`
+  - `fact_bmu_family_shortfall_daily`
 - `weather_history.py` now materializes:
   - `fact_weather_hourly`
 - `fact_weather_hourly` carries observed anchor weather plus capacity-weighted cluster and parent-region aggregates.
@@ -207,10 +209,12 @@ Key behavior:
 - The truth table now also carries explicit `counterfactual_invalid_reason` and `lost_energy_block_reason` fields so failed capture is diagnosable instead of just silent.
 - The three reconciliation QA tables are the main debugging surface for target completeness:
   - `fact_curtailment_reconciliation_daily` shows both raw NESO-total and wind-only QA reconciliation, with BOALF acceptance and physical-inference dispatch split out separately
+  - `fact_constraint_target_audit_daily` shows whether each day is voltage-dominant, thermal-dominant, or mixed inside the QA target, and classifies the day as source-limited, counterfactual-or-definition-limited, or partially recovered
   - `fact_dispatch_alignment_daily` shows whether blocked dispatch could materially close the QA-target gap, and how much of the dispatch surface is still coming from BOALF versus PN-QPN plus BOD inference
   - `fact_dispatch_alignment_bmu_daily` shows which BMUs are fully estimated, partially blocked, or fully blocked, with blocked lower-bound MWh split by reason
   - `fact_curtailment_gap_reason_daily` breaks each day down by loss-estimate failure reason
   - `fact_bmu_curtailment_gap_bmu_daily` shows which BMUs account for the biggest dispatch-to-lost-energy gap
+  - `fact_bmu_family_shortfall_daily` rolls the same gap up to BMU-family and day so the shortfall can be attributed to families like Seagreen, Race Bank, Gunfleet Sands, or Moray rather than only individual BMUs
 - `fact_bmu_curtailment_truth_half_hourly` now carries both reconciliation layers:
   - raw-context fields: `gb_daily_raw_constraint_total_mwh`, `raw_reconciliation_*`
   - precision-gate fields: `gb_daily_qa_target_mwh`, `qa_reconciliation_*`
@@ -220,6 +224,11 @@ Key behavior:
   a final turbine-level power model.
 - `fact_bmu_availability_half_hourly` uses REMIT as the primary outage gate. If REMIT is missing
   for a run, rows degrade to `availability_state=unknown` instead of silently becoming available.
+- Partial REMIT windows no longer behave like hard outages by default. When REMIT still reports
+  positive available capacity, the availability table now downgrades those rows to `unknown`.
+- The truth table keeps both raw and effective availability fields. It can promote a partial-REMIT
+  row back to `available` only when REMIT available capacity supports the counterfactual, and it
+  marks that with `availability_override_flag` and `availability_override_reason`.
 
 ## Next steps
 

@@ -289,6 +289,14 @@ def build_fact_bmu_availability_half_hourly(
     frame["remit_active_flag"] = frame["remit_active_flag"].where(frame["remit_active_flag"].notna(), False).astype(bool)
     frame["remit_event_count"] = pd.to_numeric(frame["remit_event_count"], errors="coerce").fillna(0).astype(int)
     frame["remit_overlap_hours"] = pd.to_numeric(frame["remit_overlap_hours"], errors="coerce")
+    frame["remit_max_available_capacity_mw"] = pd.to_numeric(frame["remit_max_available_capacity_mw"], errors="coerce")
+    frame["remit_max_unavailable_capacity_mw"] = pd.to_numeric(frame["remit_max_unavailable_capacity_mw"], errors="coerce")
+    frame["remit_normal_capacity_mw"] = pd.to_numeric(frame["remit_normal_capacity_mw"], errors="coerce")
+    frame["remit_partial_availability_flag"] = (
+        frame["remit_active_flag"]
+        & frame["remit_max_available_capacity_mw"].notna()
+        & (frame["remit_max_available_capacity_mw"] > 0)
+    )
 
     uou_frame = pd.DataFrame()
     if not raw_uou_frame.empty:
@@ -326,11 +334,13 @@ def build_fact_bmu_availability_half_hourly(
     if remit_fetch_ok:
         frame["availability_state"] = "available"
     frame.loc[frame["remit_active_flag"], "availability_state"] = "outage"
+    frame.loc[frame["remit_partial_availability_flag"], "availability_state"] = "unknown"
 
     frame["availability_confidence"] = "low"
     if remit_fetch_ok:
         frame["availability_confidence"] = "medium"
     frame.loc[frame["remit_active_flag"], "availability_confidence"] = "high"
+    frame.loc[frame["remit_partial_availability_flag"], "availability_confidence"] = "medium"
     frame.loc[
         (frame["availability_state"] == "available") & frame["uou_output_usable_mw"].notna() & (frame["uou_output_usable_mw"] > 0),
         "availability_confidence",
@@ -365,6 +375,7 @@ def build_fact_bmu_availability_half_hourly(
         "remit_event_count",
         "remit_overlap_hours",
         "remit_active_flag",
+        "remit_partial_availability_flag",
         "remit_max_available_capacity_mw",
         "remit_max_unavailable_capacity_mw",
         "remit_normal_capacity_mw",

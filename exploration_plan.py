@@ -138,7 +138,7 @@ DATASET_SPECS: Tuple[DatasetSpec, ...] = (
         role="Availability gate for lost-energy estimation.",
         source_plan="REMIT outage windows mapped onto BMUs, with UOU2T14D as secondary QA where available.",
         status="implemented_first_pass",
-        note="REMIT drives outage gating; UOU is supporting evidence only.",
+        note="REMIT drives outage gating, but partial-availability REMIT windows now degrade to unknown and can be explicitly overridden in truth-building when available capacity supports the counterfactual.",
     ),
     DatasetSpec(
         key="fact_bmu_curtailment_truth_half_hourly",
@@ -159,6 +159,15 @@ DATASET_SPECS: Tuple[DatasetSpec, ...] = (
         note="Carries both raw NESO-total reconciliation and the wind-only positive-voltage-plus-thermal QA target used for precision gating.",
     ),
     DatasetSpec(
+        key="fact_constraint_target_audit_daily",
+        grain="daily",
+        spatial_scope="GB-wide with QA-target composition audit",
+        role="Explains which QA-target categories dominate each day and whether the remaining miss looks source-limited or definition-limited.",
+        source_plan="Join fact_constraint_daily category columns to daily BMU reconciliation and dispatch-alignment surfaces.",
+        status="implemented_first_pass",
+        note="Use this before changing the precision gate; it distinguishes voltage-led, thermal-led, and mixed shortfall days.",
+    ),
+    DatasetSpec(
         key="fact_dispatch_alignment_daily",
         grain="daily",
         spatial_scope="GB-wide with BMU dispatch decomposition",
@@ -166,6 +175,15 @@ DATASET_SPECS: Tuple[DatasetSpec, ...] = (
         source_plan="Derived from fact_bmu_curtailment_truth_half_hourly with acceptance truth, physical-inference increments, and dispatch rows split into estimated, blocked, and mapping-status buckets.",
         status="implemented_first_pass",
         note="Use this to decide whether BOALF-only undercapture is being reduced materially by the BOD plus PN/QPN expansion or whether a new source is still required.",
+    ),
+    DatasetSpec(
+        key="fact_bmu_family_shortfall_daily",
+        grain="daily",
+        spatial_scope="BMU family",
+        role="Attributes remaining dispatch-to-lost-energy gaps to BMU families and days rather than only individual BMUs.",
+        source_plan="Group fact_bmu_curtailment_truth_half_hourly by derived BMU family code and day.",
+        status="implemented_first_pass",
+        note="Use this to see which families actually drive the benchmark shortfall before adding new sources.",
     ),
     DatasetSpec(
         key="fact_weather_hourly",
