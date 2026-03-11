@@ -552,7 +552,8 @@ def build_support_case_summary_markdown(
                 f"- Dominant anomaly: `{day.publication_anomaly_dominant_state}`",
                 f"- Anomaly MWh: `{float(day.publication_anomaly_candidate_mwh_lower_bound):.3f}`",
                 f"- Remaining QA shortfall MWh: `{float(day.remaining_qa_shortfall_mwh):.3f}`",
-                f"- Recommended support action: `{day.publication_anomaly_next_action}`",
+                f"- Recommended support action: `{day.support_recommended_action}`",
+                f"- Publication next action: `{day.publication_anomaly_next_action}`",
                 f"- Selected families: `{int(day.selected_family_count)}`",
                 "",
             ]
