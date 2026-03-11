@@ -1,0 +1,14 @@
+settlement_date,elexon_bm_unit,national_grid_bm_unit,cluster_key,cluster_label,parent_region,mapping_status,dispatch_half_hour_count,lost_energy_estimate_half_hour_count,accepted_down_delta_mwh_lower_bound,dispatch_down_mwh_lower_bound,lost_energy_mwh,primary_dispatch_block_reason,dispatch_minus_lost_energy_gap_mwh
+2024-10-01,T_SGRWO-5,SGRWO-5,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,27,27,3.1333333333333337,920.45,450.42600000000004,,470.024
+2024-10-01,T_RCBKO-1,RCBKO-1,humber_offshore,Humber Offshore,England/Wales,mapped,5,5,2.8166666666666664,568.5,128.715,,439.78499999999997
+2024-10-01,T_SGRWO-1,SGRWO-1,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,9,9,16.916666666666668,716.4166666666666,283.81385,,432.6028166666666
+2024-10-01,T_SGRWO-6,SGRWO-6,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,10,10,30.900000000000002,719.9,326.7952500000001,,393.10474999999985
+2024-10-01,T_SGRWO-2,SGRWO-2,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,24,24,4.15,732.3666666666667,389.22946666666667,,343.1372
+2024-10-01,T_SGRWO-4,SGRWO-4,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,31,31,6.783333333333333,1449.0,1121.6987333333336,,327.3012666666664
+2024-10-01,T_RCBKO-2,RCBKO-2,humber_offshore,Humber Offshore,England/Wales,mapped,4,4,1.3333333333333333,420.75,158.098,,262.652
+2024-10-01,T_SGRWO-3,SGRWO-3,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,25,25,10.233333333333333,1293.7749999999999,1145.5196683697598,,148.2553316302401
+2024-10-01,T_GNFSW-1,GNFSW-1,east_anglia_offshore,East Anglia Offshore,England/Wales,mapped,5,5,2.8166666666666664,173.93333333333334,37.952000000000005,,135.98133333333334
+2024-10-01,T_GNFSW-2,GNFSW-2,east_anglia_offshore,East Anglia Offshore,England/Wales,mapped,4,4,1.6,83.58333333333333,22.485,,61.09833333333333
+2024-10-01,T_PNYCW-1,PNYCW-1,,,England/Wales,region_only,4,4,3.316666666666667,32.06666666666666,71.57350000000001,,-39.50683333333335
+2024-10-01,T_CLDNW-1,CLDNW-1,,,Scotland,region_only,2,2,3.5166666666666666,3.5166666666666666,55.724000000000004,,-52.20733333333334
+2024-10-01,T_CLDCW-1,CLDCW-1,,,Scotland,region_only,2,2,1.4166666666666665,1.4166666666666665,74.265,,-72.84833333333333
