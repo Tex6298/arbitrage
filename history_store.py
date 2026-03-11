@@ -24,6 +24,9 @@ TRUTH_STORE_PRIMARY_KEYS: Dict[str, list[str]] = {
     "fact_support_case_daily": ["support_batch_id", "settlement_date"],
     "fact_support_case_family_daily": ["support_batch_id", "settlement_date", "bmu_family_key"],
     "fact_support_case_half_hourly": ["support_batch_id", "settlement_date", "settlement_period", "elexon_bm_unit"],
+    "fact_support_case_resolution": ["support_batch_id", "settlement_date", "bmu_family_key"],
+    "fact_support_resolution_daily": ["support_batch_id", "settlement_date"],
+    "fact_support_resolution_batch": ["support_batch_id"],
 }
 
 

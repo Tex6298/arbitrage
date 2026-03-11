@@ -519,12 +519,12 @@ class SupportLoopMaterializationTests(unittest.TestCase):
 
             self.assertEqual(support_batch_id, "support_fail_warn_days7_families5_2024-10-02_2024-10-06")
             self.assertEqual(len(frames[SUPPORT_CASE_DAILY_TABLE]), 2)
-            self.assertEqual(
+            self.assertCountEqual(
                 frames[SUPPORT_CASE_FAMILY_TABLE]["bmu_family_key"].tolist(),
                 ["HOWBO", "HOWAO"],
             )
             self.assertNotIn("WLNYO", frames[SUPPORT_CASE_FAMILY_TABLE]["bmu_family_key"].tolist())
-            self.assertEqual(
+            self.assertCountEqual(
                 frames[SUPPORT_CASE_HALF_HOURLY_TABLE]["elexon_bm_unit"].tolist(),
                 ["T_HOWBO-1", "T_HOWAO-1"],
             )

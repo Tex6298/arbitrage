@@ -180,6 +180,30 @@ def _select_support_families(
     return prepared[columns + ["support_case_family_rank"]].reset_index(drop=True)
 
 
+def select_support_case_daily(
+    fact_publication_anomaly_daily: pd.DataFrame,
+    status_mode: str = "fail_warn",
+    top_days: int = 7,
+) -> pd.DataFrame:
+    return _select_support_days(
+        publication_anomaly_daily=fact_publication_anomaly_daily,
+        status_mode=status_mode,
+        top_days=top_days,
+    )
+
+
+def select_support_case_family_daily(
+    fact_publication_anomaly_family_daily: pd.DataFrame,
+    selected_support_days: pd.DataFrame,
+    top_families_per_day: int = 5,
+) -> pd.DataFrame:
+    return _select_support_families(
+        publication_anomaly_family_daily=fact_publication_anomaly_family_daily,
+        selected_days=selected_support_days,
+        top_families_per_day=top_families_per_day,
+    )
+
+
 def build_fact_support_case_daily(
     selected_support_days: pd.DataFrame,
     selected_support_families: pd.DataFrame,
@@ -708,10 +732,20 @@ def materialize_truth_store_support_loop(
         top_families_per_day=top_families_per_day,
         generated_at_utc=generated_value,
     )
+    from support_resolution import SUPPORT_CASE_RESOLUTION_TABLE, materialize_truth_store_support_resolution
+
+    resolution_frames = materialize_truth_store_support_resolution(
+        db_path=target_path,
+        support_batch_id=support_batch_id,
+        fact_support_case_family_daily=fact_support_case_family_daily,
+        generated_at_utc=generated_value,
+    )
+    fact_support_case_resolution = resolution_frames[SUPPORT_CASE_RESOLUTION_TABLE]
     frames = {
         SUPPORT_CASE_DAILY_TABLE: fact_support_case_daily,
         SUPPORT_CASE_FAMILY_TABLE: fact_support_case_family_daily,
         SUPPORT_CASE_HALF_HOURLY_TABLE: fact_support_case_half_hourly,
+        SUPPORT_CASE_RESOLUTION_TABLE: fact_support_case_resolution,
     }
     upsert_frame_to_sqlite(
         db_path=target_path,

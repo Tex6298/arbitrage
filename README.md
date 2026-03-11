@@ -170,6 +170,48 @@ Key behavior:
       --forensic-output-dir hornsea_support_extract
     ```
 
+18. Materialize a ranked publication-anomaly support batch from the SQLite store and write the CSV evidence tables plus Markdown dossier:
+
+    ```bash
+    python inline_arbitrage_live.py ^
+      --materialize-truth-store-support-loop ^
+      --show-truth-store-support-loop ^
+      --truth-store-db-path support_loop_smoke.sqlite ^
+      --support-status fail_warn ^
+      --support-top-days 7 ^
+      --support-top-families-per-day 5 ^
+      --support-half-hour-limit 20 ^
+      --support-output-dir support_loop_output
+    ```
+
+19. Build or review the support-case resolution ledger, and annotate a specific family-day once support feedback or analyst review arrives:
+
+    ```bash
+    python inline_arbitrage_live.py ^
+      --materialize-truth-store-support-resolution ^
+      --show-truth-store-support-resolution ^
+      --truth-store-db-path support_loop_smoke.sqlite ^
+      --resolution-filter open ^
+      --resolution-limit 20
+    ```
+
+    ```bash
+    python inline_arbitrage_live.py ^
+      --annotate-truth-store-support-resolution ^
+      --truth-store-db-path support_loop_smoke.sqlite ^
+      --resolution-batch-id support_fail_warn_days7_families5_2024-10-01_2024-10-07 ^
+      --resolution-date 2024-10-02 ^
+      --resolution-family-key HOWBO ^
+      --resolution-state confirmed_publication_gap ^
+      --resolution-truth-policy-action fix_source_and_rerun ^
+      --resolution-note "Elexon support escalation opened for Hornsea publication anomaly." ^
+      --resolution-source-reference ticket-2026-03-11-HOWBO
+    ```
+
+    The same review surface now also prints:
+    - `fact_support_resolution_daily`
+    - `fact_support_resolution_batch`
+
 12. Materialize observed weather history for anchors, clusters, and parent regions:
 
    ```bash
@@ -323,6 +365,32 @@ Key behavior:
   attach a support question code instead of silently folding those rows back into truth.
 - The support-evidence extract is the support-ready packet. It keeps row-level `PN/QPN/MILS/MELS`, generation,
   BOALF lower bound, BOD sentinel diagnostics, and the recommended support question together in one scoped CSV export.
+- The support loop packages the broader store-backed publication-anomaly ranking into:
+  - `fact_support_case_daily`
+  - `fact_support_case_family_daily`
+  - `fact_support_case_half_hourly`
+  - `support_case_summary.md`
+- The support loop now also keeps a manual resolution ledger:
+  - `fact_support_case_resolution`
+- The support-resolution workflow now also materializes review summaries:
+  - `fact_support_resolution_daily`
+  - `fact_support_resolution_batch`
+- New support-resolution states are:
+  - `open`
+  - `confirmed_publication_gap`
+  - `confirmed_non_boalf_pattern`
+  - `confirmed_source_artifact`
+  - `not_reproducible`
+- New truth-policy actions are:
+  - `keep_out_of_precision`
+  - `eligible_for_new_evidence_tier`
+  - `fix_source_and_rerun`
+  - `close_no_change`
+- The support loop is packaging and triage only. It does not change dispatch truth, truth tiers, reconciliation gates,
+  or the precision profile.
+- `bmu_truth_store.sqlite` in the repo may be a Git LFS pointer in some checkouts rather than a usable SQLite file.
+  If so, rebuild a local store first, for example:
+  - `python inline_arbitrage_live.py --fill-truth-store-from-dir bmu_truth_history_phase4_family_day --truth-store-db-path support_loop_smoke.sqlite`
 - `precision_profile_include` now keys off the wind-only QA target, not the mixed raw NESO total.
 - The weather-calibrated tier now uses observed weather history from capacity-weighted anchor points.
   It still does not replace a valid physical-baseline row, and it is still a first pass rather than

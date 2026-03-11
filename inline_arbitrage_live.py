@@ -44,6 +44,18 @@ from exploration_plan import backtest_plan_frame, dataset_plan_frame, drift_moni
 from gb_topology import cluster_hub_matrix, interconnector_hub_frame, reachability_frame, route_hub_frame
 from history_store import ingest_truth_csv_tree_to_sqlite, upsert_truth_frames_to_sqlite
 from physical_constraints import assumption_frame, compute_netbacks
+from support_resolution import (
+    SUPPORT_CASE_RESOLUTION_TABLE,
+    SUPPORT_RESOLUTION_BATCH_TABLE,
+    SUPPORT_RESOLUTION_DAILY_TABLE,
+    VALID_RESOLUTION_FILTERS,
+    VALID_RESOLUTION_STATES,
+    VALID_TRUTH_POLICY_ACTIONS,
+    annotate_support_case_resolution,
+    materialize_truth_store_support_resolution,
+    read_support_case_resolution,
+    read_support_resolution_review,
+)
 from support_loop import (
     SUPPORT_CASE_DAILY_TABLE,
     SUPPORT_CASE_FAMILY_TABLE,
@@ -628,6 +640,63 @@ def main() -> int:
         help="Maximum number of support half-hour evidence rows to print",
     )
     parser.add_argument(
+        "--materialize-truth-store-support-resolution",
+        action="store_true",
+        help="Build or refresh the support-case resolution ledger from store-backed support batches, then exit",
+    )
+    parser.add_argument(
+        "--show-truth-store-support-resolution",
+        action="store_true",
+        help="Print the support-case resolution ledger from the SQLite truth store, then exit",
+    )
+    parser.add_argument(
+        "--annotate-truth-store-support-resolution",
+        action="store_true",
+        help="Upsert one support-case resolution annotation into the SQLite truth store, then exit",
+    )
+    parser.add_argument(
+        "--resolution-batch-id",
+        help="Support batch id for support-resolution materialization, annotation, or review",
+    )
+    parser.add_argument(
+        "--resolution-date",
+        help="Support-resolution settlement date for annotation (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--resolution-family-key",
+        help="BMU family key for support-resolution annotation",
+    )
+    parser.add_argument(
+        "--resolution-state",
+        choices=VALID_RESOLUTION_STATES,
+        help="Resolution state for support-case annotation",
+    )
+    parser.add_argument(
+        "--resolution-truth-policy-action",
+        choices=VALID_TRUTH_POLICY_ACTIONS,
+        help="Truth-policy action for support-case annotation",
+    )
+    parser.add_argument(
+        "--resolution-note",
+        help="Optional analyst note for support-case annotation",
+    )
+    parser.add_argument(
+        "--resolution-source-reference",
+        help="Optional source or ticket reference for support-case annotation",
+    )
+    parser.add_argument(
+        "--resolution-filter",
+        default="all",
+        choices=VALID_RESOLUTION_FILTERS,
+        help="Filter for support-case resolution review: all, open, resolved, or a specific resolution state",
+    )
+    parser.add_argument(
+        "--resolution-limit",
+        type=int,
+        default=20,
+        help="Maximum number of support-case resolution rows to print",
+    )
+    parser.add_argument(
         "--materialize-weather-history",
         action="store_true",
         help="Fetch and save anchor, cluster, and parent-region weather history, then exit",
@@ -1050,6 +1119,7 @@ def main() -> int:
                     SUPPORT_CASE_DAILY_TABLE,
                     SUPPORT_CASE_FAMILY_TABLE,
                     SUPPORT_CASE_HALF_HOURLY_TABLE,
+                    SUPPORT_CASE_RESOLUTION_TABLE,
                 ]:
                     print(f"{table_name}: rows={len(frames[table_name])}")
             if args.show_truth_store_support_loop:
@@ -1086,6 +1156,109 @@ def main() -> int:
                 ]:
                     if name in written_paths:
                         print(f"{name}: {written_paths[name]}")
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
+    if (
+        args.materialize_truth_store_support_resolution
+        or args.show_truth_store_support_resolution
+        or args.annotate_truth_store_support_resolution
+    ):
+        if not args.truth_store_db_path:
+            raise SystemExit(
+                "--materialize-truth-store-support-resolution, --show-truth-store-support-resolution, and "
+                "--annotate-truth-store-support-resolution require --truth-store-db-path"
+            )
+        try:
+            if args.annotate_truth_store_support_resolution:
+                missing = [
+                    flag
+                    for flag, value in [
+                        ("--resolution-batch-id", args.resolution_batch_id),
+                        ("--resolution-date", args.resolution_date),
+                        ("--resolution-family-key", args.resolution_family_key),
+                        ("--resolution-state", args.resolution_state),
+                        ("--resolution-truth-policy-action", args.resolution_truth_policy_action),
+                    ]
+                    if not value
+                ]
+                if missing:
+                    raise SystemExit(
+                        "--annotate-truth-store-support-resolution requires "
+                        + ", ".join(missing)
+                    )
+                annotated = annotate_support_case_resolution(
+                    db_path=args.truth_store_db_path,
+                    support_batch_id=args.resolution_batch_id,
+                    settlement_date=args.resolution_date,
+                    bmu_family_key=args.resolution_family_key,
+                    resolution_state=args.resolution_state,
+                    truth_policy_action=args.resolution_truth_policy_action,
+                    resolution_note=args.resolution_note,
+                    source_reference=args.resolution_source_reference,
+                )
+                print("Annotated Support Case Resolution")
+                print(annotated.to_string(index=False))
+                return 0
+
+            resolution_frame = pd.DataFrame()
+            review_frames = {}
+            if args.materialize_truth_store_support_resolution:
+                materialized = materialize_truth_store_support_resolution(
+                    db_path=args.truth_store_db_path,
+                    support_batch_id=args.resolution_batch_id,
+                )
+                resolution_frame = materialized[SUPPORT_CASE_RESOLUTION_TABLE]
+                review_frames = {
+                    SUPPORT_RESOLUTION_DAILY_TABLE: materialized[SUPPORT_RESOLUTION_DAILY_TABLE],
+                    SUPPORT_RESOLUTION_BATCH_TABLE: materialized[SUPPORT_RESOLUTION_BATCH_TABLE],
+                }
+                batch_text = f" batch={args.resolution_batch_id}" if args.resolution_batch_id else ""
+                print(
+                    f"[store=sqlite] Materialized support-case resolution table in {args.truth_store_db_path}{batch_text}"
+                )
+                print(f"{SUPPORT_CASE_RESOLUTION_TABLE}: rows={len(resolution_frame)}")
+                print(f"{SUPPORT_RESOLUTION_DAILY_TABLE}: rows={len(review_frames[SUPPORT_RESOLUTION_DAILY_TABLE])}")
+                print(f"{SUPPORT_RESOLUTION_BATCH_TABLE}: rows={len(review_frames[SUPPORT_RESOLUTION_BATCH_TABLE])}")
+            if args.show_truth_store_support_resolution:
+                if resolution_frame.empty:
+                    resolution_frame = read_support_case_resolution(
+                        db_path=args.truth_store_db_path,
+                        support_batch_id=args.resolution_batch_id,
+                        resolution_filter=args.resolution_filter,
+                    )
+                else:
+                    resolution_frame = read_support_case_resolution(
+                        db_path=args.truth_store_db_path,
+                        support_batch_id=args.resolution_batch_id,
+                        resolution_filter=args.resolution_filter,
+                    )
+                if not review_frames:
+                    review_frames = read_support_resolution_review(
+                        db_path=args.truth_store_db_path,
+                        support_batch_id=args.resolution_batch_id,
+                    )
+                print("Support Resolution Batch Review")
+                batch_review = review_frames[SUPPORT_RESOLUTION_BATCH_TABLE]
+                if batch_review.empty:
+                    print("No matching support-resolution batch rows.")
+                else:
+                    print(batch_review.to_string(index=False))
+                print()
+                print("Support Resolution Daily Review")
+                daily_review = review_frames[SUPPORT_RESOLUTION_DAILY_TABLE]
+                if daily_review.empty:
+                    print("No matching support-resolution daily rows.")
+                else:
+                    print(daily_review.head(args.resolution_limit).to_string(index=False))
+                print()
+                print("Support Case Resolution")
+                if resolution_frame.empty:
+                    print("No matching support-case resolution rows.")
+                else:
+                    print(resolution_frame.head(args.resolution_limit).to_string(index=False))
             return 0
         except Exception as exc:
             print(f"ERROR: {exc}", file=sys.stderr)
