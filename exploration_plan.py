@@ -147,7 +147,7 @@ DATASET_SPECS: Tuple[DatasetSpec, ...] = (
         role="Tiered BMU curtailment truth surface for precision-first and research-friendly backtests.",
         source_plan="Join B1610 generation, BOALF acceptance truth, BOD bid-offer evidence, balancing physical, REMIT availability, weather history, and GB daily reconciliation.",
         status="implemented_first_pass",
-        note="Carries acceptance-only and BOALF-windowed physical-inference dispatch source tiers alongside dispatch-only, physical-baseline, and weather-calibrated lost-energy tiers.",
+        note="Carries acceptance-only and physical-inference dispatch tiers, plus explicit same-BMU versus family-day inference scope, alongside dispatch-only, physical-baseline, and weather-calibrated lost-energy tiers.",
     ),
     DatasetSpec(
         key="fact_curtailment_reconciliation_daily",
@@ -156,7 +156,7 @@ DATASET_SPECS: Tuple[DatasetSpec, ...] = (
         role="Target-quality QA surface that explains why BMU truth does or does not reconcile to GB daily curtailment labels.",
         source_plan="Aggregate fact_bmu_curtailment_truth_half_hourly against fact_constraint_daily, plus block-reason and BMU-day gap summaries.",
         status="implemented_first_pass",
-        note="Carries both raw NESO-total reconciliation and the wind-only positive-voltage-plus-thermal QA target used for precision gating.",
+        note="Carries both raw NESO-total reconciliation and the wind-only positive-voltage-plus-thermal QA target used for precision gating, with same-BMU and family-day dispatch increments broken out separately.",
     ),
     DatasetSpec(
         key="fact_constraint_target_audit_daily",
@@ -183,7 +183,7 @@ DATASET_SPECS: Tuple[DatasetSpec, ...] = (
         role="Attributes remaining dispatch-to-lost-energy gaps to BMU families and days rather than only individual BMUs.",
         source_plan="Group fact_bmu_curtailment_truth_half_hourly by derived BMU family code and day.",
         status="implemented_first_pass",
-        note="Use this to see which families actually drive the benchmark shortfall before adding new sources.",
+        note="Use this to see which families actually drive the benchmark shortfall before adding new sources; same-BMU and family-day dispatch increments are now separated so targeted expansion stays auditable.",
     ),
     DatasetSpec(
         key="fact_weather_hourly",

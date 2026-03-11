@@ -635,6 +635,206 @@ class CurtailmentTruthTests(unittest.TestCase):
         self.assertIn("BOD", first_row["source_lineage"])
         self.assertIn("balancing_physical", first_row["source_lineage"])
 
+    def test_family_day_dispatch_expansion_can_promote_sibling_bmu(self) -> None:
+        base_day = dt.date(2024, 10, 1)
+        dim = pd.DataFrame(
+            [
+                {
+                    "elexon_bm_unit": "T_TEST-1",
+                    "national_grid_bm_unit": "TEST-1",
+                    "bm_unit_name": "Test Wind 1",
+                    "lead_party_name": "Test Lead",
+                    "fuel_type": "WIND",
+                    "bm_unit_type": "GEN",
+                    "gsp_group_id": "_A",
+                    "gsp_group_name": "Test GSP",
+                    "generation_capacity_mw": 40.0,
+                    "mapping_status": "mapped",
+                    "mapping_confidence": "high",
+                    "mapping_rule": "test",
+                    "cluster_key": "moray_firth_offshore",
+                    "cluster_label": "Moray Firth Offshore",
+                    "parent_region": "Scotland",
+                },
+                {
+                    "elexon_bm_unit": "T_TEST-2",
+                    "national_grid_bm_unit": "TEST-2",
+                    "bm_unit_name": "Test Wind 2",
+                    "lead_party_name": "Test Lead",
+                    "fuel_type": "WIND",
+                    "bm_unit_type": "GEN",
+                    "gsp_group_id": "_A",
+                    "gsp_group_name": "Test GSP",
+                    "generation_capacity_mw": 40.0,
+                    "mapping_status": "mapped",
+                    "mapping_confidence": "high",
+                    "mapping_rule": "test",
+                    "cluster_key": "moray_firth_offshore",
+                    "cluster_label": "Moray Firth Offshore",
+                    "parent_region": "Scotland",
+                },
+            ]
+        )
+        generation = pd.DataFrame(
+            [
+                *[
+                    {
+                        "settlement_date": base_day,
+                        "settlement_period": period,
+                        "elexon_bm_unit": "T_TEST-1",
+                        "generation_mwh": 10.0,
+                    }
+                    for period in [3, 4, 5, 6, 7]
+                ],
+                {
+                    "settlement_date": base_day,
+                    "settlement_period": 8,
+                    "elexon_bm_unit": "T_TEST-2",
+                    "generation_mwh": 10.0,
+                },
+            ]
+        )
+        dispatch = pd.DataFrame(
+            [
+                {
+                    "settlement_date": base_day,
+                    "settlement_period": 5,
+                    "elexon_bm_unit": "T_TEST-1",
+                    "accepted_down_delta_mwh_lower_bound": 1.0,
+                    "accepted_up_delta_mwh_lower_bound": 0.0,
+                    "dispatch_down_flag": True,
+                    "dispatch_up_flag": False,
+                    "acceptance_event_count": 1,
+                    "distinct_acceptance_number_count": 1,
+                }
+            ]
+        )
+        physical = pd.DataFrame(
+            [
+                *[
+                    {
+                        "settlement_date": base_day,
+                        "settlement_period": period,
+                        "elexon_bm_unit": "T_TEST-1",
+                        "pn_mwh": 40.0,
+                        "qpn_mwh": 0.0,
+                        "physical_baseline_source_dataset": "PN",
+                        "physical_baseline_mwh": 20.0,
+                        "physical_consistency_flag": True,
+                        "counterfactual_method": "pn_qpn_physical_max",
+                        "counterfactual_valid_flag": True,
+                    }
+                    for period in [3, 4, 5, 6, 7]
+                ],
+                {
+                    "settlement_date": base_day,
+                    "settlement_period": 8,
+                    "elexon_bm_unit": "T_TEST-2",
+                    "pn_mwh": 30.0,
+                    "qpn_mwh": 0.0,
+                    "physical_baseline_source_dataset": "PN",
+                    "physical_baseline_mwh": 20.0,
+                    "physical_consistency_flag": True,
+                    "counterfactual_method": "pn_qpn_physical_max",
+                    "counterfactual_valid_flag": True,
+                },
+            ]
+        )
+        availability = pd.DataFrame(
+            [
+                *[
+                    {
+                        "settlement_date": base_day,
+                        "settlement_period": period,
+                        "elexon_bm_unit": "T_TEST-1",
+                        "remit_active_flag": False,
+                        "availability_state": "available",
+                        "availability_confidence": "high",
+                        "uou_output_usable_mw": 40.0,
+                    }
+                    for period in [3, 4, 5, 6, 7]
+                ],
+                {
+                    "settlement_date": base_day,
+                    "settlement_period": 8,
+                    "elexon_bm_unit": "T_TEST-2",
+                    "remit_active_flag": False,
+                    "availability_state": "available",
+                    "availability_confidence": "high",
+                    "uou_output_usable_mw": 40.0,
+                },
+            ]
+        )
+        bid_offer = pd.DataFrame(
+            [
+                *[
+                    {
+                        "settlement_date": base_day,
+                        "settlement_period": period,
+                        "elexon_bm_unit": "T_TEST-1",
+                        "negative_bid_pair_count": 1,
+                        "negative_bid_available_flag": True,
+                        "most_negative_bid_gbp_per_mwh": -80.0,
+                        "least_negative_bid_gbp_per_mwh": -80.0,
+                    }
+                    for period in [3, 4, 5, 6, 7]
+                ],
+                {
+                    "settlement_date": base_day,
+                    "settlement_period": 8,
+                    "elexon_bm_unit": "T_TEST-2",
+                    "negative_bid_pair_count": 1,
+                    "negative_bid_available_flag": True,
+                    "most_negative_bid_gbp_per_mwh": -90.0,
+                    "least_negative_bid_gbp_per_mwh": -90.0,
+                },
+            ]
+        )
+        constraints = add_constraint_qa_columns(
+            pd.DataFrame(
+                [
+                    {
+                        "date": base_day,
+                        "total_curtailment_mwh": 200.0,
+                        "voltage_constraints_volume_mwh": 200.0,
+                        "thermal_constraints_volume_mwh": 0.0,
+                        "increasing_system_inertia_volume_mwh": 0.0,
+                        "reducing_largest_loss_volume_mwh": 0.0,
+                    }
+                ]
+            )
+        )
+
+        fact = build_fact_bmu_curtailment_truth_half_hourly(
+            dim_bmu_asset=dim,
+            fact_bmu_generation_half_hourly=generation,
+            fact_bmu_dispatch_acceptance_half_hourly=dispatch,
+            fact_bmu_physical_position_half_hourly=physical,
+            fact_bmu_availability_half_hourly=availability,
+            fact_constraint_daily=constraints,
+            fact_weather_hourly=pd.DataFrame(),
+            start_date=base_day,
+            end_date=base_day,
+            fact_bmu_bid_offer_half_hourly=bid_offer,
+        )
+        sibling_row = fact[
+            (fact["elexon_bm_unit"] == "T_TEST-2")
+            & (fact["settlement_period"] == 8)
+        ].iloc[0]
+        self.assertFalse(bool(sibling_row["dispatch_acceptance_window_flag"]))
+        self.assertTrue(bool(sibling_row["family_day_dispatch_expansion_eligible_flag"]))
+        self.assertTrue(bool(sibling_row["family_day_dispatch_window_flag"]))
+        self.assertTrue(bool(sibling_row["family_day_dispatch_expansion_applied_flag"]))
+        self.assertEqual(sibling_row["dispatch_inference_scope"], "family_day_window")
+        self.assertEqual(sibling_row["dispatch_truth_source_tier"], "physical_inference")
+        self.assertAlmostEqual(float(sibling_row["family_day_dispatch_increment_mwh_lower_bound"]), 30.0)
+        self.assertAlmostEqual(float(sibling_row["dispatch_down_evidence_mwh_lower_bound"]), 30.0)
+        self.assertTrue(bool(sibling_row["dispatch_truth_flag"]))
+
+        daily = build_fact_curtailment_reconciliation_daily(fact)
+        self.assertAlmostEqual(float(daily.iloc[0]["family_day_dispatch_increment_mwh_lower_bound"]), 30.0)
+        self.assertEqual(int(daily.iloc[0]["dispatch_family_day_inference_row_count"]), 1)
+
     def test_truth_profiles_follow_row_flags(self) -> None:
         dim = sample_dim_bmu_asset()
         generation = pd.DataFrame(

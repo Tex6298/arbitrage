@@ -203,18 +203,21 @@ Key behavior:
   - `acceptance_only` when BOALF alone supports the dispatch row
   - `physical_inference` when a nearby BOALF down-acceptance window plus a negative `BOD` bid and positive `PN-QPN` gap create a dispatch row with no same-half-hour BOALF acceptance
   - `acceptance_plus_physical_inference` when the PN-QPN gap materially exceeds the BOALF lower bound inside that BOALF-triggered window
+- The truth table now also carries explicit dispatch-inference scope fields:
+  - `dispatch_inference_scope` distinguishes same-BMU BOALF-window inference from the narrower family-day expansion window
+  - `family_day_dispatch_increment_mwh_lower_bound` is only applied on mapped BMU-family days that already dominate the provisional family shortfall audit
 - The active dispatch quantity for QA and profiles is now `dispatch_down_evidence_mwh_lower_bound`.
   The original BOALF-only field `accepted_down_delta_mwh_lower_bound` is still preserved as raw
   acceptance truth so the expansion remains auditable.
 - The truth table now also carries explicit `counterfactual_invalid_reason` and `lost_energy_block_reason` fields so failed capture is diagnosable instead of just silent.
 - The three reconciliation QA tables are the main debugging surface for target completeness:
-  - `fact_curtailment_reconciliation_daily` shows both raw NESO-total and wind-only QA reconciliation, with BOALF acceptance and physical-inference dispatch split out separately
+  - `fact_curtailment_reconciliation_daily` shows both raw NESO-total and wind-only QA reconciliation, with BOALF acceptance, same-BMU physical inference, and family-day expansion split out separately
   - `fact_constraint_target_audit_daily` shows whether each day is voltage-dominant, thermal-dominant, or mixed inside the QA target, and classifies the day as source-limited, counterfactual-or-definition-limited, or partially recovered
   - `fact_dispatch_alignment_daily` shows whether blocked dispatch could materially close the QA-target gap, and how much of the dispatch surface is still coming from BOALF versus PN-QPN plus BOD inference
   - `fact_dispatch_alignment_bmu_daily` shows which BMUs are fully estimated, partially blocked, or fully blocked, with blocked lower-bound MWh split by reason
   - `fact_curtailment_gap_reason_daily` breaks each day down by loss-estimate failure reason
   - `fact_bmu_curtailment_gap_bmu_daily` shows which BMUs account for the biggest dispatch-to-lost-energy gap
-  - `fact_bmu_family_shortfall_daily` rolls the same gap up to BMU-family and day so the shortfall can be attributed to families like Seagreen, Race Bank, Gunfleet Sands, or Moray rather than only individual BMUs
+  - `fact_bmu_family_shortfall_daily` rolls the same gap up to BMU-family and day so the shortfall can be attributed to families like Seagreen, Race Bank, Gunfleet Sands, or Moray rather than only individual BMUs, and now exposes the family-day dispatch increment separately
 - `fact_bmu_curtailment_truth_half_hourly` now carries both reconciliation layers:
   - raw-context fields: `gb_daily_raw_constraint_total_mwh`, `raw_reconciliation_*`
   - precision-gate fields: `gb_daily_qa_target_mwh`, `qa_reconciliation_*`
