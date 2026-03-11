@@ -46,14 +46,19 @@ from history_store import ingest_truth_csv_tree_to_sqlite, upsert_truth_frames_t
 from physical_constraints import assumption_frame, compute_netbacks
 from support_resolution import (
     SUPPORT_CASE_RESOLUTION_TABLE,
+    SUPPORT_OPEN_CASE_PRIORITY_FAMILY_TABLE,
+    SUPPORT_RERUN_GATE_BATCH_TABLE,
+    SUPPORT_RERUN_GATE_DAILY_TABLE,
     SUPPORT_RESOLUTION_BATCH_TABLE,
     SUPPORT_RESOLUTION_DAILY_TABLE,
     VALID_RESOLUTION_FILTERS,
     VALID_RESOLUTION_STATES,
+    VALID_SUPPORT_GATE_FILTERS,
     VALID_TRUTH_POLICY_ACTIONS,
     annotate_support_case_resolution,
     materialize_truth_store_support_resolution,
     read_support_case_resolution,
+    read_support_rerun_gate_review,
     read_support_resolution_review,
 )
 from support_loop import (
@@ -695,6 +700,28 @@ def main() -> int:
         type=int,
         default=20,
         help="Maximum number of support-case resolution rows to print",
+    )
+    parser.add_argument(
+        "--materialize-truth-store-support-gate",
+        action="store_true",
+        help="Build or refresh the support rerun-gate and open-case priority tables from the SQLite truth store, then exit",
+    )
+    parser.add_argument(
+        "--show-truth-store-support-gate",
+        action="store_true",
+        help="Print the support rerun-gate and open-case priority tables from the SQLite truth store, then exit",
+    )
+    parser.add_argument(
+        "--support-gate-filter",
+        default="all",
+        choices=VALID_SUPPORT_GATE_FILTERS,
+        help="Filter for support rerun-gate review: all, blocked, ready_for_rerun, or no_rerun_required",
+    )
+    parser.add_argument(
+        "--support-open-case-limit",
+        type=int,
+        default=20,
+        help="Maximum number of open-case priority rows to print",
     )
     parser.add_argument(
         "--materialize-weather-history",

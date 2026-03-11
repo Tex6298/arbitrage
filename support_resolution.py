@@ -741,6 +741,17 @@ def materialize_truth_store_support_resolution(
         fact_support_case_resolution=resolution,
     )
     support_resolution_batch = build_fact_support_resolution_batch(support_resolution_daily)
+    support_rerun_gate_daily = build_fact_support_rerun_gate_daily(support_resolution_daily)
+    support_rerun_gate_batch = build_fact_support_rerun_gate_batch(
+        fact_support_resolution_batch=support_resolution_batch,
+        fact_support_rerun_gate_daily=support_rerun_gate_daily,
+    )
+    support_open_case_priority = build_fact_support_open_case_priority_family_daily(
+        fact_support_case_family_daily=support_family,
+        fact_support_case_resolution=resolution,
+        fact_support_rerun_gate_daily=support_rerun_gate_daily,
+        fact_support_rerun_gate_batch=support_rerun_gate_batch,
+    )
     upsert_frame_to_sqlite(
         db_path=target_path,
         table_name=SUPPORT_CASE_RESOLUTION_TABLE,
@@ -759,10 +770,31 @@ def materialize_truth_store_support_resolution(
         frame=support_resolution_batch,
         primary_keys=["support_batch_id"],
     )
+    upsert_frame_to_sqlite(
+        db_path=target_path,
+        table_name=SUPPORT_RERUN_GATE_DAILY_TABLE,
+        frame=support_rerun_gate_daily,
+        primary_keys=["support_batch_id", "settlement_date"],
+    )
+    upsert_frame_to_sqlite(
+        db_path=target_path,
+        table_name=SUPPORT_RERUN_GATE_BATCH_TABLE,
+        frame=support_rerun_gate_batch,
+        primary_keys=["support_batch_id"],
+    )
+    upsert_frame_to_sqlite(
+        db_path=target_path,
+        table_name=SUPPORT_OPEN_CASE_PRIORITY_FAMILY_TABLE,
+        frame=support_open_case_priority,
+        primary_keys=["support_batch_id", "settlement_date", "bmu_family_key"],
+    )
     return {
         SUPPORT_CASE_RESOLUTION_TABLE: resolution,
         SUPPORT_RESOLUTION_DAILY_TABLE: support_resolution_daily,
         SUPPORT_RESOLUTION_BATCH_TABLE: support_resolution_batch,
+        SUPPORT_RERUN_GATE_DAILY_TABLE: support_rerun_gate_daily,
+        SUPPORT_RERUN_GATE_BATCH_TABLE: support_rerun_gate_batch,
+        SUPPORT_OPEN_CASE_PRIORITY_FAMILY_TABLE: support_open_case_priority,
     }
 
 
@@ -877,4 +909,77 @@ def read_support_resolution_review(
     return {
         SUPPORT_RESOLUTION_DAILY_TABLE: daily.reset_index(drop=True),
         SUPPORT_RESOLUTION_BATCH_TABLE: batch.reset_index(drop=True),
+    }
+
+
+def read_support_rerun_gate_review(
+    db_path: str | Path,
+    support_batch_id: str | None = None,
+    gate_filter: str = "all",
+) -> Dict[str, pd.DataFrame]:
+    if gate_filter not in VALID_SUPPORT_GATE_FILTERS:
+        raise ValueError(f"unsupported support gate filter '{gate_filter}'")
+
+    daily = (
+        _load_table(db_path, SUPPORT_RERUN_GATE_DAILY_TABLE)
+        if _table_exists(db_path, SUPPORT_RERUN_GATE_DAILY_TABLE)
+        else pd.DataFrame()
+    )
+    batch = (
+        _load_table(db_path, SUPPORT_RERUN_GATE_BATCH_TABLE)
+        if _table_exists(db_path, SUPPORT_RERUN_GATE_BATCH_TABLE)
+        else pd.DataFrame()
+    )
+    priority = (
+        _load_table(db_path, SUPPORT_OPEN_CASE_PRIORITY_FAMILY_TABLE)
+        if _table_exists(db_path, SUPPORT_OPEN_CASE_PRIORITY_FAMILY_TABLE)
+        else pd.DataFrame()
+    )
+
+    if support_batch_id:
+        if not daily.empty:
+            daily = daily[daily["support_batch_id"].fillna("").astype(str).eq(str(support_batch_id))].copy()
+        if not batch.empty:
+            batch = batch[batch["support_batch_id"].fillna("").astype(str).eq(str(support_batch_id))].copy()
+        if not priority.empty:
+            priority = priority[priority["support_batch_id"].fillna("").astype(str).eq(str(support_batch_id))].copy()
+
+    if gate_filter != "all":
+        batch_state_map = {
+            "blocked": "blocked_by_open_cases",
+            "ready_for_rerun": "ready_for_targeted_rerun",
+            "no_rerun_required": "no_rerun_required",
+        }
+        daily_state_map = {
+            "blocked": "blocked_by_open_cases",
+            "ready_for_rerun": "candidate_targeted_rerun",
+            "no_rerun_required": "candidate_policy_lock",
+        }
+        if not batch.empty:
+            batch = batch[
+                batch["support_rerun_gate_state"].fillna("").astype(str).eq(batch_state_map[gate_filter])
+            ].copy()
+        if not daily.empty:
+            daily = daily[
+                daily["support_rerun_gate_state"].fillna("").astype(str).eq(daily_state_map[gate_filter])
+            ].copy()
+
+    if not priority.empty:
+        if daily.empty:
+            priority = priority.iloc[0:0].copy()
+        else:
+            priority = priority.merge(
+                daily[["support_batch_id", "settlement_date"]].drop_duplicates(),
+                on=["support_batch_id", "settlement_date"],
+                how="inner",
+            )
+        priority = priority.sort_values(
+            ["support_batch_id", "open_case_priority_rank", "settlement_date", "bmu_family_key"],
+            ascending=[True, True, True, True],
+        ).reset_index(drop=True)
+
+    return {
+        SUPPORT_RERUN_GATE_DAILY_TABLE: daily.reset_index(drop=True),
+        SUPPORT_RERUN_GATE_BATCH_TABLE: batch.reset_index(drop=True),
+        SUPPORT_OPEN_CASE_PRIORITY_FAMILY_TABLE: priority.reset_index(drop=True),
     }
