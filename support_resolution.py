@@ -19,6 +19,10 @@ SUPPORT_RESOLUTION_BATCH_TABLE = "fact_support_resolution_batch"
 SUPPORT_RERUN_GATE_DAILY_TABLE = "fact_support_rerun_gate_daily"
 SUPPORT_RERUN_GATE_BATCH_TABLE = "fact_support_rerun_gate_batch"
 SUPPORT_OPEN_CASE_PRIORITY_FAMILY_TABLE = "fact_support_open_case_priority_family_daily"
+SUPPORT_RERUN_CANDIDATE_DAILY_TABLE = "fact_support_rerun_candidate_daily"
+SUPPORT_RERUN_CANDIDATE_FAMILY_TABLE = "fact_support_rerun_candidate_family_daily"
+SUPPORT_RESOLUTION_PATTERN_SUMMARY_TABLE = "fact_support_resolution_pattern_summary"
+SUPPORT_RESOLUTION_PATTERN_MEMBER_TABLE = "fact_support_resolution_pattern_member_family_daily"
 VALID_RESOLUTION_STATES = (
     "open",
     "confirmed_publication_gap",
@@ -34,12 +38,28 @@ VALID_TRUTH_POLICY_ACTIONS = (
 )
 VALID_RESOLUTION_FILTERS = tuple(dict.fromkeys(("all", "open", "resolved", *VALID_RESOLUTION_STATES)))
 VALID_SUPPORT_GATE_FILTERS = ("all", "blocked", "ready_for_rerun", "no_rerun_required")
+VALID_SUPPORT_RERUN_CANDIDATE_FILTERS = ("all", "fix_source_and_rerun", "eligible_for_new_evidence_tier")
+VALID_SUPPORT_PATTERN_FILTERS = ("all", "open", "single_day", "multi_day")
 
 
 def _resolve_generated_at_utc(value: str | None = None) -> str:
     if value:
         return value
     return dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat()
+
+
+def _series_or_default(frame: pd.DataFrame, column: str, default: str = "") -> pd.Series:
+    if column not in frame.columns:
+        return pd.Series(default, index=frame.index, dtype="object")
+    return frame[column].fillna(default).astype(str)
+
+
+def _support_resolution_pattern_key(frame: pd.DataFrame) -> pd.Series:
+    family_key = _series_or_default(frame, "bmu_family_key", "unknown_family")
+    anomaly_state = _series_or_default(frame, "publication_anomaly_dominant_state", "unknown_state")
+    question_code = _series_or_default(frame, "support_question_code", "unknown_question")
+    mapping_status = _series_or_default(frame, "mapping_status", "unknown_mapping")
+    return family_key + "::" + anomaly_state + "::" + question_code + "::" + mapping_status
 
 
 def _resolution_columns() -> list[str]:
@@ -73,6 +93,23 @@ def _table_exists(db_path: str | Path, table_name: str) -> bool:
             (table_name,),
         ).fetchone()
     return row is not None
+
+
+def _delete_rows_for_support_batches(
+    db_path: str | Path,
+    table_name: str,
+    support_batch_ids: list[str],
+) -> None:
+    batch_ids = [str(value) for value in support_batch_ids if str(value)]
+    if not batch_ids or not _table_exists(db_path, table_name):
+        return
+    placeholders = ", ".join("?" for _ in batch_ids)
+    with closing(sqlite3.connect(db_path)) as connection:
+        connection.execute(
+            f'DELETE FROM "{table_name}" WHERE "support_batch_id" IN ({placeholders})',
+            batch_ids,
+        )
+        connection.commit()
 
 
 def _empty_resolution_frame() -> pd.DataFrame:
@@ -628,8 +665,16 @@ def build_fact_support_open_case_priority_family_daily(
     family["publication_anomaly_candidate_mwh_lower_bound"] = pd.to_numeric(
         family["publication_anomaly_candidate_mwh_lower_bound"], errors="coerce"
     ).fillna(0.0)
-    rank_source = pd.to_numeric(family.get("day_family_rank_by_publication_anomaly"), errors="coerce")
-    fallback_rank = pd.to_numeric(family.get("support_case_family_rank"), errors="coerce")
+    rank_source = (
+        pd.to_numeric(family["day_family_rank_by_publication_anomaly"], errors="coerce")
+        if "day_family_rank_by_publication_anomaly" in family.columns
+        else pd.Series(pd.NA, index=family.index, dtype="object")
+    )
+    fallback_rank = (
+        pd.to_numeric(family["support_case_family_rank"], errors="coerce")
+        if "support_case_family_rank" in family.columns
+        else pd.Series(pd.NA, index=family.index, dtype="object")
+    )
     family["family_publication_anomaly_priority_rank"] = rank_source.where(rank_source.notna(), fallback_rank)
     family["family_publication_anomaly_priority_rank"] = (
         pd.to_numeric(family["family_publication_anomaly_priority_rank"], errors="coerce").fillna(999999).astype("Int64")
@@ -693,6 +738,340 @@ def build_fact_support_open_case_priority_family_daily(
     return family[columns].reset_index(drop=True)
 
 
+def build_fact_support_resolution_pattern_summary(
+    fact_support_open_case_priority_family_daily: pd.DataFrame,
+) -> pd.DataFrame:
+    columns = [
+        "support_batch_id",
+        "support_resolution_pattern_key",
+        "support_generated_at_utc",
+        "support_status_mode",
+        "support_top_days",
+        "support_top_families_per_day",
+        "bmu_family_key",
+        "bmu_family_label",
+        "publication_anomaly_dominant_state",
+        "support_question_code",
+        "support_recommended_action",
+        "mapping_status",
+        "cluster_key",
+        "cluster_label",
+        "parent_region",
+        "open_case_count",
+        "open_day_count",
+        "first_settlement_date",
+        "last_settlement_date",
+        "pattern_publication_anomaly_mwh",
+        "pattern_max_case_mwh",
+        "first_open_case_priority_rank",
+        "support_rerun_gate_state_batch",
+        "support_rerun_next_action_batch",
+        "pattern_review_state",
+    ]
+    if fact_support_open_case_priority_family_daily.empty:
+        return pd.DataFrame(columns=columns)
+
+    open_cases = fact_support_open_case_priority_family_daily.copy()
+    open_cases["support_resolution_pattern_key"] = _support_resolution_pattern_key(open_cases)
+    open_cases["publication_anomaly_candidate_mwh_lower_bound"] = pd.to_numeric(
+        open_cases["publication_anomaly_candidate_mwh_lower_bound"], errors="coerce"
+    ).fillna(0.0)
+    open_cases["open_case_priority_rank"] = pd.to_numeric(
+        open_cases["open_case_priority_rank"], errors="coerce"
+    ).fillna(999999)
+
+    summary = open_cases.groupby(
+        ["support_batch_id", "support_resolution_pattern_key"],
+        as_index=False,
+        dropna=False,
+    ).agg(
+        support_generated_at_utc=("support_generated_at_utc", "first"),
+        support_status_mode=("support_status_mode", "first"),
+        support_top_days=("support_top_days", "first"),
+        support_top_families_per_day=("support_top_families_per_day", "first"),
+        bmu_family_key=("bmu_family_key", "first"),
+        bmu_family_label=("bmu_family_label", "first"),
+        publication_anomaly_dominant_state=("publication_anomaly_dominant_state", "first"),
+        support_question_code=("support_question_code", "first"),
+        support_recommended_action=("support_recommended_action", "first"),
+        mapping_status=("mapping_status", "first"),
+        cluster_key=("cluster_key", "first"),
+        cluster_label=("cluster_label", "first"),
+        parent_region=("parent_region", "first"),
+        open_case_count=("support_case_family_key", "nunique"),
+        open_day_count=("settlement_date", "nunique"),
+        first_settlement_date=("settlement_date", "min"),
+        last_settlement_date=("settlement_date", "max"),
+        pattern_publication_anomaly_mwh=("publication_anomaly_candidate_mwh_lower_bound", "sum"),
+        pattern_max_case_mwh=("publication_anomaly_candidate_mwh_lower_bound", "max"),
+        first_open_case_priority_rank=("open_case_priority_rank", "min"),
+        support_rerun_gate_state_batch=("support_rerun_gate_state_batch", "first"),
+        support_rerun_next_action_batch=("support_rerun_next_action_batch", "first"),
+    )
+    summary = _coerce_int64_columns(summary, ["open_case_count", "open_day_count"])
+    summary["first_open_case_priority_rank"] = pd.to_numeric(
+        summary["first_open_case_priority_rank"], errors="coerce"
+    ).fillna(999999).astype("Int64")
+    summary["pattern_review_state"] = pd.Series("single_day", index=summary.index, dtype="object")
+    summary.loc[summary["open_day_count"].gt(1), "pattern_review_state"] = "multi_day"
+    return summary[columns].sort_values(
+        [
+            "support_batch_id",
+            "first_open_case_priority_rank",
+            "pattern_publication_anomaly_mwh",
+            "bmu_family_key",
+        ],
+        ascending=[True, True, False, True],
+    ).reset_index(drop=True)
+
+
+def build_fact_support_resolution_pattern_member_family_daily(
+    fact_support_open_case_priority_family_daily: pd.DataFrame,
+    fact_support_resolution_pattern_summary: pd.DataFrame,
+) -> pd.DataFrame:
+    columns = [
+        "support_batch_id",
+        "support_resolution_pattern_key",
+        "support_generated_at_utc",
+        "support_status_mode",
+        "support_top_days",
+        "support_top_families_per_day",
+        "support_case_day_rank",
+        "support_case_family_rank",
+        "support_case_family_key",
+        "settlement_date",
+        "bmu_family_key",
+        "bmu_family_label",
+        "publication_anomaly_dominant_state",
+        "support_question_code",
+        "support_recommended_action",
+        "mapping_status",
+        "cluster_key",
+        "cluster_label",
+        "parent_region",
+        "publication_anomaly_candidate_mwh_lower_bound",
+        "open_case_priority_rank",
+        "support_rerun_gate_state_daily",
+        "support_rerun_next_action_daily",
+        "support_rerun_gate_state_batch",
+        "support_rerun_next_action_batch",
+        "pattern_review_state",
+    ]
+    if fact_support_open_case_priority_family_daily.empty:
+        return pd.DataFrame(columns=columns)
+
+    members = fact_support_open_case_priority_family_daily.copy()
+    members["support_resolution_pattern_key"] = _support_resolution_pattern_key(members)
+    if fact_support_resolution_pattern_summary.empty:
+        members["pattern_review_state"] = pd.NA
+    else:
+        members = members.merge(
+            fact_support_resolution_pattern_summary[
+                ["support_batch_id", "support_resolution_pattern_key", "pattern_review_state"]
+            ],
+            on=["support_batch_id", "support_resolution_pattern_key"],
+            how="left",
+        )
+    return members[columns].sort_values(
+        [
+            "support_batch_id",
+            "open_case_priority_rank",
+            "settlement_date",
+            "bmu_family_key",
+        ],
+        ascending=[True, True, True, True],
+    ).reset_index(drop=True)
+
+
+def build_fact_support_rerun_candidate_daily(
+    fact_support_rerun_gate_daily: pd.DataFrame,
+) -> pd.DataFrame:
+    columns = [
+        "support_batch_id",
+        "support_generated_at_utc",
+        "support_status_mode",
+        "support_top_days",
+        "support_top_families_per_day",
+        "support_case_day_rank",
+        "settlement_date",
+        "qa_reconciliation_status",
+        "recoverability_audit_state",
+        "publication_anomaly_dominant_state",
+        "selected_family_count",
+        "resolved_family_count",
+        "eligible_for_new_evidence_tier_count",
+        "fix_source_and_rerun_count",
+        "close_no_change_count",
+        "keep_out_of_precision_count",
+        "support_rerun_gate_state",
+        "support_rerun_next_action",
+        "rerun_candidate_action_count",
+        "rerun_candidate_action_mix",
+    ]
+    if fact_support_rerun_gate_daily.empty:
+        return pd.DataFrame(columns=columns)
+
+    daily = fact_support_rerun_gate_daily.copy()
+    daily = daily[
+        daily["support_rerun_gate_state"].fillna("").astype(str).eq("candidate_targeted_rerun")
+    ].copy()
+    if daily.empty:
+        return pd.DataFrame(columns=columns)
+
+    daily = _coerce_int64_columns(
+        daily,
+        [
+            "selected_family_count",
+            "resolved_family_count",
+            "eligible_for_new_evidence_tier_count",
+            "fix_source_and_rerun_count",
+            "close_no_change_count",
+            "keep_out_of_precision_count",
+        ],
+    )
+    daily["rerun_candidate_action_count"] = (
+        daily["eligible_for_new_evidence_tier_count"] + daily["fix_source_and_rerun_count"]
+    ).astype("Int64")
+    mix = pd.Series("none", index=daily.index, dtype="object")
+    fix_mask = daily["fix_source_and_rerun_count"].gt(0)
+    eligible_mask = daily["eligible_for_new_evidence_tier_count"].gt(0)
+    mix.loc[fix_mask & ~eligible_mask] = "fix_source_and_rerun_only"
+    mix.loc[~fix_mask & eligible_mask] = "eligible_for_new_evidence_tier_only"
+    mix.loc[fix_mask & eligible_mask] = "mixed_fix_and_evidence_tier"
+    daily["rerun_candidate_action_mix"] = mix
+    return daily[columns].sort_values(
+        ["support_batch_id", "support_case_day_rank", "settlement_date"],
+        ascending=[True, True, True],
+    ).reset_index(drop=True)
+
+
+def build_fact_support_rerun_candidate_family_daily(
+    fact_support_case_family_daily: pd.DataFrame,
+    fact_support_case_resolution: pd.DataFrame,
+    fact_support_rerun_gate_daily: pd.DataFrame,
+    fact_support_rerun_gate_batch: pd.DataFrame,
+) -> pd.DataFrame:
+    columns = [
+        "support_batch_id",
+        "support_generated_at_utc",
+        "support_status_mode",
+        "support_top_days",
+        "support_top_families_per_day",
+        "support_case_day_rank",
+        "support_case_family_rank",
+        "support_case_family_key",
+        "settlement_date",
+        "bmu_family_key",
+        "bmu_family_label",
+        "cluster_key",
+        "cluster_label",
+        "parent_region",
+        "mapping_status",
+        "publication_anomaly_candidate_mwh_lower_bound",
+        "publication_anomaly_dominant_state",
+        "support_question_code",
+        "support_recommended_action",
+        "resolution_state",
+        "truth_policy_action",
+        "rerun_candidate_action",
+        "support_rerun_gate_state_daily",
+        "support_rerun_next_action_daily",
+        "support_rerun_gate_state_batch",
+        "support_rerun_next_action_batch",
+        "rerun_candidate_family_rank",
+    ]
+    if (
+        fact_support_case_family_daily.empty
+        or fact_support_case_resolution.empty
+        or fact_support_rerun_gate_daily.empty
+    ):
+        return pd.DataFrame(columns=columns)
+
+    family = fact_support_case_family_daily.copy()
+    resolution = fact_support_case_resolution.copy()
+    family = family.merge(
+        resolution[
+            [
+                "support_batch_id",
+                "settlement_date",
+                "bmu_family_key",
+                "resolution_state",
+                "truth_policy_action",
+            ]
+        ],
+        on=["support_batch_id", "settlement_date", "bmu_family_key"],
+        how="inner",
+    )
+    family = family[
+        family["truth_policy_action"]
+        .fillna("")
+        .astype(str)
+        .isin({"fix_source_and_rerun", "eligible_for_new_evidence_tier"})
+    ].copy()
+    if family.empty:
+        return pd.DataFrame(columns=columns)
+
+    daily_gate = fact_support_rerun_gate_daily[
+        fact_support_rerun_gate_daily["support_rerun_gate_state"]
+        .fillna("")
+        .astype(str)
+        .eq("candidate_targeted_rerun")
+    ][
+        [
+            "support_batch_id",
+            "settlement_date",
+            "support_rerun_gate_state",
+            "support_rerun_next_action",
+        ]
+    ].rename(
+        columns={
+            "support_rerun_gate_state": "support_rerun_gate_state_daily",
+            "support_rerun_next_action": "support_rerun_next_action_daily",
+        }
+    )
+    family = family.merge(daily_gate, on=["support_batch_id", "settlement_date"], how="inner")
+    if family.empty:
+        return pd.DataFrame(columns=columns)
+
+    if not fact_support_rerun_gate_batch.empty:
+        batch_gate = fact_support_rerun_gate_batch[
+            ["support_batch_id", "support_rerun_gate_state", "support_rerun_next_action"]
+        ].rename(
+            columns={
+                "support_rerun_gate_state": "support_rerun_gate_state_batch",
+                "support_rerun_next_action": "support_rerun_next_action_batch",
+            }
+        )
+        family = family.merge(batch_gate, on="support_batch_id", how="left")
+    else:
+        family["support_rerun_gate_state_batch"] = pd.NA
+        family["support_rerun_next_action_batch"] = pd.NA
+
+    family["publication_anomaly_candidate_mwh_lower_bound"] = pd.to_numeric(
+        family["publication_anomaly_candidate_mwh_lower_bound"], errors="coerce"
+    ).fillna(0.0)
+    family["rerun_candidate_action"] = family["truth_policy_action"].map(
+        {
+            "fix_source_and_rerun": "rerun_after_source_fix",
+            "eligible_for_new_evidence_tier": "review_new_evidence_tier_then_rerun",
+        }
+    ).fillna("rerun_candidate_review")
+    family = family.sort_values(
+        [
+            "support_batch_id",
+            "support_case_day_rank",
+            "support_case_family_rank",
+            "publication_anomaly_candidate_mwh_lower_bound",
+            "bmu_family_key",
+        ],
+        ascending=[True, True, True, False, True],
+    ).reset_index(drop=True)
+    family["rerun_candidate_family_rank"] = family.groupby(
+        ["support_batch_id", "settlement_date"]
+    ).cumcount().add(1).astype("Int64")
+    return family[columns].reset_index(drop=True)
+
+
 def materialize_truth_store_support_resolution(
     db_path: str | Path,
     support_batch_id: str | None = None,
@@ -735,6 +1114,8 @@ def materialize_truth_store_support_resolution(
             ].copy()
     else:
         support_daily = _derive_support_case_daily_from_family(support_family)
+    if support_daily.empty and fact_support_case_family_daily is not None:
+        support_daily = _derive_support_case_daily_from_family(support_family)
     support_resolution_daily = build_fact_support_resolution_daily(
         fact_support_case_daily=support_daily,
         fact_support_case_family_daily=support_family,
@@ -752,6 +1133,42 @@ def materialize_truth_store_support_resolution(
         fact_support_rerun_gate_daily=support_rerun_gate_daily,
         fact_support_rerun_gate_batch=support_rerun_gate_batch,
     )
+    support_pattern_summary = build_fact_support_resolution_pattern_summary(support_open_case_priority)
+    support_pattern_members = build_fact_support_resolution_pattern_member_family_daily(
+        fact_support_open_case_priority_family_daily=support_open_case_priority,
+        fact_support_resolution_pattern_summary=support_pattern_summary,
+    )
+    support_rerun_candidate_daily = build_fact_support_rerun_candidate_daily(support_rerun_gate_daily)
+    support_rerun_candidate_family = build_fact_support_rerun_candidate_family_daily(
+        fact_support_case_family_daily=support_family,
+        fact_support_case_resolution=resolution,
+        fact_support_rerun_gate_daily=support_rerun_gate_daily,
+        fact_support_rerun_gate_batch=support_rerun_gate_batch,
+    )
+    batch_ids_to_refresh = (
+        [str(support_batch_id)]
+        if support_batch_id
+        else sorted(
+            {
+                str(value)
+                for value in support_family.get("support_batch_id", pd.Series(dtype="object")).dropna().astype(str)
+                if str(value)
+            }
+        )
+    )
+    for table_name in [
+        SUPPORT_CASE_RESOLUTION_TABLE,
+        SUPPORT_RESOLUTION_DAILY_TABLE,
+        SUPPORT_RESOLUTION_BATCH_TABLE,
+        SUPPORT_RERUN_GATE_DAILY_TABLE,
+        SUPPORT_RERUN_GATE_BATCH_TABLE,
+        SUPPORT_OPEN_CASE_PRIORITY_FAMILY_TABLE,
+        SUPPORT_RESOLUTION_PATTERN_SUMMARY_TABLE,
+        SUPPORT_RESOLUTION_PATTERN_MEMBER_TABLE,
+        SUPPORT_RERUN_CANDIDATE_DAILY_TABLE,
+        SUPPORT_RERUN_CANDIDATE_FAMILY_TABLE,
+    ]:
+        _delete_rows_for_support_batches(target_path, table_name, batch_ids_to_refresh)
     upsert_frame_to_sqlite(
         db_path=target_path,
         table_name=SUPPORT_CASE_RESOLUTION_TABLE,
@@ -788,6 +1205,30 @@ def materialize_truth_store_support_resolution(
         frame=support_open_case_priority,
         primary_keys=["support_batch_id", "settlement_date", "bmu_family_key"],
     )
+    upsert_frame_to_sqlite(
+        db_path=target_path,
+        table_name=SUPPORT_RESOLUTION_PATTERN_SUMMARY_TABLE,
+        frame=support_pattern_summary,
+        primary_keys=["support_batch_id", "support_resolution_pattern_key"],
+    )
+    upsert_frame_to_sqlite(
+        db_path=target_path,
+        table_name=SUPPORT_RESOLUTION_PATTERN_MEMBER_TABLE,
+        frame=support_pattern_members,
+        primary_keys=["support_batch_id", "settlement_date", "bmu_family_key"],
+    )
+    upsert_frame_to_sqlite(
+        db_path=target_path,
+        table_name=SUPPORT_RERUN_CANDIDATE_DAILY_TABLE,
+        frame=support_rerun_candidate_daily,
+        primary_keys=["support_batch_id", "settlement_date"],
+    )
+    upsert_frame_to_sqlite(
+        db_path=target_path,
+        table_name=SUPPORT_RERUN_CANDIDATE_FAMILY_TABLE,
+        frame=support_rerun_candidate_family,
+        primary_keys=["support_batch_id", "settlement_date", "bmu_family_key"],
+    )
     return {
         SUPPORT_CASE_RESOLUTION_TABLE: resolution,
         SUPPORT_RESOLUTION_DAILY_TABLE: support_resolution_daily,
@@ -795,6 +1236,10 @@ def materialize_truth_store_support_resolution(
         SUPPORT_RERUN_GATE_DAILY_TABLE: support_rerun_gate_daily,
         SUPPORT_RERUN_GATE_BATCH_TABLE: support_rerun_gate_batch,
         SUPPORT_OPEN_CASE_PRIORITY_FAMILY_TABLE: support_open_case_priority,
+        SUPPORT_RESOLUTION_PATTERN_SUMMARY_TABLE: support_pattern_summary,
+        SUPPORT_RESOLUTION_PATTERN_MEMBER_TABLE: support_pattern_members,
+        SUPPORT_RERUN_CANDIDATE_DAILY_TABLE: support_rerun_candidate_daily,
+        SUPPORT_RERUN_CANDIDATE_FAMILY_TABLE: support_rerun_candidate_family,
     }
 
 
@@ -870,6 +1315,85 @@ def annotate_support_case_resolution(
     return row[_resolution_columns()].reset_index(drop=True)
 
 
+def annotate_support_resolution_pattern(
+    db_path: str | Path,
+    support_batch_id: str,
+    resolution_pattern_key: str,
+    resolution_state: str,
+    truth_policy_action: str,
+    resolution_note: str | None = None,
+    source_reference: str | None = None,
+    generated_at_utc: str | None = None,
+) -> pd.DataFrame:
+    if resolution_state not in VALID_RESOLUTION_STATES:
+        raise ValueError(f"unsupported resolution state '{resolution_state}'")
+    if truth_policy_action not in VALID_TRUTH_POLICY_ACTIONS:
+        raise ValueError(f"unsupported truth policy action '{truth_policy_action}'")
+
+    target_path = Path(db_path)
+    if not target_path.exists():
+        raise FileNotFoundError(f"truth store does not exist: {target_path}")
+
+    updated_at = _resolve_generated_at_utc(generated_at_utc)
+    materialized = materialize_truth_store_support_resolution(
+        db_path=target_path,
+        support_batch_id=support_batch_id,
+        generated_at_utc=updated_at,
+    )
+    pattern_members = materialized[SUPPORT_RESOLUTION_PATTERN_MEMBER_TABLE]
+    selected_members = pattern_members[
+        pattern_members["support_batch_id"].fillna("").astype(str).eq(str(support_batch_id))
+        & pattern_members["support_resolution_pattern_key"].fillna("").astype(str).eq(str(resolution_pattern_key))
+    ].copy()
+    if selected_members.empty:
+        raise ValueError(
+            "support-resolution pattern row not found; materialize the support-resolution patterns first"
+        )
+
+    support_family = _load_table(target_path, SUPPORT_CASE_FAMILY_TABLE)
+    support_family = support_family[
+        support_family["support_batch_id"].fillna("").astype(str).eq(str(support_batch_id))
+    ].copy()
+    support_family = support_family.merge(
+        selected_members[["support_batch_id", "settlement_date", "bmu_family_key"]].drop_duplicates(),
+        on=["support_batch_id", "settlement_date", "bmu_family_key"],
+        how="inner",
+    )
+    if support_family.empty:
+        raise ValueError("support-case family rows for the selected pattern are missing")
+
+    existing = _load_table(target_path, SUPPORT_CASE_RESOLUTION_TABLE)
+    existing = existing[existing["support_batch_id"].fillna("").astype(str).eq(str(support_batch_id))].copy()
+    rows = build_fact_support_case_resolution(
+        fact_support_case_family_daily=support_family,
+        existing_resolution=existing,
+        generated_at_utc=updated_at,
+    )
+    rows["resolution_state"] = resolution_state
+    rows["truth_policy_action"] = truth_policy_action
+    if resolution_note is not None:
+        rows["resolution_note"] = resolution_note
+    if source_reference is not None:
+        rows["source_reference"] = source_reference
+    rows["resolution_updated_at_utc"] = updated_at
+
+    upsert_frame_to_sqlite(
+        db_path=target_path,
+        table_name=SUPPORT_CASE_RESOLUTION_TABLE,
+        frame=rows[_resolution_columns()],
+        primary_keys=["support_batch_id", "settlement_date", "bmu_family_key"],
+    )
+    materialize_truth_store_support_resolution(
+        db_path=target_path,
+        support_batch_id=support_batch_id,
+        generated_at_utc=updated_at,
+    )
+    return rows[_resolution_columns()].sort_values(
+        ["settlement_date", "support_case_family_rank", "bmu_family_key"],
+        ascending=[True, True, True],
+    ).reset_index(drop=True)
+
+
 def read_support_case_resolution(
     db_path: str | Path,
     support_batch_id: str | None = None,
@@ -909,6 +1433,77 @@ def read_support_resolution_review(
     return {
         SUPPORT_RESOLUTION_DAILY_TABLE: daily.reset_index(drop=True),
         SUPPORT_RESOLUTION_BATCH_TABLE: batch.reset_index(drop=True),
+    }
+
+
+def read_support_resolution_pattern_review(
+    db_path: str | Path,
+    support_batch_id: str | None = None,
+    pattern_filter: str = "all",
+    resolution_pattern_key: str | None = None,
+) -> Dict[str, pd.DataFrame]:
+    if pattern_filter not in VALID_SUPPORT_PATTERN_FILTERS:
+        raise ValueError(f"unsupported support pattern filter '{pattern_filter}'")
+
+    summary = (
+        _load_table(db_path, SUPPORT_RESOLUTION_PATTERN_SUMMARY_TABLE)
+        if _table_exists(db_path, SUPPORT_RESOLUTION_PATTERN_SUMMARY_TABLE)
+        else pd.DataFrame()
+    )
+    members = (
+        _load_table(db_path, SUPPORT_RESOLUTION_PATTERN_MEMBER_TABLE)
+        if _table_exists(db_path, SUPPORT_RESOLUTION_PATTERN_MEMBER_TABLE)
+        else pd.DataFrame()
+    )
+
+    if support_batch_id:
+        if not summary.empty:
+            summary = summary[summary["support_batch_id"].fillna("").astype(str).eq(str(support_batch_id))].copy()
+        if not members.empty:
+            members = members[members["support_batch_id"].fillna("").astype(str).eq(str(support_batch_id))].copy()
+    if resolution_pattern_key:
+        if not summary.empty:
+            summary = summary[
+                summary["support_resolution_pattern_key"].fillna("").astype(str).eq(str(resolution_pattern_key))
+            ].copy()
+        if not members.empty:
+            members = members[
+                members["support_resolution_pattern_key"].fillna("").astype(str).eq(str(resolution_pattern_key))
+            ].copy()
+    if pattern_filter == "single_day" and not summary.empty:
+        summary = summary[summary["pattern_review_state"].fillna("").astype(str).eq("single_day")].copy()
+    elif pattern_filter == "multi_day" and not summary.empty:
+        summary = summary[summary["pattern_review_state"].fillna("").astype(str).eq("multi_day")].copy()
+
+    if not members.empty:
+        if summary.empty:
+            members = members.iloc[0:0].copy()
+        else:
+            members = members.merge(
+                summary[["support_batch_id", "support_resolution_pattern_key"]].drop_duplicates(),
+                on=["support_batch_id", "support_resolution_pattern_key"],
+                how="inner",
+            )
+
+    if not summary.empty:
+        summary = summary.sort_values(
+            [
+                "support_batch_id",
+                "first_open_case_priority_rank",
+                "pattern_publication_anomaly_mwh",
+                "bmu_family_key",
+            ],
+            ascending=[True, True, False, True],
+        ).reset_index(drop=True)
+    if not members.empty:
+        members = members.sort_values(
+            ["support_batch_id", "open_case_priority_rank", "settlement_date", "bmu_family_key"],
+            ascending=[True, True, True, True],
+        ).reset_index(drop=True)
+
+    return {
+        SUPPORT_RESOLUTION_PATTERN_SUMMARY_TABLE: summary,
+        SUPPORT_RESOLUTION_PATTERN_MEMBER_TABLE: members,
     }
 
 
@@ -982,4 +1577,61 @@ def read_support_rerun_gate_review(
         SUPPORT_RERUN_GATE_DAILY_TABLE: daily.reset_index(drop=True),
         SUPPORT_RERUN_GATE_BATCH_TABLE: batch.reset_index(drop=True),
         SUPPORT_OPEN_CASE_PRIORITY_FAMILY_TABLE: priority.reset_index(drop=True),
+    }
+
+
+def read_support_rerun_candidate_review(
+    db_path: str | Path,
+    support_batch_id: str | None = None,
+    candidate_filter: str = "all",
+) -> Dict[str, pd.DataFrame]:
+    if candidate_filter not in VALID_SUPPORT_RERUN_CANDIDATE_FILTERS:
+        raise ValueError(f"unsupported support rerun candidate filter '{candidate_filter}'")
+
+    daily = (
+        _load_table(db_path, SUPPORT_RERUN_CANDIDATE_DAILY_TABLE)
+        if _table_exists(db_path, SUPPORT_RERUN_CANDIDATE_DAILY_TABLE)
+        else pd.DataFrame()
+    )
+    family = (
+        _load_table(db_path, SUPPORT_RERUN_CANDIDATE_FAMILY_TABLE)
+        if _table_exists(db_path, SUPPORT_RERUN_CANDIDATE_FAMILY_TABLE)
+        else pd.DataFrame()
+    )
+
+    if support_batch_id:
+        if not daily.empty:
+            daily = daily[daily["support_batch_id"].fillna("").astype(str).eq(str(support_batch_id))].copy()
+        if not family.empty:
+            family = family[family["support_batch_id"].fillna("").astype(str).eq(str(support_batch_id))].copy()
+
+    if candidate_filter != "all":
+        if not family.empty:
+            family = family[
+                family["truth_policy_action"].fillna("").astype(str).eq(candidate_filter)
+            ].copy()
+        if not daily.empty:
+            if family.empty:
+                daily = daily.iloc[0:0].copy()
+            else:
+                daily = daily.merge(
+                    family[["support_batch_id", "settlement_date"]].drop_duplicates(),
+                    on=["support_batch_id", "settlement_date"],
+                    how="inner",
+                )
+
+    if not daily.empty:
+        daily = daily.sort_values(
+            ["support_batch_id", "support_case_day_rank", "settlement_date"],
+            ascending=[True, True, True],
+        ).reset_index(drop=True)
+    if not family.empty:
+        family = family.sort_values(
+            ["support_batch_id", "support_case_day_rank", "rerun_candidate_family_rank", "bmu_family_key"],
+            ascending=[True, True, True, True],
+        ).reset_index(drop=True)
+
+    return {
+        SUPPORT_RERUN_CANDIDATE_DAILY_TABLE: daily,
+        SUPPORT_RERUN_CANDIDATE_FAMILY_TABLE: family,
     }

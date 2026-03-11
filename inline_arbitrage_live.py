@@ -47,17 +47,26 @@ from physical_constraints import assumption_frame, compute_netbacks
 from support_resolution import (
     SUPPORT_CASE_RESOLUTION_TABLE,
     SUPPORT_OPEN_CASE_PRIORITY_FAMILY_TABLE,
+    SUPPORT_RERUN_CANDIDATE_DAILY_TABLE,
+    SUPPORT_RERUN_CANDIDATE_FAMILY_TABLE,
     SUPPORT_RERUN_GATE_BATCH_TABLE,
     SUPPORT_RERUN_GATE_DAILY_TABLE,
+    SUPPORT_RESOLUTION_PATTERN_MEMBER_TABLE,
+    SUPPORT_RESOLUTION_PATTERN_SUMMARY_TABLE,
     SUPPORT_RESOLUTION_BATCH_TABLE,
     SUPPORT_RESOLUTION_DAILY_TABLE,
     VALID_RESOLUTION_FILTERS,
     VALID_RESOLUTION_STATES,
     VALID_SUPPORT_GATE_FILTERS,
+    VALID_SUPPORT_PATTERN_FILTERS,
+    VALID_SUPPORT_RERUN_CANDIDATE_FILTERS,
     VALID_TRUTH_POLICY_ACTIONS,
+    annotate_support_resolution_pattern,
     annotate_support_case_resolution,
     materialize_truth_store_support_resolution,
     read_support_case_resolution,
+    read_support_resolution_pattern_review,
+    read_support_rerun_candidate_review,
     read_support_rerun_gate_review,
     read_support_resolution_review,
 )
@@ -724,6 +733,59 @@ def main() -> int:
         help="Maximum number of open-case priority rows to print",
     )
     parser.add_argument(
+        "--materialize-truth-store-rerun-candidates",
+        action="store_true",
+        help="Build or refresh the support rerun-candidate tables from the SQLite truth store, then exit",
+    )
+    parser.add_argument(
+        "--show-truth-store-rerun-candidates",
+        action="store_true",
+        help="Print the support rerun-candidate tables from the SQLite truth store, then exit",
+    )
+    parser.add_argument(
+        "--support-rerun-candidate-filter",
+        default="all",
+        choices=VALID_SUPPORT_RERUN_CANDIDATE_FILTERS,
+        help="Filter for support rerun candidates: all, fix_source_and_rerun, or eligible_for_new_evidence_tier",
+    )
+    parser.add_argument(
+        "--support-rerun-candidate-limit",
+        type=int,
+        default=20,
+        help="Maximum number of rerun-candidate family rows to print",
+    )
+    parser.add_argument(
+        "--materialize-truth-store-support-resolution-patterns",
+        action="store_true",
+        help="Build or refresh repeated open-case resolution-pattern tables from the SQLite truth store, then exit",
+    )
+    parser.add_argument(
+        "--show-truth-store-support-resolution-patterns",
+        action="store_true",
+        help="Print repeated open-case resolution-pattern tables from the SQLite truth store, then exit",
+    )
+    parser.add_argument(
+        "--apply-truth-store-support-resolution-pattern",
+        action="store_true",
+        help="Apply one resolution annotation to all currently open family-days in a selected support-resolution pattern, then exit",
+    )
+    parser.add_argument(
+        "--resolution-pattern-key",
+        help="Support-resolution pattern key for review or bulk annotation",
+    )
+    parser.add_argument(
+        "--support-pattern-filter",
+        default="all",
+        choices=VALID_SUPPORT_PATTERN_FILTERS,
+        help="Filter for support-resolution patterns: all, open, single_day, or multi_day",
+    )
+    parser.add_argument(
+        "--support-pattern-limit",
+        type=int,
+        default=20,
+        help="Maximum number of support-resolution pattern rows to print",
+    )
+    parser.add_argument(
         "--materialize-weather-history",
         action="store_true",
         help="Fetch and save anchor, cluster, and parent-region weather history, then exit",
@@ -1192,11 +1254,22 @@ def main() -> int:
         args.materialize_truth_store_support_resolution
         or args.show_truth_store_support_resolution
         or args.annotate_truth_store_support_resolution
+        or args.materialize_truth_store_support_resolution_patterns
+        or args.show_truth_store_support_resolution_patterns
+        or args.apply_truth_store_support_resolution_pattern
+        or args.materialize_truth_store_support_gate
+        or args.show_truth_store_support_gate
+        or args.materialize_truth_store_rerun_candidates
+        or args.show_truth_store_rerun_candidates
     ):
         if not args.truth_store_db_path:
             raise SystemExit(
-                "--materialize-truth-store-support-resolution, --show-truth-store-support-resolution, and "
-                "--annotate-truth-store-support-resolution require --truth-store-db-path"
+                "--materialize-truth-store-support-resolution, --show-truth-store-support-resolution, "
+                "--annotate-truth-store-support-resolution, --materialize-truth-store-support-resolution-patterns, "
+                "--show-truth-store-support-resolution-patterns, --apply-truth-store-support-resolution-pattern, "
+                "--materialize-truth-store-support-gate, and --show-truth-store-support-gate, "
+                "--materialize-truth-store-rerun-candidates, and "
+                "--show-truth-store-rerun-candidates require --truth-store-db-path"
             )
         try:
             if args.annotate_truth_store_support_resolution:
@@ -1229,10 +1302,46 @@ def main() -> int:
                 print("Annotated Support Case Resolution")
                 print(annotated.to_string(index=False))
                 return 0
+            if args.apply_truth_store_support_resolution_pattern:
+                missing = [
+                    flag
+                    for flag, value in [
+                        ("--resolution-batch-id", args.resolution_batch_id),
+                        ("--resolution-pattern-key", args.resolution_pattern_key),
+                        ("--resolution-state", args.resolution_state),
+                        ("--resolution-truth-policy-action", args.resolution_truth_policy_action),
+                    ]
+                    if not value
+                ]
+                if missing:
+                    raise SystemExit(
+                        "--apply-truth-store-support-resolution-pattern requires "
+                        + ", ".join(missing)
+                    )
+                annotated = annotate_support_resolution_pattern(
+                    db_path=args.truth_store_db_path,
+                    support_batch_id=args.resolution_batch_id,
+                    resolution_pattern_key=args.resolution_pattern_key,
+                    resolution_state=args.resolution_state,
+                    truth_policy_action=args.resolution_truth_policy_action,
+                    resolution_note=args.resolution_note,
+                    source_reference=args.resolution_source_reference,
+                )
+                print("Annotated Support Resolution Pattern")
+                print(annotated.to_string(index=False))
+                return 0
 
             resolution_frame = pd.DataFrame()
             review_frames = {}
-            if args.materialize_truth_store_support_resolution:
+            pattern_frames = {}
+            gate_frames = {}
+            candidate_frames = {}
+            if (
+                args.materialize_truth_store_support_resolution
+                or args.materialize_truth_store_support_resolution_patterns
+                or args.materialize_truth_store_support_gate
+                or args.materialize_truth_store_rerun_candidates
+            ):
                 materialized = materialize_truth_store_support_resolution(
                     db_path=args.truth_store_db_path,
                     support_batch_id=args.resolution_batch_id,
@@ -1242,26 +1351,67 @@ def main() -> int:
                     SUPPORT_RESOLUTION_DAILY_TABLE: materialized[SUPPORT_RESOLUTION_DAILY_TABLE],
                     SUPPORT_RESOLUTION_BATCH_TABLE: materialized[SUPPORT_RESOLUTION_BATCH_TABLE],
                 }
+                pattern_frames = {
+                    SUPPORT_RESOLUTION_PATTERN_SUMMARY_TABLE: materialized[SUPPORT_RESOLUTION_PATTERN_SUMMARY_TABLE],
+                    SUPPORT_RESOLUTION_PATTERN_MEMBER_TABLE: materialized[SUPPORT_RESOLUTION_PATTERN_MEMBER_TABLE],
+                }
+                gate_frames = {
+                    SUPPORT_RERUN_GATE_DAILY_TABLE: materialized[SUPPORT_RERUN_GATE_DAILY_TABLE],
+                    SUPPORT_RERUN_GATE_BATCH_TABLE: materialized[SUPPORT_RERUN_GATE_BATCH_TABLE],
+                    SUPPORT_OPEN_CASE_PRIORITY_FAMILY_TABLE: materialized[SUPPORT_OPEN_CASE_PRIORITY_FAMILY_TABLE],
+                }
+                candidate_frames = {
+                    SUPPORT_RERUN_CANDIDATE_DAILY_TABLE: materialized[SUPPORT_RERUN_CANDIDATE_DAILY_TABLE],
+                    SUPPORT_RERUN_CANDIDATE_FAMILY_TABLE: materialized[SUPPORT_RERUN_CANDIDATE_FAMILY_TABLE],
+                }
                 batch_text = f" batch={args.resolution_batch_id}" if args.resolution_batch_id else ""
-                print(
-                    f"[store=sqlite] Materialized support-case resolution table in {args.truth_store_db_path}{batch_text}"
-                )
-                print(f"{SUPPORT_CASE_RESOLUTION_TABLE}: rows={len(resolution_frame)}")
-                print(f"{SUPPORT_RESOLUTION_DAILY_TABLE}: rows={len(review_frames[SUPPORT_RESOLUTION_DAILY_TABLE])}")
-                print(f"{SUPPORT_RESOLUTION_BATCH_TABLE}: rows={len(review_frames[SUPPORT_RESOLUTION_BATCH_TABLE])}")
+                if args.materialize_truth_store_support_resolution:
+                    print(
+                        f"[store=sqlite] Materialized support-case resolution table in {args.truth_store_db_path}{batch_text}"
+                    )
+                    print(f"{SUPPORT_CASE_RESOLUTION_TABLE}: rows={len(resolution_frame)}")
+                    print(f"{SUPPORT_RESOLUTION_DAILY_TABLE}: rows={len(review_frames[SUPPORT_RESOLUTION_DAILY_TABLE])}")
+                    print(f"{SUPPORT_RESOLUTION_BATCH_TABLE}: rows={len(review_frames[SUPPORT_RESOLUTION_BATCH_TABLE])}")
+                if args.materialize_truth_store_support_resolution_patterns:
+                    print(
+                        f"[store=sqlite] Materialized support-resolution pattern tables in {args.truth_store_db_path}{batch_text}"
+                    )
+                    print(
+                        f"{SUPPORT_RESOLUTION_PATTERN_SUMMARY_TABLE}: "
+                        f"rows={len(pattern_frames[SUPPORT_RESOLUTION_PATTERN_SUMMARY_TABLE])}"
+                    )
+                    print(
+                        f"{SUPPORT_RESOLUTION_PATTERN_MEMBER_TABLE}: "
+                        f"rows={len(pattern_frames[SUPPORT_RESOLUTION_PATTERN_MEMBER_TABLE])}"
+                    )
+                if args.materialize_truth_store_support_gate:
+                    print(
+                        f"[store=sqlite] Materialized support rerun-gate tables in {args.truth_store_db_path}{batch_text}"
+                    )
+                    print(f"{SUPPORT_RERUN_GATE_DAILY_TABLE}: rows={len(gate_frames[SUPPORT_RERUN_GATE_DAILY_TABLE])}")
+                    print(f"{SUPPORT_RERUN_GATE_BATCH_TABLE}: rows={len(gate_frames[SUPPORT_RERUN_GATE_BATCH_TABLE])}")
+                    print(
+                        f"{SUPPORT_OPEN_CASE_PRIORITY_FAMILY_TABLE}: "
+                        f"rows={len(gate_frames[SUPPORT_OPEN_CASE_PRIORITY_FAMILY_TABLE])}"
+                    )
+                if args.materialize_truth_store_rerun_candidates:
+                    print(
+                        f"[store=sqlite] Materialized support rerun-candidate tables in {args.truth_store_db_path}{batch_text}"
+                    )
+                    print(
+                        f"{SUPPORT_RERUN_CANDIDATE_DAILY_TABLE}: "
+                        f"rows={len(candidate_frames[SUPPORT_RERUN_CANDIDATE_DAILY_TABLE])}"
+                    )
+                    print(
+                        f"{SUPPORT_RERUN_CANDIDATE_FAMILY_TABLE}: "
+                        f"rows={len(candidate_frames[SUPPORT_RERUN_CANDIDATE_FAMILY_TABLE])}"
+                    )
             if args.show_truth_store_support_resolution:
-                if resolution_frame.empty:
-                    resolution_frame = read_support_case_resolution(
-                        db_path=args.truth_store_db_path,
-                        support_batch_id=args.resolution_batch_id,
-                        resolution_filter=args.resolution_filter,
-                    )
-                else:
-                    resolution_frame = read_support_case_resolution(
-                        db_path=args.truth_store_db_path,
-                        support_batch_id=args.resolution_batch_id,
-                        resolution_filter=args.resolution_filter,
-                    )
+                resolution_frame = read_support_case_resolution(
+                    db_path=args.truth_store_db_path,
+                    support_batch_id=args.resolution_batch_id,
+                    resolution_filter=args.resolution_filter,
+                )
                 if not review_frames:
                     review_frames = read_support_resolution_review(
                         db_path=args.truth_store_db_path,
@@ -1286,6 +1436,81 @@ def main() -> int:
                     print("No matching support-case resolution rows.")
                 else:
                     print(resolution_frame.head(args.resolution_limit).to_string(index=False))
+                if (
+                    args.show_truth_store_support_resolution_patterns
+                    or args.show_truth_store_support_gate
+                    or args.show_truth_store_rerun_candidates
+                ):
+                    print()
+            if args.show_truth_store_support_resolution_patterns:
+                pattern_frames = read_support_resolution_pattern_review(
+                    db_path=args.truth_store_db_path,
+                    support_batch_id=args.resolution_batch_id,
+                    pattern_filter=args.support_pattern_filter,
+                    resolution_pattern_key=args.resolution_pattern_key,
+                )
+                print("Support Resolution Pattern Summary")
+                pattern_summary = pattern_frames[SUPPORT_RESOLUTION_PATTERN_SUMMARY_TABLE]
+                if pattern_summary.empty:
+                    print("No matching support-resolution pattern rows.")
+                else:
+                    print(pattern_summary.head(args.support_pattern_limit).to_string(index=False))
+                print()
+                print("Support Resolution Pattern Members")
+                pattern_members = pattern_frames[SUPPORT_RESOLUTION_PATTERN_MEMBER_TABLE]
+                if pattern_members.empty:
+                    print("No matching support-resolution pattern member rows.")
+                else:
+                    print(pattern_members.head(args.support_pattern_limit).to_string(index=False))
+                if args.show_truth_store_support_gate or args.show_truth_store_rerun_candidates:
+                    print()
+            if args.show_truth_store_support_gate:
+                gate_frames = read_support_rerun_gate_review(
+                    db_path=args.truth_store_db_path,
+                    support_batch_id=args.resolution_batch_id,
+                    gate_filter=args.support_gate_filter,
+                )
+                print("Support Rerun Gate Batch")
+                batch_gate = gate_frames[SUPPORT_RERUN_GATE_BATCH_TABLE]
+                if batch_gate.empty:
+                    print("No matching support rerun-gate batch rows.")
+                else:
+                    print(batch_gate.to_string(index=False))
+                print()
+                print("Support Rerun Gate Daily")
+                daily_gate = gate_frames[SUPPORT_RERUN_GATE_DAILY_TABLE]
+                if daily_gate.empty:
+                    print("No matching support rerun-gate daily rows.")
+                else:
+                    print(daily_gate.head(args.resolution_limit).to_string(index=False))
+                print()
+                print("Support Open-Case Priority")
+                open_case_priority = gate_frames[SUPPORT_OPEN_CASE_PRIORITY_FAMILY_TABLE]
+                if open_case_priority.empty:
+                    print("No matching open-case priority rows.")
+                else:
+                    print(open_case_priority.head(args.support_open_case_limit).to_string(index=False))
+                if args.show_truth_store_rerun_candidates:
+                    print()
+            if args.show_truth_store_rerun_candidates:
+                candidate_frames = read_support_rerun_candidate_review(
+                    db_path=args.truth_store_db_path,
+                    support_batch_id=args.resolution_batch_id,
+                    candidate_filter=args.support_rerun_candidate_filter,
+                )
+                print("Support Rerun Candidate Daily")
+                candidate_daily = candidate_frames[SUPPORT_RERUN_CANDIDATE_DAILY_TABLE]
+                if candidate_daily.empty:
+                    print("No matching support rerun-candidate daily rows.")
+                else:
+                    print(candidate_daily.to_string(index=False))
+                print()
+                print("Support Rerun Candidate Family Daily")
+                candidate_family = candidate_frames[SUPPORT_RERUN_CANDIDATE_FAMILY_TABLE]
+                if candidate_family.empty:
+                    print("No matching support rerun-candidate family rows.")
+                else:
+                    print(candidate_family.head(args.support_rerun_candidate_limit).to_string(index=False))
             return 0
         except Exception as exc:
             print(f"ERROR: {exc}", file=sys.stderr)

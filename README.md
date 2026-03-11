@@ -212,6 +212,67 @@ Key behavior:
     - `fact_support_resolution_daily`
     - `fact_support_resolution_batch`
 
+20. Materialize or review the support rerun-gate and unresolved-case priority surfaces:
+
+    ```bash
+    python inline_arbitrage_live.py ^
+      --materialize-truth-store-support-gate ^
+      --show-truth-store-support-gate ^
+      --truth-store-db-path support_loop_smoke.sqlite ^
+      --resolution-batch-id support_fail_warn_days7_families5_2024-10-01_2024-10-07 ^
+      --support-gate-filter all ^
+      --support-open-case-limit 20
+    ```
+
+    This review surface prints:
+    - `fact_support_rerun_gate_batch`
+    - `fact_support_rerun_gate_daily`
+    - `fact_support_open_case_priority_family_daily`
+
+21. Materialize or review repeated open-case resolution patterns, then bulk-annotate one pattern when the same support-ready family issue repeats across multiple days:
+
+    ```bash
+    python inline_arbitrage_live.py ^
+      --materialize-truth-store-support-resolution-patterns ^
+      --show-truth-store-support-resolution-patterns ^
+      --truth-store-db-path support_loop_smoke.sqlite ^
+      --resolution-batch-id support_fail_warn_days7_families5_2024-10-01_2024-10-07 ^
+      --support-pattern-filter multi_day ^
+      --support-pattern-limit 20
+    ```
+
+    ```bash
+    python inline_arbitrage_live.py ^
+      --apply-truth-store-support-resolution-pattern ^
+      --truth-store-db-path support_loop_smoke.sqlite ^
+      --resolution-batch-id support_fail_warn_days7_families5_2024-10-01_2024-10-07 ^
+      --resolution-pattern-key HOWAO::negative_bid_without_boalf::query_missing_boalf_with_negative_bid_and_physical_gap::mapped ^
+      --resolution-state confirmed_publication_gap ^
+      --resolution-truth-policy-action fix_source_and_rerun ^
+      --resolution-note "Bulk-reviewed repeated Hornsea HOWAO publication-gap pattern across open family-days." ^
+      --resolution-source-reference bulk-pattern-2026-03-11-HOWAO
+    ```
+
+    This review/apply surface uses:
+    - `fact_support_resolution_pattern_summary`
+    - `fact_support_resolution_pattern_member_family_daily`
+
+21. Materialize or review the rerun-candidate surfaces for days and family-days that are actually ready once their local resolution state allows rerun:
+
+    ```bash
+    python inline_arbitrage_live.py ^
+      --materialize-truth-store-rerun-candidates ^
+      --show-truth-store-rerun-candidates ^
+      --truth-store-db-path support_loop_smoke.sqlite ^
+      --resolution-batch-id support_fail_warn_days7_families5_2024-10-01_2024-10-07 ^
+      --support-rerun-candidate-filter all ^
+      --support-rerun-candidate-limit 20
+    ```
+
+    This review surface prints:
+    - `fact_support_rerun_candidate_daily`
+    - `fact_support_rerun_candidate_family_daily`
+
 12. Materialize observed weather history for anchors, clusters, and parent regions:
 
    ```bash
@@ -375,17 +436,40 @@ Key behavior:
 - The support-resolution workflow now also materializes review summaries:
   - `fact_support_resolution_daily`
   - `fact_support_resolution_batch`
+- The support-resolution workflow now also materializes rerun-gate and unresolved-case priority surfaces:
+  - `fact_support_rerun_gate_daily`
+  - `fact_support_rerun_gate_batch`
+  - `fact_support_open_case_priority_family_daily`
+- The same support-resolution refresh path now also materializes repeated-pattern helper surfaces:
+  - `fact_support_resolution_pattern_summary`
+  - `fact_support_resolution_pattern_member_family_daily`
+- The same refresh path now also materializes rerun-candidate prep surfaces:
+  - `fact_support_rerun_candidate_daily`
+  - `fact_support_rerun_candidate_family_daily`
 - New support-resolution states are:
   - `open`
   - `confirmed_publication_gap`
   - `confirmed_non_boalf_pattern`
   - `confirmed_source_artifact`
   - `not_reproducible`
+- New support rerun-gate states are:
+  - batch: `blocked_by_open_cases`, `ready_for_targeted_rerun`, `no_rerun_required`
+  - day: `blocked_by_open_cases`, `candidate_targeted_rerun`, `candidate_policy_lock`
 - New truth-policy actions are:
   - `keep_out_of_precision`
   - `eligible_for_new_evidence_tier`
   - `fix_source_and_rerun`
   - `close_no_change`
+- The rerun gate is mixed-mode by design:
+  - batch rows are the hard stop/go surface
+  - day rows are advisory so targeted reruns can be prepared without changing truth automatically
+- The rerun-candidate tables are narrower than the rerun gate:
+  - they only surface resolved family-days with `fix_source_and_rerun` or `eligible_for_new_evidence_tier`
+  - they only emit days where the day-level rerun gate is `candidate_targeted_rerun`
+- The repeated-pattern helper is narrower than the open-case priority table:
+  - it groups only currently open family-days
+  - it keys patterns by `bmu_family_key + anomaly state + support question code + mapping status`
+  - bulk apply only touches currently open rows inside one selected batch and one selected pattern key
 - The support loop is packaging and triage only. It does not change dispatch truth, truth tiers, reconciliation gates,
   or the precision profile.
 - `bmu_truth_store.sqlite` in the repo may be a Git LFS pointer in some checkouts rather than a usable SQLite file.
