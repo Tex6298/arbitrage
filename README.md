@@ -138,6 +138,28 @@ Key behavior:
      --truth-store-db-path bmu_truth_store.sqlite
    ```
 
+15. Materialize and inspect the store-backed source-completeness focus surfaces:
+
+   ```bash
+   python inline_arbitrage_live.py ^
+     --materialize-truth-store-source-focus ^
+     --show-truth-store-source-focus ^
+     --truth-store-db-path bmu_truth_store.sqlite ^
+     --source-focus-status fail_warn ^
+     --source-focus-limit 20
+    ```
+
+16. Materialize and inspect targeted family dispatch forensics from the SQLite store. By default this scopes to Hornsea family keys `HOWAO,HOWBO`:
+
+    ```bash
+    python inline_arbitrage_live.py ^
+      --materialize-truth-store-family-forensics ^
+      --show-truth-store-family-forensics ^
+      --truth-store-db-path bmu_truth_store.sqlite ^
+      --forensic-family-keys HOWAO,HOWBO ^
+      --forensic-limit 20
+    ```
+
 12. Materialize observed weather history for anchors, clusters, and parent regions:
 
    ```bash
@@ -244,6 +266,24 @@ Key behavior:
 - The BMU truth materializer can now upsert its 11 output tables into a SQLite store using
   `--truth-store-db-path`, and `--fill-truth-store-from-dir` can backfill a tree of daily CSV drops
   into that same deduped store without relying on one giant weekly CSV export.
+- The repo now also materializes store-backed prioritization tables:
+  - `fact_source_completeness_focus_daily`
+  - `fact_source_completeness_focus_family_daily`
+- The same store pass now also materializes store-backed dispatch-source gap tables:
+  - `fact_dispatch_source_gap_daily`
+  - `fact_dispatch_source_gap_family_daily`
+- The repo now also materializes targeted store-backed family forensics tables:
+  - `fact_family_dispatch_forensic_daily`
+  - `fact_family_dispatch_forensic_bmu_daily`
+  - `fact_family_dispatch_forensic_half_hourly`
+- Those focus tables turn the stored QA surfaces into ranked next actions, so the next dispatch-source
+  pass can target the remaining fail and warn days directly from SQLite rather than from stitched CSVs.
+- The new source-gap tables are narrower: they rank days and BMU families where `negative_bid_available_flag`
+  plus `physical_dispatch_down_gap_mwh` indicate missing dispatch evidence, and split that gap into
+  `same_bmu_window`, `family_window`, and `no_window` scopes so source expansion is auditable.
+- The family-forensics tables are narrower again: they are a scoped inspection surface keyed by a forensic family
+  scope such as `HOWAO+HOWBO`, and they break the chosen families down at daily, BMU-daily, and half-hourly
+  grain so a Hornsea-first forensic pass can inspect evidence without auto-promoting those rows into dispatch truth.
 - `precision_profile_include` now keys off the wind-only QA target, not the mixed raw NESO total.
 - The weather-calibrated tier now uses observed weather history from capacity-weighted anchor points.
   It still does not replace a valid physical-baseline row, and it is still a first pass rather than

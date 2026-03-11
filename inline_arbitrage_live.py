@@ -44,6 +44,11 @@ from exploration_plan import backtest_plan_frame, dataset_plan_frame, drift_moni
 from gb_topology import cluster_hub_matrix, interconnector_hub_frame, reachability_frame, route_hub_frame
 from history_store import ingest_truth_csv_tree_to_sqlite, upsert_truth_frames_to_sqlite
 from physical_constraints import assumption_frame, compute_netbacks
+from truth_store_forensics import (
+    forensic_scope_key_for_family_keys,
+    materialize_truth_store_family_forensics,
+    read_truth_store_family_forensics,
+)
 from truth_store_focus import materialize_truth_store_source_focus, read_truth_store_source_focus
 from weather_history import materialize_weather_history
 
@@ -544,6 +549,35 @@ def main() -> int:
         help="Maximum number of source-focus family rows to print",
     )
     parser.add_argument(
+        "--materialize-truth-store-family-forensics",
+        action="store_true",
+        help="Build store-backed family dispatch forensics tables from the SQLite truth store, then exit",
+    )
+    parser.add_argument(
+        "--show-truth-store-family-forensics",
+        action="store_true",
+        help="Print the store-backed family dispatch forensics summary from the SQLite truth store, then exit",
+    )
+    parser.add_argument(
+        "--forensic-family-keys",
+        default="HOWAO,HOWBO",
+        help="Comma-separated BMU family keys for store-backed forensics (default: HOWAO,HOWBO for Hornsea)",
+    )
+    parser.add_argument(
+        "--forensic-start",
+        help="Optional forensic start date, inclusive (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--forensic-end",
+        help="Optional forensic end date, inclusive (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--forensic-limit",
+        type=int,
+        default=20,
+        help="Maximum number of forensic BMU or half-hour rows to print",
+    )
+    parser.add_argument(
         "--materialize-weather-history",
         action="store_true",
         help="Fetch and save anchor, cluster, and parent-region weather history, then exit",
@@ -686,6 +720,74 @@ def main() -> int:
                     print("No matching source-focus families.")
                 else:
                     print(family.to_string(index=False))
+                print()
+                print("Dispatch Source Gaps Daily")
+                gap_daily = filtered["fact_dispatch_source_gap_daily"]
+                if gap_daily.empty:
+                    print("No matching dispatch source-gap days.")
+                else:
+                    print(gap_daily.to_string(index=False))
+                print()
+                print("Dispatch Source Gaps Families")
+                gap_family = filtered["fact_dispatch_source_gap_family_daily"].head(args.source_focus_limit)
+                if gap_family.empty:
+                    print("No matching dispatch source-gap families.")
+                else:
+                    print(gap_family.to_string(index=False))
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
+    if args.materialize_truth_store_family_forensics or args.show_truth_store_family_forensics:
+        if not args.truth_store_db_path:
+            raise SystemExit(
+                "--materialize-truth-store-family-forensics and --show-truth-store-family-forensics require --truth-store-db-path"
+            )
+        forensic_start = parse_bmu_iso_date(args.forensic_start).isoformat() if args.forensic_start else None
+        forensic_end = parse_bmu_iso_date(args.forensic_end).isoformat() if args.forensic_end else None
+        try:
+            frames = materialize_truth_store_family_forensics(
+                db_path=args.truth_store_db_path,
+                family_keys=args.forensic_family_keys,
+                start_date=forensic_start,
+                end_date=forensic_end,
+            )
+            scope_key = forensic_scope_key_for_family_keys(args.forensic_family_keys)
+            if args.materialize_truth_store_family_forensics:
+                print(
+                    f"[store=sqlite] Materialized family forensics tables in {args.truth_store_db_path} "
+                    f"for scope={scope_key}"
+                )
+                for table_name, frame in frames.items():
+                    print(f"{table_name}: rows={len(frame)}")
+            if args.show_truth_store_family_forensics:
+                filtered = read_truth_store_family_forensics(
+                    db_path=args.truth_store_db_path,
+                    family_keys=args.forensic_family_keys,
+                    start_date=forensic_start,
+                    end_date=forensic_end,
+                )
+                print(f"Family Dispatch Forensics Daily ({scope_key})")
+                daily = filtered["fact_family_dispatch_forensic_daily"]
+                if daily.empty:
+                    print("No matching forensic daily rows.")
+                else:
+                    print(daily.to_string(index=False))
+                print()
+                print(f"Family Dispatch Forensics BMU Daily ({scope_key})")
+                bmu_daily = filtered["fact_family_dispatch_forensic_bmu_daily"].head(args.forensic_limit)
+                if bmu_daily.empty:
+                    print("No matching forensic BMU rows.")
+                else:
+                    print(bmu_daily.to_string(index=False))
+                print()
+                print(f"Family Dispatch Forensics Half-Hourly ({scope_key})")
+                half_hourly = filtered["fact_family_dispatch_forensic_half_hourly"].head(args.forensic_limit)
+                if half_hourly.empty:
+                    print("No matching forensic half-hour rows.")
+                else:
+                    print(half_hourly.to_string(index=False))
             return 0
         except Exception as exc:
             print(f"ERROR: {exc}", file=sys.stderr)
