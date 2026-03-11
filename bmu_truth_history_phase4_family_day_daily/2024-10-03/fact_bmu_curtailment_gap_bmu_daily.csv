@@ -1,0 +1,15 @@
+settlement_date,elexon_bm_unit,national_grid_bm_unit,cluster_key,cluster_label,parent_region,mapping_status,dispatch_half_hour_count,lost_energy_estimate_half_hour_count,accepted_down_delta_mwh_lower_bound,dispatch_down_mwh_lower_bound,lost_energy_mwh,primary_dispatch_block_reason,dispatch_minus_lost_energy_gap_mwh
+2024-10-03,T_MOWEO-3,MOWEO-3,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,9,8,4.833333333333334,850.1833333333334,507.046,physical_below_generation,343.1373333333334
+2024-10-03,T_MOWEO-1,MOWEO-1,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,12,11,11.466666666666667,924.65,588.161,physical_below_generation,336.48900000000003
+2024-10-03,T_MOWEO-2,MOWEO-2,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,11,11,2.65,832.0,504.65200000000004,,327.34799999999996
+2024-10-03,T_GORDW-2,GORDW-2,,,,unmapped,2,1,0.16666666666666666,5.666666666666667,5.506,physical_below_generation,0.16066666666666674
+2024-10-03,T_VKNGW-4,VKNGW-4,shetland_wind,Shetland Wind,Scotland,mapped,1,1,0.18333333333333332,0.18333333333333332,5.396599999999999,,-5.213266666666666
+2024-10-03,T_VKNGW-2,VKNGW-2,shetland_wind,Shetland Wind,Scotland,mapped,2,2,0.2,0.4583333333333333,5.835183333333332,,-5.376849999999999
+2024-10-03,T_SGRWO-3,SGRWO-3,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,3,3,0.6,2.2,7.944,,-5.744
+2024-10-03,T_SGRWO-5,SGRWO-5,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,3,3,0.4,1.4083333333333332,8.149283333333331,,-6.740949999999998
+2024-10-03,T_SGRWO-2,SGRWO-2,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,3,3,0.35,1.2833333333333334,8.377683333333332,,-7.094349999999999
+2024-10-03,T_SGRWO-4,SGRWO-4,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,3,3,0.5333333333333333,1.8583333333333332,9.104,,-7.245666666666666
+2024-10-03,T_VKNGW-1,VKNGW-1,shetland_wind,Shetland Wind,Scotland,mapped,1,1,0.3,0.3,14.1442,,-13.844199999999999
+2024-10-03,T_VKNGW-3,VKNGW-3,shetland_wind,Shetland Wind,Scotland,mapped,1,1,0.21666666666666667,0.21666666666666667,14.7212,,-14.504533333333333
+2024-10-03,T_SGRWO-1,SGRWO-1,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,3,3,1.2166666666666668,4.283333333333333,29.68466666666667,,-25.401333333333334
+2024-10-03,T_SGRWO-6,SGRWO-6,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,3,3,1.4666666666666668,5.416666666666666,39.934000000000005,,-34.51733333333334
