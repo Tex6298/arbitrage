@@ -43,6 +43,7 @@ from curtailment_signals import materialize_curtailed_history, parse_iso_date
 from exploration_plan import backtest_plan_frame, dataset_plan_frame, drift_monitor_plan_frame, map_layer_plan_frame
 from gb_topology import cluster_hub_matrix, interconnector_hub_frame, reachability_frame, route_hub_frame
 from history_store import ingest_truth_csv_tree_to_sqlite, upsert_truth_frames_to_sqlite
+from interconnector_flow import materialize_interconnector_flow_history, parse_iso_date as parse_flow_iso_date
 from physical_constraints import assumption_frame, compute_netbacks
 from support_resolution import (
     SUPPORT_CASE_RESOLUTION_TABLE,
@@ -789,6 +790,18 @@ def main() -> int:
         "--materialize-weather-history",
         action="store_true",
         help="Fetch and save anchor, cluster, and parent-region weather history, then exit",
+    )
+    parser.add_argument(
+        "--materialize-interconnector-flow",
+        action="store_true",
+        help="Fetch and save border-level ENTSO-E physical interconnector flow history, then exit",
+    )
+    parser.add_argument("--flow-start", help="Interconnector flow materialization start date, inclusive (YYYY-MM-DD)")
+    parser.add_argument("--flow-end", help="Interconnector flow materialization end date, inclusive (YYYY-MM-DD)")
+    parser.add_argument(
+        "--flow-output-dir",
+        default="interconnector_flow_history",
+        help="Output directory for interconnector flow history",
     )
     parser.add_argument("--weather-start", help="Weather materialization start date, inclusive (YYYY-MM-DD)")
     parser.add_argument("--weather-end", help="Weather materialization end date, inclusive (YYYY-MM-DD)")
@@ -1537,6 +1550,45 @@ def main() -> int:
             for table_name, frame in frames.items():
                 output_path = os.path.join(args.weather_output_dir, f"{table_name}.csv")
                 print(f"{table_name}: rows={len(frame)} path={output_path}")
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
+    if args.materialize_interconnector_flow:
+        if not args.flow_start or not args.flow_end:
+            raise SystemExit("--materialize-interconnector-flow requires --flow-start and --flow-end")
+
+        flow_start = parse_flow_iso_date(args.flow_start)
+        flow_end = parse_flow_iso_date(args.flow_end)
+        if flow_end < flow_start:
+            raise SystemExit("--flow-end must be on or after --flow-start")
+
+        entsoe_token = os.environ.get("ENTOS_E_TOKEN") or os.environ.get("ENTSOE_TOKEN") or ""
+        if not entsoe_token:
+            raise SystemExit("--materialize-interconnector-flow requires ENTOS_E_TOKEN or ENTSOE_TOKEN")
+
+        try:
+            frames = materialize_interconnector_flow_history(
+                start_date=flow_start,
+                end_date=flow_end,
+                output_dir=args.flow_output_dir,
+                token=entsoe_token,
+            )
+            print(
+                f"[source=entsoe] Materialized {len(frames)} tables for {flow_start} to {flow_end} (inclusive)"
+            )
+            for table_name, frame in frames.items():
+                output_path = os.path.join(args.flow_output_dir, f"{table_name}.csv")
+                print(f"{table_name}: rows={len(frame)} path={output_path}")
+            if args.truth_store_db_path:
+                summary = upsert_truth_frames_to_sqlite(frames, args.truth_store_db_path)
+                print(f"[store=sqlite] Upserted interconnector flow tables into {args.truth_store_db_path}")
+                for _, row in summary.iterrows():
+                    print(
+                        f"{row['table_name']}: rows_loaded={int(row['rows_loaded'])} "
+                        f"table_rows={int(row['table_row_count'])}"
+                    )
             return 0
         except Exception as exc:
             print(f"ERROR: {exc}", file=sys.stderr)

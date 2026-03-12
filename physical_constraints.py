@@ -76,9 +76,9 @@ ASSUMPTIONS: Tuple[ConstraintAssumption, ...] = (
     ConstraintAssumption(
         key="cross_border_capacity",
         question="Is interconnector capacity actually available on the route?",
-        current_assumption="Implicitly yes. The model uses fixed losses and placeholder fees only.",
+        current_assumption="Not yet in route scoring. The repo now has a first-pass border-level physical flow surface, but it still lacks hourly ATC/NTC, outage, and commercial-capacity gating.",
         risk="Medium to high. Auctioned capacity, outages, and counterflows can invalidate the route.",
-        next_solution="Layer in ATC/NTC, auction allocations, outage flags, and physical flow saturation by border and hour.",
+        next_solution="Join fact_interconnector_flow_hourly into route scoring, then layer in ATC/NTC, auction allocations, outage flags, and physical flow saturation by border and hour.",
     ),
     ConstraintAssumption(
         key="route_costs",
@@ -99,7 +99,7 @@ def remaining_workstreams() -> List[str]:
         "Replace the seed cluster registry in asset_mapping.py with confirmed wind farm, node, and ownership metadata.",
         "Add curtailment or redispatch signals so the model distinguishes generic spreads from forced-export conditions.",
         "Materialize fact_gb_transfer_gate_hourly so the coarse hub reachability matrix becomes an hourly cluster-to-hub deliverability gate.",
-        "Materialize fact_interconnector_flow_hourly so route scoring can see observed cable loading and direction by hour.",
+        "Join fact_interconnector_flow_hourly into route scoring so observed border loading and direction can actually block or derate export paths.",
         "Materialize fact_interconnector_capacity_hourly so route scoring can see tradable headroom, outages, and ATC or NTC constraints by hour.",
         "Replace static leg fees and losses with connector-specific parameters and time-varying availability.",
     ]

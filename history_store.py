@@ -10,6 +10,7 @@ import pandas as pd
 
 
 TRUTH_STORE_PRIMARY_KEYS: Dict[str, list[str]] = {
+    "fact_interconnector_flow_hourly": ["interval_start_utc", "border_key", "direction_key"],
     "fact_bmu_bid_offer_half_hourly": ["settlement_date", "settlement_period", "elexon_bm_unit"],
     "fact_bmu_physical_position_half_hourly": ["settlement_date", "settlement_period", "elexon_bm_unit"],
     "fact_bmu_availability_half_hourly": ["settlement_date", "settlement_period", "elexon_bm_unit"],

@@ -283,6 +283,17 @@ Key behavior:
      --weather-output-dir weather_history
    ```
 
+13. Materialize first-pass border-level interconnector physical flow history from ENTSO-E:
+
+   ```bash
+   python inline_arbitrage_live.py ^
+     --materialize-interconnector-flow ^
+     --flow-start 2024-10-01 ^
+     --flow-end 2024-10-03 ^
+     --flow-output-dir interconnector_flow_history ^
+     --truth-store-db-path bmu_truth_store.sqlite
+   ```
+
 ## Notes
 
 - GB prices come from the Elexon market-index feed and are published in GBP, so an FX rate
@@ -356,11 +367,16 @@ Key behavior:
 - `weather_history.py` now materializes:
   - `fact_weather_hourly`
 - `fact_weather_hourly` carries observed anchor weather plus capacity-weighted cluster and parent-region aggregates.
-- The repo does not yet materialize the network-deliverability layer. In particular, the SQLite store still has no:
+- The repo now materializes the first network-deliverability surface:
   - `fact_interconnector_flow_hourly`
+- The current first pass is real ENTSO-E `A11` border flow, but it is still border-level rather than cable-specific.
+  Shared borders like GB-FR are therefore carried as aggregate border truth plus candidate hub sets, not attributed to `IFA`,
+  `IFA2`, or `ElecLink` individually.
+- The repo still does not yet materialize:
   - `fact_interconnector_capacity_hourly`
   - `fact_gb_transfer_gate_hourly`
-- That means the current truth and route stack can tell you where curtailed wind and route opportunity may exist, but not yet whether the internal GB network and the interconnector itself had usable hourly headroom.
+- That means the current stack can now tell you whether the border was physically flowing and in which direction, but not yet
+  whether unused headroom was commercially available or whether curtailed GB clusters could actually reach the landing hub internally.
 - `fact_bmu_curtailment_truth_half_hourly` is tiered, not flattened. It keeps:
   - `dispatch_only` rows when dispatch truth exists but a lost-energy estimate is not valid
   - `physical_baseline` rows when PN or QPN provides a valid half-hour counterfactual
@@ -486,6 +502,15 @@ Key behavior:
   a final turbine-level power model.
 - `fact_bmu_availability_half_hourly` uses REMIT as the primary outage gate. If REMIT is missing
   for a run, rows degrade to `availability_state=unknown` instead of silently becoming available.
+- Multi-day REMIT fetch quality is now tracked at settlement-date scope inside
+  `fact_bmu_availability_half_hourly` with `remit_fetch_ok`, `remit_detail_url_count`,
+  `remit_detail_error_count`, and `remit_first_fetch_error`, so one bad REMIT day no longer
+  poisons a whole weekly rerun.
+- `interconnector_flow.py` now materializes:
+  - `fact_interconnector_flow_hourly`
+- `fact_interconnector_flow_hourly` is a first-pass border-level physical flow surface from ENTSO-E `A11`.
+  It carries GB-signed direction, observed hourly MW, and candidate hub sets. It is not yet a cable-specific truth layer and it does
+  not yet include ATC/NTC, outages, or utilization versus technical capacity.
 - Partial REMIT windows no longer behave like hard outages by default. When REMIT still reports
   positive available capacity, the availability table now downgrades those rows to `unknown`.
 - The truth table keeps both raw and effective availability fields. It can promote a partial-REMIT
@@ -497,7 +522,7 @@ Key behavior:
 - Replace the seed asset registry with confirmed wind farm, node, and owner metadata
 - Turn the topology scaffold into actual transfer gates between clusters and hubs
 - Materialize `fact_gb_transfer_gate_hourly` so cluster-to-hub deliverability is an hourly data surface instead of a static reachability assumption
-- Materialize `fact_interconnector_flow_hourly` so route scoring can see whether the cable was already physically busy
+- Join `fact_interconnector_flow_hourly` into route scoring so observed border loading and direction can actually block or derate export paths
 - Materialize `fact_interconnector_capacity_hourly` so route scoring can distinguish physical flow from tradable headroom, outages, and constrained availability
 - Add forecast weather history and feature versioning so weather forecast error can be backtested
 - Improve dispatch-to-lost-energy capture against the wind-only QA target before relying on the precision profile

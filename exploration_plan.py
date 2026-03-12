@@ -83,8 +83,8 @@ DATASET_SPECS: Tuple[DatasetSpec, ...] = (
         spatial_scope="Border and interconnector direction",
         role="Observed cross-border physical flow and utilization surface for deliverability checks.",
         source_plan="ENTSO-E or connector-operator actual flow history joined to dim_hub and route legs.",
-        status="planned",
-        note="This is the first real answer to 'was the cable already busy'; it should carry import or export direction, observed MW, and utilization versus technical limit.",
+        status="implemented_first_pass",
+        note="First pass is ENTSO-E A11 border-level physical flow with GB-signed direction and candidate hub sets. It is real border flow, but it does not yet disaggregate shared borders like GB-FR down to cable-specific truth or utilization versus technical limit.",
     ),
     DatasetSpec(
         key="fact_interconnector_capacity_hourly",
