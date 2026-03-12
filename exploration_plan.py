@@ -150,6 +150,15 @@ DATASET_SPECS: Tuple[DatasetSpec, ...] = (
         note="This is the first operator-truth overlay for France. It can block or cap IFA and IFA2 directly from REMIT, while ElecLink degrades explicitly to unknown when no UMM export is available.",
     ),
     DatasetSpec(
+        key="fact_france_connector_operator_source_compare",
+        grain="requested window by source variant",
+        spatial_scope="GB-FR connector cable",
+        role="Audited selection surface for ElecLink operator-source choice.",
+        source_plan="Compare authenticated Nord Pool UMM against manual UMM export and record which source was selected for the requested window.",
+        status="implemented_first_pass",
+        note="Near-current windows prefer authenticated Nord Pool UMM when available; historical replay windows prefer a reviewed manual export when supplied.",
+    ),
+    DatasetSpec(
         key="fact_gb_transfer_gate_hourly",
         grain="hourly",
         spatial_scope="Cluster to interconnector hub",

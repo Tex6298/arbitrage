@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 from gb_topology import INTERCONNECTOR_HUBS
+from france_connector_reviewed import build_fact_france_connector_reviewed_hourly
 from interconnector_capacity import (
     INTERCONNECTOR_CAPACITY_AUDIT_DAILY_TABLE,
     INTERCONNECTOR_CAPACITY_REVIEW_POLICY_TABLE,
@@ -158,6 +159,20 @@ def _empty_france_connector_frame() -> pd.DataFrame:
             "reviewed_border_offered_capacity_mw",
             "reviewed_border_capacity_state",
             "reviewed_border_headroom_proxy_mw",
+            "reviewed_publication_state",
+            "reviewed_publication_evidence_tier",
+            "reviewed_publication_tier_accepted_flag",
+            "reviewed_publication_capacity_policy_action",
+            "reviewed_publication_capacity_limit_mw",
+            "reviewed_publication_source_provider",
+            "reviewed_publication_source_family",
+            "reviewed_publication_source_key",
+            "reviewed_publication_source_label",
+            "reviewed_publication_source_document_title",
+            "reviewed_publication_source_document_url",
+            "reviewed_publication_source_reference",
+            "reviewed_publication_source_published_date",
+            "reviewed_publication_source_count",
             "operator_source_provider",
             "operator_availability_state",
             "operator_capacity_evidence_tier",
@@ -208,6 +223,7 @@ def build_fact_france_connector_hourly(
     interconnector_capacity: pd.DataFrame | None = None,
     interconnector_capacity_review_policy: pd.DataFrame | None = None,
     interconnector_capacity_reviewed: pd.DataFrame | None = None,
+    france_connector_reviewed_period: pd.DataFrame | None = None,
     france_connector_availability: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     if end_date < start_date:
@@ -250,6 +266,55 @@ def build_fact_france_connector_hourly(
                 "reviewed_border_gate_state",
             ]
         ]
+
+    connector_reviewed = build_fact_france_connector_reviewed_hourly(
+        start_date=start_date,
+        end_date=end_date,
+        reviewed_period=france_connector_reviewed_period,
+    )
+    if not connector_reviewed.empty:
+        connector_reviewed = connector_reviewed.rename(
+            columns={
+                "reviewed_evidence_tier": "reviewed_publication_evidence_tier",
+                "reviewed_tier_accepted_flag": "reviewed_publication_tier_accepted_flag",
+                "capacity_policy_action": "reviewed_publication_capacity_policy_action",
+                "reviewed_capacity_limit_mw": "reviewed_publication_capacity_limit_mw",
+                "source_provider": "reviewed_publication_source_provider",
+                "source_family": "reviewed_publication_source_family",
+                "source_key": "reviewed_publication_source_key",
+                "source_label": "reviewed_publication_source_label",
+                "source_document_title": "reviewed_publication_source_document_title",
+                "source_document_url": "reviewed_publication_source_document_url",
+                "source_reference": "reviewed_publication_source_reference",
+                "source_published_date": "reviewed_publication_source_published_date",
+                "reviewed_source_count": "reviewed_publication_source_count",
+            }
+        )
+        connector_reviewed = connector_reviewed[
+            [
+                "interval_start_utc",
+                "connector_key",
+                "direction_key",
+                "reviewed_publication_state",
+                "reviewed_publication_evidence_tier",
+                "reviewed_publication_tier_accepted_flag",
+                "reviewed_publication_capacity_policy_action",
+                "reviewed_publication_capacity_limit_mw",
+                "reviewed_available_capacity_mw",
+                "reviewed_unavailable_capacity_mw",
+                "reviewed_publication_source_provider",
+                "reviewed_publication_source_family",
+                "reviewed_publication_source_key",
+                "reviewed_publication_source_label",
+                "reviewed_publication_source_document_title",
+                "reviewed_publication_source_document_url",
+                "reviewed_publication_source_reference",
+                "reviewed_publication_source_published_date",
+                "reviewed_publication_source_count",
+                "review_note",
+            ]
+        ]
+        connector_reviewed = connector_reviewed[connector_reviewed["direction_key"].isin(["gb_to_neighbor", "both"])].copy()
 
     review_policy = (
         interconnector_capacity_review_policy.copy()
@@ -295,6 +360,31 @@ def build_fact_france_connector_hourly(
         base["reviewed_border_capacity_state"] = "capacity_unknown"
         base["reviewed_border_gate_state"] = "capacity_unknown"
 
+    if not connector_reviewed.empty:
+        base = base.merge(
+            connector_reviewed.drop(columns=["direction_key"], errors="ignore"),
+            on=["interval_start_utc", "connector_key"],
+            how="left",
+        )
+    else:
+        base["reviewed_publication_state"] = pd.NA
+        base["reviewed_publication_evidence_tier"] = pd.NA
+        base["reviewed_publication_tier_accepted_flag"] = False
+        base["reviewed_publication_capacity_policy_action"] = pd.NA
+        base["reviewed_publication_capacity_limit_mw"] = np.nan
+        base["reviewed_available_capacity_mw"] = np.nan
+        base["reviewed_unavailable_capacity_mw"] = np.nan
+        base["reviewed_publication_source_provider"] = pd.NA
+        base["reviewed_publication_source_family"] = pd.NA
+        base["reviewed_publication_source_key"] = pd.NA
+        base["reviewed_publication_source_label"] = pd.NA
+        base["reviewed_publication_source_document_title"] = pd.NA
+        base["reviewed_publication_source_document_url"] = pd.NA
+        base["reviewed_publication_source_reference"] = pd.NA
+        base["reviewed_publication_source_published_date"] = pd.NaT
+        base["reviewed_publication_source_count"] = np.nan
+        base["review_note"] = pd.NA
+
     base["border_flow_published_flag"] = base["border_flow_published_flag"].where(
         base["border_flow_published_flag"].notna(),
         False,
@@ -313,6 +403,15 @@ def build_fact_france_connector_hourly(
     base["reviewed_border_flow_state"] = base["reviewed_border_flow_state"].fillna("flow_unknown")
     base["reviewed_border_capacity_state"] = base["reviewed_border_capacity_state"].fillna("capacity_unknown")
     base["reviewed_border_gate_state"] = base["reviewed_border_gate_state"].fillna("capacity_unknown")
+    base["reviewed_publication_tier_accepted_flag"] = base["reviewed_publication_tier_accepted_flag"].where(
+        base["reviewed_publication_tier_accepted_flag"].notna(),
+        False,
+    ).astype(bool)
+    base["reviewed_publication_state"] = base["reviewed_publication_state"].fillna(pd.NA)
+    base["reviewed_publication_evidence_tier"] = base["reviewed_publication_evidence_tier"].fillna("none")
+    base["reviewed_publication_capacity_policy_action"] = base["reviewed_publication_capacity_policy_action"].fillna(
+        "keep_capacity_unknown"
+    )
 
     base = base.merge(review_policy, on=["border_key"], how="left")
     base["review_state"] = base["review_state"].fillna("capacity_unknown_default")
@@ -441,6 +540,72 @@ def build_fact_france_connector_hourly(
         "Published GB-FR capacity is unavailable, so cable headroom is only a nominal-share proxy anchored to observed border flow."
     )
 
+    reviewed_publication_limit = pd.to_numeric(base["reviewed_publication_capacity_limit_mw"], errors="coerce")
+    reviewed_publication_state = base["reviewed_publication_state"].fillna("")
+    reviewed_publication_available = (
+        base["reviewed_publication_tier_accepted_flag"]
+        & reviewed_publication_state.isin(["available", "partial_capacity"])
+        & reviewed_publication_limit.gt(0)
+    )
+    reviewed_publication_blocked = (
+        base["reviewed_publication_tier_accepted_flag"]
+        & (
+            reviewed_publication_state.eq("outage")
+            | reviewed_publication_limit.fillna(0).le(0)
+        )
+    )
+
+    current_offered_before_publication = pd.to_numeric(base["connector_offered_capacity_mw_proxy"], errors="coerce")
+    current_headroom_before_publication = pd.to_numeric(base["connector_headroom_proxy_mw"], errors="coerce")
+    publication_limit_effective = reviewed_publication_limit.where(
+        reviewed_publication_limit.notna(),
+        current_offered_before_publication,
+    )
+
+    base.loc[reviewed_publication_blocked, "connector_offered_capacity_mw_proxy"] = 0.0
+    base.loc[reviewed_publication_blocked, "connector_headroom_proxy_mw"] = 0.0
+    base.loc[reviewed_publication_blocked, "connector_capacity_evidence_tier"] = "reviewed_public_doc_period"
+    base.loc[reviewed_publication_blocked, "connector_gate_state"] = "reviewed_publication_blocked"
+    base.loc[reviewed_publication_blocked, "connector_gate_reason"] = (
+        "A reviewed public France-connector publication reports the connector unavailable for this period."
+    )
+
+    reviewed_publication_promote = reviewed_publication_available & ~reviewed_publication_blocked & (
+        ~first_pass_published
+        | publication_limit_effective.lt(current_headroom_before_publication.fillna(np.inf))
+        | base["connector_capacity_evidence_tier"].isin(
+            ["nominal_static", "operator_no_active_outage", "reviewed_border_split_proxy"]
+        )
+    )
+    base.loc[reviewed_publication_promote, "connector_offered_capacity_mw_proxy"] = pd.concat(
+        [
+            current_offered_before_publication.loc[reviewed_publication_promote],
+            publication_limit_effective.loc[reviewed_publication_promote],
+        ],
+        axis=1,
+    ).min(axis=1)
+    base.loc[reviewed_publication_promote, "connector_headroom_proxy_mw"] = pd.concat(
+        [
+            current_headroom_before_publication.loc[reviewed_publication_promote],
+            publication_limit_effective.loc[reviewed_publication_promote],
+        ],
+        axis=1,
+    ).min(axis=1)
+    base.loc[reviewed_publication_promote, "connector_capacity_evidence_tier"] = "reviewed_public_doc_period"
+
+    publication_binding = reviewed_publication_promote & publication_limit_effective.lt(
+        current_headroom_before_publication.fillna(np.inf)
+    )
+    publication_non_binding = reviewed_publication_promote & ~publication_binding
+    base.loc[publication_binding, "connector_gate_state"] = "reviewed_publication_cap"
+    base.loc[publication_binding, "connector_gate_reason"] = (
+        "A reviewed public France-connector publication caps this cable below the current proxy headroom for the period."
+    )
+    base.loc[publication_non_binding, "connector_gate_state"] = "reviewed_publication_pass"
+    base.loc[publication_non_binding, "connector_gate_reason"] = (
+        "A reviewed public France-connector publication confirms connector availability for the period, so the route can use a reviewed connector tier instead of staying capacity-unknown."
+    )
+
     base["operator_capacity_limit_mw"] = pd.to_numeric(base["operator_capacity_limit_mw"], errors="coerce")
     operator_outage = base["operator_availability_state"].eq("outage")
     operator_partial = base["operator_availability_state"].eq("partial_outage")
@@ -496,6 +661,7 @@ def materialize_france_connector_history(
     interconnector_capacity: pd.DataFrame | None = None,
     interconnector_capacity_review_policy: pd.DataFrame | None = None,
     interconnector_capacity_reviewed: pd.DataFrame | None = None,
+    france_connector_reviewed_period: pd.DataFrame | None = None,
     france_connector_availability: pd.DataFrame | None = None,
 ) -> Dict[str, pd.DataFrame]:
     resolved_flow = interconnector_flow
@@ -526,6 +692,7 @@ def materialize_france_connector_history(
         interconnector_capacity=resolved_capacity,
         interconnector_capacity_review_policy=resolved_review_policy,
         interconnector_capacity_reviewed=resolved_reviewed_capacity,
+        france_connector_reviewed_period=france_connector_reviewed_period,
         france_connector_availability=france_connector_availability,
     )
     output_path = Path(output_dir)

@@ -49,11 +49,20 @@ from france_connector import (
     interconnector_cable_frame,
     materialize_france_connector_history,
 )
+from france_connector_reviewed import (
+    FRANCE_CONNECTOR_REVIEWED_PERIOD_TABLE,
+    build_fact_france_connector_reviewed_period,
+)
 from france_connector_availability import (
     FRANCE_CONNECTOR_AVAILABILITY_TABLE,
     FRANCE_CONNECTOR_OPERATOR_EVENT_TABLE,
+    FRANCE_CONNECTOR_OPERATOR_SOURCE_COMPARE_TABLE,
+    NORDPOOL_UMM_MESSAGES_URL,
+    NORDPOOL_UMM_TOKEN_URL,
     build_fact_france_connector_availability_hourly,
+    build_eleclink_operator_source_compare,
     build_france_connector_operator_event_frame,
+    fetch_eleclink_umm_authenticated,
     load_eleclink_umm_export,
 )
 from gb_transfer_gate import (
@@ -142,6 +151,11 @@ BMRS_KEY_ENV_NAMES = ("BMRS_API_KEY",)
 GB_PROVIDER_ENV_NAMES = ("GB_DATA_PROVIDER", "BMRS_DATA_PROVIDER")
 FX_ENV_NAMES = ("GBP_EUR", "GBP_EUR_RATE")
 DEFAULT_GB_PROVIDER = "APXMIDP"
+NORDPOOL_UMM_USERNAME_ENV_NAMES = ("NORDPOOL_UMM_USERNAME",)
+NORDPOOL_UMM_PASSWORD_ENV_NAMES = ("NORDPOOL_UMM_PASSWORD",)
+NORDPOOL_UMM_CLIENT_AUTH_ENV_NAMES = ("NORDPOOL_UMM_CLIENT_AUTHORIZATION",)
+NORDPOOL_UMM_SCOPE_ENV_NAMES = ("NORDPOOL_UMM_SCOPE",)
+NORDPOOL_UMM_ACCESS_TOKEN_ENV_NAMES = ("NORDPOOL_UMM_ACCESS_TOKEN",)
 
 
 @dataclass(frozen=True)
@@ -263,6 +277,22 @@ def parse_json_error(payload: bytes) -> str:
                     return value.strip()
 
     return ""
+
+
+def _first_env_value(names: Tuple[str, ...]) -> str | None:
+    return next((os.environ.get(name) for name in names if os.environ.get(name)), None)
+
+
+def resolve_eleclink_umm_auth_args(args: argparse.Namespace) -> dict:
+    return {
+        "username": args.eleclink_umm_username or _first_env_value(NORDPOOL_UMM_USERNAME_ENV_NAMES),
+        "password": args.eleclink_umm_password or _first_env_value(NORDPOOL_UMM_PASSWORD_ENV_NAMES),
+        "client_authorization": args.eleclink_umm_client_authorization or _first_env_value(NORDPOOL_UMM_CLIENT_AUTH_ENV_NAMES),
+        "scope": args.eleclink_umm_scope or _first_env_value(NORDPOOL_UMM_SCOPE_ENV_NAMES),
+        "access_token": args.eleclink_umm_access_token or _first_env_value(NORDPOOL_UMM_ACCESS_TOKEN_ENV_NAMES),
+        "token_url": args.eleclink_umm_token_url,
+        "messages_url": args.eleclink_umm_messages_url,
+    }
 
 
 def fetch_entsoe_payload(url: str, zone_name: str) -> bytes:
@@ -930,6 +960,28 @@ def main() -> int:
     parser.add_argument(
         "--eleclink-umm-export-path",
         help="Optional local CSV or JSON export of ElecLink Nord Pool UMM outages to tighten France connector availability",
+    )
+    parser.add_argument(
+        "--france-reviewed-input-path",
+        help="Optional local CSV or JSON input normalized from ElecLink public documents and JAO notices to materialize fact_france_connector_reviewed_period",
+    )
+    parser.add_argument("--eleclink-umm-username", help="Optional Nord Pool UMM username for authenticated ElecLink access")
+    parser.add_argument("--eleclink-umm-password", help="Optional Nord Pool UMM password for authenticated ElecLink access")
+    parser.add_argument(
+        "--eleclink-umm-client-authorization",
+        help="Optional Nord Pool client authorization string for token retrieval; if no Basic prefix is present it will be added",
+    )
+    parser.add_argument("--eleclink-umm-scope", help="Optional Nord Pool UMM token scope")
+    parser.add_argument("--eleclink-umm-access-token", help="Optional pre-fetched Nord Pool UMM bearer token")
+    parser.add_argument(
+        "--eleclink-umm-token-url",
+        default=NORDPOOL_UMM_TOKEN_URL,
+        help="Nord Pool STS token endpoint for authenticated ElecLink UMM access",
+    )
+    parser.add_argument(
+        "--eleclink-umm-messages-url",
+        default=NORDPOOL_UMM_MESSAGES_URL,
+        help="Nord Pool UMM messages endpoint for authenticated ElecLink UMM access",
     )
     parser.add_argument("--route-score-start", help="Route-score materialization start date, inclusive (YYYY-MM-DD)")
     parser.add_argument("--route-score-end", help="Route-score materialization end date, inclusive (YYYY-MM-DD)")
@@ -1914,33 +1966,59 @@ def main() -> int:
 
         try:
             raw_remit, remit_status = fetch_remit_event_detail_with_status(france_start, france_end)
+            france_reviewed_period = build_fact_france_connector_reviewed_period(
+                start_date=france_start,
+                end_date=france_end,
+                reviewed_input_path=args.france_reviewed_input_path,
+            )
+            eleclink_auth_kwargs = resolve_eleclink_umm_auth_args(args)
+            eleclink_auth_frame, eleclink_auth_status = fetch_eleclink_umm_authenticated(**eleclink_auth_kwargs)
             eleclink_export = load_eleclink_umm_export(args.eleclink_umm_export_path)
+            selected_eleclink, eleclink_source_compare, eleclink_resolution = build_eleclink_operator_source_compare(
+                start_date=france_start,
+                end_date=france_end,
+                authenticated_frame=eleclink_auth_frame,
+                authenticated_status=eleclink_auth_status,
+                export_frame=eleclink_export,
+                export_attempted_flag=bool(args.eleclink_umm_export_path),
+            )
             france_operator_event = build_france_connector_operator_event_frame(
                 raw_remit,
-                eleclink_umm_export=eleclink_export,
+                eleclink_umm_export=selected_eleclink,
             )
             france_availability = build_fact_france_connector_availability_hourly(
                 start_date=france_start,
                 end_date=france_end,
                 operator_event_frame=france_operator_event,
                 remit_fetch_status_by_date=remit_status,
-                eleclink_export_loaded=not eleclink_export.empty,
+                eleclink_source_resolution=eleclink_resolution,
             )
             frames = materialize_france_connector_history(
                 start_date=france_start,
                 end_date=france_end,
                 output_dir=args.france_output_dir,
                 token=entsoe_token,
+                france_connector_reviewed_period=france_reviewed_period,
                 france_connector_availability=france_availability,
             )
+            frames[FRANCE_CONNECTOR_REVIEWED_PERIOD_TABLE] = france_reviewed_period
             frames[FRANCE_CONNECTOR_OPERATOR_EVENT_TABLE] = france_operator_event
             frames[FRANCE_CONNECTOR_AVAILABILITY_TABLE] = france_availability
+            frames[FRANCE_CONNECTOR_OPERATOR_SOURCE_COMPARE_TABLE] = eleclink_source_compare
+            france_reviewed_period.to_csv(
+                os.path.join(args.france_output_dir, f"{FRANCE_CONNECTOR_REVIEWED_PERIOD_TABLE}.csv"),
+                index=False,
+            )
             france_operator_event.to_csv(
                 os.path.join(args.france_output_dir, f"{FRANCE_CONNECTOR_OPERATOR_EVENT_TABLE}.csv"),
                 index=False,
             )
             france_availability.to_csv(
                 os.path.join(args.france_output_dir, f"{FRANCE_CONNECTOR_AVAILABILITY_TABLE}.csv"),
+                index=False,
+            )
+            eleclink_source_compare.to_csv(
+                os.path.join(args.france_output_dir, f"{FRANCE_CONNECTOR_OPERATOR_SOURCE_COMPARE_TABLE}.csv"),
                 index=False,
             )
             print(
@@ -2018,17 +2096,32 @@ def main() -> int:
                 review_policy=review_policy,
             )
             raw_remit, remit_status = fetch_remit_event_detail_with_status(network_start, network_end)
+            france_reviewed_period = build_fact_france_connector_reviewed_period(
+                start_date=network_start,
+                end_date=network_end,
+                reviewed_input_path=args.france_reviewed_input_path,
+            )
+            eleclink_auth_kwargs = resolve_eleclink_umm_auth_args(args)
+            eleclink_auth_frame, eleclink_auth_status = fetch_eleclink_umm_authenticated(**eleclink_auth_kwargs)
             eleclink_export = load_eleclink_umm_export(args.eleclink_umm_export_path)
+            selected_eleclink, eleclink_source_compare, eleclink_resolution = build_eleclink_operator_source_compare(
+                start_date=network_start,
+                end_date=network_end,
+                authenticated_frame=eleclink_auth_frame,
+                authenticated_status=eleclink_auth_status,
+                export_frame=eleclink_export,
+                export_attempted_flag=bool(args.eleclink_umm_export_path),
+            )
             france_operator_event = build_france_connector_operator_event_frame(
                 raw_remit,
-                eleclink_umm_export=eleclink_export,
+                eleclink_umm_export=selected_eleclink,
             )
             france_availability = build_fact_france_connector_availability_hourly(
                 start_date=network_start,
                 end_date=network_end,
                 operator_event_frame=france_operator_event,
                 remit_fetch_status_by_date=remit_status,
-                eleclink_export_loaded=not eleclink_export.empty,
+                eleclink_source_resolution=eleclink_resolution,
             )
             france_connector = build_fact_france_connector_hourly(
                 start_date=network_start,
@@ -2037,6 +2130,7 @@ def main() -> int:
                 interconnector_capacity=interconnector_capacity,
                 interconnector_capacity_review_policy=review_policy,
                 interconnector_capacity_reviewed=reviewed_capacity,
+                france_connector_reviewed_period=france_reviewed_period,
                 france_connector_availability=france_availability,
             )
             gb_transfer_gate = build_fact_gb_transfer_gate_hourly(
@@ -2068,8 +2162,10 @@ def main() -> int:
                 store_frames[INTERCONNECTOR_CAPACITY_REVIEW_POLICY_TABLE] = review_policy
                 store_frames[INTERCONNECTOR_CAPACITY_REVIEWED_TABLE] = reviewed_capacity
                 store_frames[DIM_INTERCONNECTOR_CABLE_TABLE] = interconnector_cable_frame()
+                store_frames[FRANCE_CONNECTOR_REVIEWED_PERIOD_TABLE] = france_reviewed_period
                 store_frames[FRANCE_CONNECTOR_OPERATOR_EVENT_TABLE] = france_operator_event
                 store_frames[FRANCE_CONNECTOR_AVAILABILITY_TABLE] = france_availability
+                store_frames[FRANCE_CONNECTOR_OPERATOR_SOURCE_COMPARE_TABLE] = eleclink_source_compare
                 store_frames[FRANCE_CONNECTOR_TABLE] = france_connector
                 summary = upsert_truth_frames_to_sqlite(store_frames, args.truth_store_db_path)
                 print(f"[store=sqlite] Upserted route-score and reviewed-capacity tables into {args.truth_store_db_path}")

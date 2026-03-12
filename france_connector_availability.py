@@ -3,6 +3,9 @@ from __future__ import annotations
 import datetime as dt
 import json
 import re
+import urllib.error
+import urllib.parse
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, Tuple
@@ -16,6 +19,10 @@ from france_connector import FRANCE_CONNECTOR_SPECS, interconnector_cable_frame
 
 FRANCE_CONNECTOR_OPERATOR_EVENT_TABLE = "fact_france_connector_operator_event"
 FRANCE_CONNECTOR_AVAILABILITY_TABLE = "fact_france_connector_availability_hourly"
+FRANCE_CONNECTOR_OPERATOR_SOURCE_COMPARE_TABLE = "fact_france_connector_operator_source_compare"
+
+NORDPOOL_UMM_TOKEN_URL = "https://sts.nordpoolgroup.com/connect/token"
+NORDPOOL_UMM_MESSAGES_URL = "https://ummapi.nordpoolgroup.com/messages"
 
 
 @dataclass(frozen=True)
@@ -50,12 +57,12 @@ FRANCE_CONNECTOR_OPERATOR_SOURCES: Tuple[FranceConnectorOperatorSource, ...] = (
     ),
     FranceConnectorOperatorSource(
         connector_key="eleclink",
-        source_provider="nordpool_umm_export",
-        source_key="nordpool_umm_export",
-        source_label="Nord Pool UMM export",
+        source_provider="nordpool_umm",
+        source_key="nordpool_umm",
+        source_label="Nord Pool UMM",
         match_patterns=(r"\beleclink\b",),
         requires_external_export=True,
-        note="ElecLink moved outage publication to Nord Pool UMM on June 3, 2024; the repo supports a manual export path until credentials are wired.",
+        note="ElecLink moved outage publication to Nord Pool UMM on June 3, 2024; the repo supports both an authenticated API path and a manual export fallback.",
     ),
 )
 
@@ -133,6 +140,67 @@ def _empty_operator_event_frame() -> pd.DataFrame:
     )
 
 
+def _normalize_eleclink_umm_frame(
+    frame: pd.DataFrame,
+    *,
+    source_key: str,
+    source_label: str,
+    connector_match_rule: str,
+) -> pd.DataFrame:
+    if frame.empty:
+        return _empty_operator_event_frame()
+
+    frame = frame.rename(
+        columns={
+            "publishTime": "publish_time_utc",
+            "publishedAt": "publish_time_utc",
+            "published_at": "publish_time_utc",
+            "eventStartTime": "event_start_utc",
+            "startTime": "event_start_utc",
+            "eventEndTime": "event_end_utc",
+            "endTime": "event_end_utc",
+            "normalCapacity": "normal_capacity_mw",
+            "nominalCapacity": "normal_capacity_mw",
+            "availableCapacity": "available_capacity_mw",
+            "unavailableCapacity": "unavailable_capacity_mw",
+            "messageType": "message_type",
+            "eventType": "event_type",
+            "eventStatus": "event_status",
+            "status": "event_status",
+            "unavailabilityType": "unavailability_type",
+            "assetId": "asset_id",
+            "assetName": "asset_id",
+            "affectedUnit": "affected_unit",
+            "registrationCode": "registration_code",
+        }
+    ).copy()
+
+    if "connector_key" not in frame.columns:
+        blob = _connector_text_blob(frame)
+        frame["connector_key"] = blob.map(_match_connector_from_text)
+    frame["connector_key"] = frame["connector_key"].fillna("eleclink")
+    frame = frame[frame["connector_key"].astype(str).str.lower().eq("eleclink")].copy()
+    if frame.empty:
+        return _empty_operator_event_frame()
+
+    frame["publish_time_utc"] = pd.to_datetime(frame.get("publish_time_utc"), utc=True, errors="coerce")
+    frame["event_start_utc"] = pd.to_datetime(frame.get("event_start_utc"), utc=True, errors="coerce")
+    frame["event_end_utc"] = pd.to_datetime(frame.get("event_end_utc"), utc=True, errors="coerce")
+    frame["normal_capacity_mw"] = pd.to_numeric(frame.get("normal_capacity_mw"), errors="coerce")
+    frame["available_capacity_mw"] = pd.to_numeric(frame.get("available_capacity_mw"), errors="coerce")
+    frame["unavailable_capacity_mw"] = pd.to_numeric(frame.get("unavailable_capacity_mw"), errors="coerce")
+    frame["connector_label"] = "ElecLink"
+    frame["source_provider"] = "nordpool_umm"
+    frame["source_key"] = source_key
+    frame["source_label"] = source_label
+    frame["source_truth_tier"] = "operator_outage_truth"
+    frame["connector_match_rule"] = connector_match_rule
+    frame["target_is_proxy"] = False
+    return frame[
+        list(_empty_operator_event_frame().columns)
+    ].dropna(subset=["event_start_utc", "event_end_utc"], how="any").reset_index(drop=True)
+
+
 def load_eleclink_umm_export(export_path: str | Path | None) -> pd.DataFrame:
     if not export_path:
         return pd.DataFrame()
@@ -150,45 +218,266 @@ def load_eleclink_umm_export(export_path: str | Path | None) -> pd.DataFrame:
     if frame.empty:
         return pd.DataFrame()
 
-    frame = frame.rename(
-        columns={
-            "publishTime": "publish_time_utc",
-            "published_at": "publish_time_utc",
-            "eventStartTime": "event_start_utc",
-            "startTime": "event_start_utc",
-            "eventEndTime": "event_end_utc",
-            "endTime": "event_end_utc",
-            "normalCapacity": "normal_capacity_mw",
-            "availableCapacity": "available_capacity_mw",
-            "unavailableCapacity": "unavailable_capacity_mw",
-            "messageType": "message_type",
-            "eventType": "event_type",
-            "eventStatus": "event_status",
-            "unavailabilityType": "unavailability_type",
-            "assetId": "asset_id",
-            "affectedUnit": "affected_unit",
-            "registrationCode": "registration_code",
-        }
-    ).copy()
+    return _normalize_eleclink_umm_frame(
+        frame,
+        source_key="nordpool_umm_export",
+        source_label="Nord Pool UMM export",
+        connector_match_rule="manual_eleclink_export",
+    )
 
-    frame["connector_key"] = frame.get("connector_key", "eleclink").fillna("eleclink")
-    frame = frame[frame["connector_key"].astype(str).str.lower().eq("eleclink")].copy()
-    frame["publish_time_utc"] = pd.to_datetime(frame.get("publish_time_utc"), utc=True, errors="coerce")
-    frame["event_start_utc"] = pd.to_datetime(frame.get("event_start_utc"), utc=True, errors="coerce")
-    frame["event_end_utc"] = pd.to_datetime(frame.get("event_end_utc"), utc=True, errors="coerce")
-    frame["normal_capacity_mw"] = pd.to_numeric(frame.get("normal_capacity_mw"), errors="coerce")
-    frame["available_capacity_mw"] = pd.to_numeric(frame.get("available_capacity_mw"), errors="coerce")
-    frame["unavailable_capacity_mw"] = pd.to_numeric(frame.get("unavailable_capacity_mw"), errors="coerce")
-    frame["connector_label"] = "ElecLink"
-    frame["source_provider"] = "nordpool_umm_export"
-    frame["source_key"] = "nordpool_umm_export"
-    frame["source_label"] = "Nord Pool UMM export"
-    frame["source_truth_tier"] = "operator_outage_truth"
-    frame["connector_match_rule"] = "manual_eleclink_export"
-    frame["target_is_proxy"] = False
-    return frame[
-        list(_empty_operator_event_frame().columns)
-    ].dropna(subset=["event_start_utc", "event_end_utc"], how="any").reset_index(drop=True)
+
+def _extract_umm_records(payload: object) -> list[dict]:
+    if isinstance(payload, list):
+        return [record for record in payload if isinstance(record, dict)]
+    if isinstance(payload, dict):
+        for key in ("items", "messages", "results", "data"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                return [record for record in value if isinstance(record, dict)]
+    return []
+
+
+def fetch_eleclink_umm_authenticated(
+    *,
+    username: str | None = None,
+    password: str | None = None,
+    client_authorization: str | None = None,
+    scope: str | None = None,
+    access_token: str | None = None,
+    token_url: str = NORDPOOL_UMM_TOKEN_URL,
+    messages_url: str = NORDPOOL_UMM_MESSAGES_URL,
+    timeout_seconds: int = 30,
+) -> tuple[pd.DataFrame, dict]:
+    status = {
+        "connector_key": "eleclink",
+        "source_variant_key": "nordpool_umm_authenticated_api",
+        "source_provider": "nordpool_umm",
+        "source_key": "nordpool_umm_authenticated_api",
+        "source_label": "Nord Pool UMM authenticated API",
+        "source_attempted_flag": False,
+        "source_fetch_ok": False,
+        "source_gap_reason": pd.NA,
+    }
+
+    token = (access_token or "").strip()
+    username = (username or "").strip()
+    password = (password or "").strip()
+    client_authorization = (client_authorization or "").strip()
+    scope = (scope or "").strip()
+
+    if not token and not (username and password and client_authorization):
+        status["source_gap_reason"] = "nordpool_umm_credentials_not_provided"
+        return _empty_operator_event_frame(), status
+
+    status["source_attempted_flag"] = True
+    try:
+        if not token:
+            token_body = {
+                "grant_type": "password",
+                "username": username,
+                "password": password,
+            }
+            if scope:
+                token_body["scope"] = scope
+            auth_header = client_authorization
+            if auth_header and not auth_header.lower().startswith("basic "):
+                auth_header = f"Basic {auth_header}"
+            token_request = urllib.request.Request(
+                token_url,
+                data=urllib.parse.urlencode(token_body).encode("utf-8"),
+                headers={
+                    "Authorization": auth_header,
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Accept": "application/json",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(token_request, timeout=timeout_seconds) as response:
+                token_payload = json.loads(response.read().decode("utf-8"))
+            token = str(token_payload.get("access_token") or "").strip()
+            if not token:
+                raise RuntimeError("Nord Pool token response did not include access_token")
+
+        message_request = urllib.request.Request(
+            messages_url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/json",
+            },
+            method="GET",
+        )
+        with urllib.request.urlopen(message_request, timeout=timeout_seconds) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        frame = pd.DataFrame(_extract_umm_records(payload))
+        status["source_fetch_ok"] = True
+        status["source_gap_reason"] = pd.NA
+        normalized = _normalize_eleclink_umm_frame(
+            frame,
+            source_key="nordpool_umm_authenticated_api",
+            source_label="Nord Pool UMM authenticated API",
+            connector_match_rule="authenticated_api_match",
+        )
+        return normalized, status
+    except urllib.error.HTTPError as exc:
+        status["source_gap_reason"] = f"nordpool_umm_http_{exc.code}"
+        return _empty_operator_event_frame(), status
+    except Exception as exc:
+        status["source_gap_reason"] = f"nordpool_umm_fetch_error:{type(exc).__name__}"
+        return _empty_operator_event_frame(), status
+
+
+def _requested_window_bounds(start_date: dt.date, end_date: dt.date) -> tuple[pd.Timestamp, pd.Timestamp]:
+    start_utc = pd.Timestamp(start_date, tz="Europe/London").tz_convert("UTC")
+    end_utc = pd.Timestamp(end_date + dt.timedelta(days=1), tz="Europe/London").tz_convert("UTC")
+    return start_utc, end_utc
+
+
+def _event_overlap_summary(
+    frame: pd.DataFrame,
+    *,
+    start_date: dt.date,
+    end_date: dt.date,
+) -> dict:
+    event_count = len(frame)
+    latest_publish_time = pd.NaT
+    overlap_event_count = 0
+    overlap_hour_count = 0
+    if frame is not None and not frame.empty:
+        working = frame.copy()
+        working["event_start_utc"] = pd.to_datetime(working["event_start_utc"], utc=True, errors="coerce")
+        working["event_end_utc"] = pd.to_datetime(working["event_end_utc"], utc=True, errors="coerce")
+        working["publish_time_utc"] = pd.to_datetime(working["publish_time_utc"], utc=True, errors="coerce")
+        latest_publish_time = working["publish_time_utc"].max()
+        window_start, window_end = _requested_window_bounds(start_date, end_date)
+        overlap = working[
+            working["event_start_utc"].notna()
+            & working["event_end_utc"].notna()
+            & (working["event_end_utc"] > window_start)
+            & (working["event_start_utc"] < window_end)
+        ].copy()
+        overlap_event_count = len(overlap)
+        if not overlap.empty:
+            interval_index = _hourly_window_frame(start_date, end_date)
+            overlap_hours = 0
+            for row in overlap.itertuples(index=False):
+                matching = interval_index[
+                    (interval_index["interval_end_utc"] > row.event_start_utc)
+                    & (interval_index["interval_start_utc"] < row.event_end_utc)
+                ]
+                overlap_hours += len(matching)
+            overlap_hour_count = overlap_hours
+    return {
+        "source_event_count": int(event_count),
+        "source_overlap_event_count": int(overlap_event_count),
+        "source_overlap_hour_count": int(overlap_hour_count),
+        "source_latest_publish_time_utc": latest_publish_time,
+    }
+
+
+def _empty_source_compare_frame() -> pd.DataFrame:
+    return pd.DataFrame(
+        columns=[
+            "requested_start_date",
+            "requested_end_date",
+            "selection_context",
+            "connector_key",
+            "source_variant_key",
+            "source_provider",
+            "source_key",
+            "source_label",
+            "source_attempted_flag",
+            "source_fetch_ok",
+            "source_event_count",
+            "source_overlap_event_count",
+            "source_overlap_hour_count",
+            "source_latest_publish_time_utc",
+            "source_selected_flag",
+            "source_selection_rank",
+            "source_selection_reason",
+            "source_gap_reason",
+        ]
+    )
+
+
+def build_eleclink_operator_source_compare(
+    *,
+    start_date: dt.date,
+    end_date: dt.date,
+    authenticated_frame: pd.DataFrame,
+    authenticated_status: dict,
+    export_frame: pd.DataFrame,
+    export_attempted_flag: bool,
+) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
+    today = dt.datetime.now(dt.timezone.utc).date()
+    historical_replay = end_date < (today - dt.timedelta(days=7))
+    selection_context = "historical_replay" if historical_replay else "current_operational"
+
+    auth_summary = {
+        **authenticated_status,
+        **_event_overlap_summary(authenticated_frame, start_date=start_date, end_date=end_date),
+    }
+    export_summary = {
+        "connector_key": "eleclink",
+        "source_variant_key": "nordpool_umm_export",
+        "source_provider": "nordpool_umm",
+        "source_key": "nordpool_umm_export",
+        "source_label": "Nord Pool UMM export",
+        "source_attempted_flag": bool(export_attempted_flag),
+        "source_fetch_ok": bool(export_attempted_flag),
+        "source_gap_reason": (pd.NA if export_attempted_flag else "nordpool_umm_export_not_provided"),
+        **_event_overlap_summary(export_frame, start_date=start_date, end_date=end_date),
+    }
+
+    selected_variant = None
+    selection_reason = "no_eleclink_source_available"
+    if historical_replay:
+        if export_summary["source_fetch_ok"]:
+            selected_variant = "nordpool_umm_export"
+            selection_reason = "manual_export_preferred_for_historical_replay"
+        elif auth_summary["source_fetch_ok"] and auth_summary["source_overlap_hour_count"] > 0:
+            selected_variant = "nordpool_umm_authenticated_api"
+            selection_reason = "authenticated_api_has_historical_overlap"
+    else:
+        if auth_summary["source_fetch_ok"]:
+            selected_variant = "nordpool_umm_authenticated_api"
+            selection_reason = "authenticated_api_preferred_for_current_window"
+        elif export_summary["source_fetch_ok"]:
+            selected_variant = "nordpool_umm_export"
+            selection_reason = "manual_export_fallback_for_current_window"
+
+    compare_rows = []
+    for rank, summary in enumerate((auth_summary, export_summary), start=1):
+        row = {
+            "requested_start_date": start_date,
+            "requested_end_date": end_date,
+            "selection_context": selection_context,
+            **summary,
+            "source_selected_flag": summary["source_variant_key"] == selected_variant,
+            "source_selection_rank": rank,
+            "source_selection_reason": selection_reason if summary["source_variant_key"] == selected_variant else pd.NA,
+        }
+        compare_rows.append(row)
+
+    compare = pd.DataFrame(compare_rows, columns=list(_empty_source_compare_frame().columns))
+    selected_frame = (
+        authenticated_frame.copy()
+        if selected_variant == "nordpool_umm_authenticated_api"
+        else export_frame.copy()
+        if selected_variant == "nordpool_umm_export"
+        else _empty_operator_event_frame()
+    )
+    selected_row = compare[compare["source_selected_flag"]].head(1)
+    resolution = {
+        "selected_variant_key": selected_variant,
+        "selection_context": selection_context,
+        "selection_reason": selection_reason,
+        "source_provider": "nordpool_umm",
+        "source_key": (selected_row.iloc[0]["source_key"] if not selected_row.empty else "nordpool_umm"),
+        "source_label": (selected_row.iloc[0]["source_label"] if not selected_row.empty else "Nord Pool UMM"),
+        "source_fetch_ok": (bool(selected_row.iloc[0]["source_fetch_ok"]) if not selected_row.empty else False),
+        "source_gap_reason": (selected_row.iloc[0]["source_gap_reason"] if not selected_row.empty else "no_eleclink_source_available"),
+    }
+    return selected_frame, compare, resolution
 
 
 def build_france_connector_operator_event_frame(
@@ -317,7 +606,7 @@ def build_fact_france_connector_availability_hourly(
     end_date: dt.date,
     operator_event_frame: pd.DataFrame,
     remit_fetch_status_by_date: pd.DataFrame | None = None,
-    eleclink_export_loaded: bool = False,
+    eleclink_source_resolution: dict | None = None,
 ) -> pd.DataFrame:
     if end_date < start_date:
         raise ValueError("end_date must be on or after start_date")
@@ -353,13 +642,20 @@ def build_fact_france_connector_availability_hourly(
     base["operator_fetch_ok"] = False
     remit_connector_mask = base["source_provider"].eq("elexon_remit")
     base.loc[remit_connector_mask, "operator_fetch_ok"] = base.loc[remit_connector_mask, "remit_fetch_ok"].fillna(False)
-    base.loc[base["connector_key"].eq("eleclink"), "operator_fetch_ok"] = bool(eleclink_export_loaded)
+    eleclink_mask = base["connector_key"].eq("eleclink")
+    eleclink_resolution = eleclink_source_resolution or {}
+    base.loc[eleclink_mask, "operator_fetch_ok"] = bool(eleclink_resolution.get("source_fetch_ok", False))
+    if eleclink_resolution:
+        base.loc[eleclink_mask, "source_provider"] = eleclink_resolution.get("source_provider", "nordpool_umm")
+        base.loc[eleclink_mask, "source_key"] = eleclink_resolution.get("source_key", "nordpool_umm")
+        base.loc[eleclink_mask, "source_label"] = eleclink_resolution.get("source_label", "Nord Pool UMM")
     base = base.drop(columns=["remit_fetch_ok"], errors="ignore")
 
     base["operator_source_gap_reason"] = pd.NA
     base.loc[remit_connector_mask & ~base["operator_fetch_ok"], "operator_source_gap_reason"] = "elexon_remit_fetch_failed"
-    base.loc[base["connector_key"].eq("eleclink") & ~base["operator_fetch_ok"], "operator_source_gap_reason"] = (
-        "nordpool_umm_export_not_provided"
+    base.loc[eleclink_mask & ~base["operator_fetch_ok"], "operator_source_gap_reason"] = eleclink_resolution.get(
+        "source_gap_reason",
+        "nordpool_umm_source_not_available",
     )
 
     interval_rows = []
@@ -473,22 +769,46 @@ def materialize_france_connector_availability_history(
     end_date: dt.date,
     output_dir: str | Path,
     eleclink_umm_export_path: str | Path | None = None,
+    eleclink_umm_authenticated: pd.DataFrame | None = None,
+    eleclink_authenticated_status: dict | None = None,
 ) -> Dict[str, pd.DataFrame]:
     raw_remit, remit_status = fetch_remit_event_detail_with_status(start_date, end_date)
     eleclink_export = load_eleclink_umm_export(eleclink_umm_export_path)
-    operator_event = build_france_connector_operator_event_frame(raw_remit, eleclink_umm_export=eleclink_export)
+    export_attempted_flag = bool(eleclink_umm_export_path)
+    authenticated_frame = eleclink_umm_authenticated if eleclink_umm_authenticated is not None else _empty_operator_event_frame()
+    authenticated_status = eleclink_authenticated_status or {
+        "connector_key": "eleclink",
+        "source_variant_key": "nordpool_umm_authenticated_api",
+        "source_provider": "nordpool_umm",
+        "source_key": "nordpool_umm_authenticated_api",
+        "source_label": "Nord Pool UMM authenticated API",
+        "source_attempted_flag": False,
+        "source_fetch_ok": False,
+        "source_gap_reason": "nordpool_umm_credentials_not_provided",
+    }
+    selected_eleclink, source_compare, eleclink_resolution = build_eleclink_operator_source_compare(
+        start_date=start_date,
+        end_date=end_date,
+        authenticated_frame=authenticated_frame,
+        authenticated_status=authenticated_status,
+        export_frame=eleclink_export,
+        export_attempted_flag=export_attempted_flag,
+    )
+    operator_event = build_france_connector_operator_event_frame(raw_remit, eleclink_umm_export=selected_eleclink)
     availability = build_fact_france_connector_availability_hourly(
         start_date=start_date,
         end_date=end_date,
         operator_event_frame=operator_event,
         remit_fetch_status_by_date=remit_status,
-        eleclink_export_loaded=not eleclink_export.empty,
+        eleclink_source_resolution=eleclink_resolution,
     )
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     operator_event.to_csv(output_path / f"{FRANCE_CONNECTOR_OPERATOR_EVENT_TABLE}.csv", index=False)
     availability.to_csv(output_path / f"{FRANCE_CONNECTOR_AVAILABILITY_TABLE}.csv", index=False)
+    source_compare.to_csv(output_path / f"{FRANCE_CONNECTOR_OPERATOR_SOURCE_COMPARE_TABLE}.csv", index=False)
     return {
         FRANCE_CONNECTOR_OPERATOR_EVENT_TABLE: operator_event,
         FRANCE_CONNECTOR_AVAILABILITY_TABLE: availability,
+        FRANCE_CONNECTOR_OPERATOR_SOURCE_COMPARE_TABLE: source_compare,
     }

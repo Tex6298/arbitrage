@@ -30,6 +30,13 @@ TRUTH_STORE_PRIMARY_KEYS: Dict[str, list[str]] = {
     "fact_interconnector_capacity_source_audit_variant": ["border_key", "direction_key", "variant_key"],
     "fact_france_connector_operator_event": ["connector_key", "event_start_utc", "event_end_utc", "publish_time_utc"],
     "fact_france_connector_availability_hourly": ["interval_start_utc", "connector_key"],
+    "fact_france_connector_operator_source_compare": [
+        "requested_start_date",
+        "requested_end_date",
+        "connector_key",
+        "source_variant_key",
+    ],
+    "fact_france_connector_reviewed_period": ["connector_key", "direction_key", "period_start_utc", "period_end_utc", "source_key"],
     "fact_france_connector_hourly": ["interval_start_utc", "connector_key"],
     "fact_gb_transfer_gate_hourly": ["interval_start_utc", "cluster_key", "hub_key"],
     "fact_route_score_hourly": ["interval_start_utc", "cluster_key", "route_name", "hub_key"],

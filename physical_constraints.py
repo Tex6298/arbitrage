@@ -85,7 +85,7 @@ ASSUMPTIONS: Tuple[ConstraintAssumption, ...] = (
         question="Is interconnector capacity actually available on the route?",
         current_assumption="Route scoring now uses first-pass border flow plus first-pass offered capacity, a separate review-policy surface exists for alternate explicit-daily capacity on GB-NL, GB-BE, and GB-DK1, and GB-FR now has a France-specific cable layer plus operator-availability overlays from Elexon REMIT for IFA and IFA2.",
         risk="Medium to high. Auctioned capacity, outages, and counterflows can invalidate the route.",
-        next_solution="Decide whether reviewed explicit-daily tiers should be promoted into route scoring, wire ElecLink onto a stable Nord Pool UMM or equivalent operator source, then replace the remaining border proxies with ATC/NTC, auction allocations, and physical flow saturation by border and hour.",
+        next_solution="Decide whether reviewed explicit-daily tiers should be promoted into route scoring, keep improving the authenticated-vs-export ElecLink source selection, then replace the remaining border proxies with ATC/NTC, auction allocations, and physical flow saturation by border and hour.",
     ),
     ConstraintAssumption(
         key="route_costs",
@@ -107,7 +107,7 @@ def remaining_workstreams() -> List[str]:
         "Add curtailment or redispatch signals so the model distinguishes generic spreads from forced-export conditions.",
         "Join fact_gb_transfer_gate_hourly into cluster-aware route scoring so internal GB transfer can actually gate a specific source cluster.",
         "Decide whether reviewed explicit-daily ENTSO-E capacity for GB-NL, GB-BE, and GB-DK1 is safe to promote beyond a reviewed evidence tier.",
-        "Replace the remaining France gap by wiring ElecLink onto a stable Nord Pool UMM or equivalent operator availability source.",
+        "Upgrade the ElecLink operator path from authenticated-vs-export first pass toward a stable, fully queryable Nord Pool UMM availability feed for both current and historical windows.",
         "Upgrade fact_interconnector_capacity_hourly from offered-capacity first pass toward ATC/NTC, outages, and post-auction headroom by hour.",
         "Replace static leg fees and losses with connector-specific parameters and time-varying availability.",
     ]

@@ -364,6 +364,14 @@ Key behavior:
      --eleclink-umm-export-path eleclink_umm_export.csv
    ```
 
+   If you have Nord Pool UMM credentials, you can also supply:
+
+   ```bash
+     --eleclink-umm-username YOUR_USERNAME ^
+     --eleclink-umm-password YOUR_PASSWORD ^
+     --eleclink-umm-client-authorization YOUR_CLIENT_AUTHORIZATION_STRING
+   ```
+
 ## Notes
 
 - GB prices come from the Elexon market-index feed and are published in GBP, so an FX rate
@@ -465,15 +473,20 @@ Key behavior:
 - `france_connector_availability.py` now materializes:
   - `fact_france_connector_operator_event`
   - `fact_france_connector_availability_hourly`
+  - `fact_france_connector_operator_source_compare`
 - `dim_interconnector_cable` is the first cable-level connector dimension. Current scope is France-facing cables only:
   `IFA`, `IFA2`, and `ElecLink`.
 - `fact_france_connector_hourly` decomposes the shared `GB-FR` border into cable rows using nominal-capacity shares,
   border flow, and any published or reviewed border-capacity overlays. It is explicitly a cable proxy layer, not
   cable-level operational truth.
 - `fact_france_connector_operator_event` is the event-level source-truth surface for France connector outages. Today it
-  uses Elexon REMIT for `IFA` and `IFA2`, and supports an optional Nord Pool UMM export path for `ElecLink`.
+  uses Elexon REMIT for `IFA` and `IFA2`, and supports both an authenticated Nord Pool UMM path and an optional manual
+  export path for `ElecLink`.
 - `fact_france_connector_availability_hourly` is the hourly operator-availability layer. It can block or cap `IFA` and
-  `IFA2` directly from REMIT, and it keeps `ElecLink` explicitly at `unknown_source` unless a UMM export is provided.
+  `IFA2` directly from REMIT, and it keeps `ElecLink` explicitly at `unknown_source` unless either an authenticated
+  Nord Pool UMM session or a reviewed manual export is selected for the requested window.
+- `fact_france_connector_operator_source_compare` is the ElecLink source-selection surface. It compares the authenticated
+  Nord Pool path and the manual export path, then records which source was selected for the requested window and why.
 - The live route scorer now joins `fact_interconnector_flow_hourly` and `fact_interconnector_capacity_hourly`
   into the GB border leg only.
   It keeps:
@@ -494,6 +507,10 @@ Key behavior:
   as one undifferentiated border inside `fact_route_score_hourly`.
 - France route rows now also carry operator-availability fields, so `IFA` and `IFA2` can be capped or blocked by
   REMIT-backed connector outages before the route is scored.
+- For `ElecLink`, the current policy is explicit:
+  - near-current windows prefer authenticated Nord Pool UMM if credentials are available
+  - historical replay windows prefer a manual UMM export when supplied
+  - if neither source is usable, `ElecLink` remains `unknown_source`
 - `fact_bmu_curtailment_truth_half_hourly` is tiered, not flattened. It keeps:
   - `dispatch_only` rows when dispatch truth exists but a lost-energy estimate is not valid
   - `physical_baseline` rows when PN or QPN provides a valid half-hour counterfactual

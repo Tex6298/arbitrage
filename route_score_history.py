@@ -57,6 +57,20 @@ def _empty_route_score_frame() -> pd.DataFrame:
             "reviewed_border_gate_state",
             "reviewed_border_flow_state",
             "reviewed_border_capacity_state",
+            "reviewed_publication_state",
+            "reviewed_publication_evidence_tier",
+            "reviewed_publication_tier_accepted_flag",
+            "reviewed_publication_capacity_policy_action",
+            "reviewed_publication_capacity_limit_mw",
+            "reviewed_publication_source_provider",
+            "reviewed_publication_source_family",
+            "reviewed_publication_source_key",
+            "reviewed_publication_source_label",
+            "reviewed_publication_source_document_title",
+            "reviewed_publication_source_document_url",
+            "reviewed_publication_source_reference",
+            "reviewed_publication_source_published_date",
+            "reviewed_publication_source_count",
             "connector_key",
             "connector_label",
             "connector_operator",
@@ -191,6 +205,20 @@ def build_fact_route_score_hourly(
                 "connector_headroom_proxy_mw",
                 "connector_gate_state",
                 "connector_gate_reason",
+                "reviewed_publication_state",
+                "reviewed_publication_evidence_tier",
+                "reviewed_publication_tier_accepted_flag",
+                "reviewed_publication_capacity_policy_action",
+                "reviewed_publication_capacity_limit_mw",
+                "reviewed_publication_source_provider",
+                "reviewed_publication_source_family",
+                "reviewed_publication_source_key",
+                "reviewed_publication_source_label",
+                "reviewed_publication_source_document_title",
+                "reviewed_publication_source_document_url",
+                "reviewed_publication_source_reference",
+                "reviewed_publication_source_published_date",
+                "reviewed_publication_source_count",
             ]
         )
     for column, default in (
@@ -203,13 +231,27 @@ def build_fact_route_score_hourly(
         ("operator_capacity_limit_mw", np.nan),
         ("nominal_capacity_mw", np.nan),
         ("nominal_capacity_share_of_border", np.nan),
-        ("connector_capacity_evidence_tier", pd.NA),
-        ("connector_headroom_proxy_mw", np.nan),
-        ("connector_gate_state", pd.NA),
-        ("connector_gate_reason", pd.NA),
-    ):
-        if column not in connector_lookup.columns:
-            connector_lookup[column] = default
+            ("connector_capacity_evidence_tier", pd.NA),
+            ("connector_headroom_proxy_mw", np.nan),
+            ("connector_gate_state", pd.NA),
+            ("connector_gate_reason", pd.NA),
+            ("reviewed_publication_state", pd.NA),
+            ("reviewed_publication_evidence_tier", pd.NA),
+            ("reviewed_publication_tier_accepted_flag", False),
+            ("reviewed_publication_capacity_policy_action", pd.NA),
+            ("reviewed_publication_capacity_limit_mw", np.nan),
+            ("reviewed_publication_source_provider", pd.NA),
+            ("reviewed_publication_source_family", pd.NA),
+            ("reviewed_publication_source_key", pd.NA),
+            ("reviewed_publication_source_label", pd.NA),
+            ("reviewed_publication_source_document_title", pd.NA),
+            ("reviewed_publication_source_document_url", pd.NA),
+            ("reviewed_publication_source_reference", pd.NA),
+            ("reviewed_publication_source_published_date", pd.NaT),
+            ("reviewed_publication_source_count", np.nan),
+        ):
+            if column not in connector_lookup.columns:
+                connector_lookup[column] = default
     connector_lookup["interval_start_utc"] = pd.to_datetime(
         connector_lookup["interval_start_utc"],
         utc=True,
@@ -325,6 +367,20 @@ def build_fact_route_score_hourly(
                         "connector_headroom_proxy_mw",
                         "connector_gate_state",
                         "connector_gate_reason",
+                        "reviewed_publication_state",
+                        "reviewed_publication_evidence_tier",
+                        "reviewed_publication_tier_accepted_flag",
+                        "reviewed_publication_capacity_policy_action",
+                        "reviewed_publication_capacity_limit_mw",
+                        "reviewed_publication_source_provider",
+                        "reviewed_publication_source_family",
+                        "reviewed_publication_source_key",
+                        "reviewed_publication_source_label",
+                        "reviewed_publication_source_document_title",
+                        "reviewed_publication_source_document_url",
+                        "reviewed_publication_source_reference",
+                        "reviewed_publication_source_published_date",
+                        "reviewed_publication_source_count",
                     ]
                 ],
                 left_on=["interval_start_utc", "hub_key"],
@@ -345,6 +401,20 @@ def build_fact_route_score_hourly(
             ("connector_headroom_proxy_mw", np.nan),
             ("connector_gate_state", pd.NA),
             ("connector_gate_reason", pd.NA),
+            ("reviewed_publication_state", pd.NA),
+            ("reviewed_publication_evidence_tier", pd.NA),
+            ("reviewed_publication_tier_accepted_flag", False),
+            ("reviewed_publication_capacity_policy_action", pd.NA),
+            ("reviewed_publication_capacity_limit_mw", np.nan),
+            ("reviewed_publication_source_provider", pd.NA),
+            ("reviewed_publication_source_family", pd.NA),
+            ("reviewed_publication_source_key", pd.NA),
+            ("reviewed_publication_source_label", pd.NA),
+            ("reviewed_publication_source_document_title", pd.NA),
+            ("reviewed_publication_source_document_url", pd.NA),
+            ("reviewed_publication_source_reference", pd.NA),
+            ("reviewed_publication_source_published_date", pd.NaT),
+            ("reviewed_publication_source_count", np.nan),
         ):
             if column not in route_transfer.columns:
                 route_transfer[column] = default
@@ -366,6 +436,15 @@ def build_fact_route_score_hourly(
         reviewed_available = (
             route_transfer["capacity_policy_action"].eq("allow_reviewed_explicit_daily")
             & route_transfer["reviewed_border_gate_state"].isin(["pass", "flow_unknown_capacity_published"])
+        )
+        connector_reviewed_available = (
+            route_transfer["route_border_key"].eq("GB-FR")
+            & route_transfer["connector_capacity_evidence_tier"].eq("reviewed_public_doc_period")
+            & connector_limit.fillna(0).gt(0)
+            & route_transfer["reviewed_publication_tier_accepted_flag"].where(
+                route_transfer["reviewed_publication_tier_accepted_flag"].notna(),
+                False,
+            ).astype(bool)
         )
 
         route_transfer["route_delivery_tier"] = "blocked"
@@ -405,7 +484,13 @@ def build_fact_route_score_hourly(
             "The route passes both the internal transfer gate and the first-pass direct border-capacity gate."
         )
 
-        reviewed_mask = price_positive & ~transfer_blocked & ~connector_blocked & ~confirmed_available & reviewed_available
+        reviewed_mask = (
+            price_positive
+            & ~transfer_blocked
+            & ~connector_blocked
+            & ~confirmed_available
+            & (reviewed_available | connector_reviewed_available)
+        )
         route_transfer.loc[reviewed_mask, "route_delivery_tier"] = "reviewed"
         route_transfer.loc[reviewed_mask, "route_delivery_signal"] = "EXPORT_REVIEWED"
         reviewed_headroom = pd.to_numeric(route_transfer.loc[reviewed_mask, "reviewed_border_headroom_proxy_mw"], errors="coerce")
@@ -426,8 +511,19 @@ def build_fact_route_score_hourly(
         route_transfer.loc[reviewed_mask, "route_delivery_reason"] = (
             "The first-pass direct border-capacity gate is unavailable, but an accepted reviewed-capacity tier exists for this border."
         )
+        reviewed_publication_only = reviewed_mask & ~reviewed_available & connector_reviewed_available
+        route_transfer.loc[reviewed_publication_only, "route_delivery_reason"] = (
+            "The route is price-positive and internally reachable, and a reviewed France connector publication period provides an auditable cable-level reviewed tier even though border capacity is still unpublished."
+        )
 
-        unknown_mask = price_positive & ~transfer_blocked & ~connector_blocked & ~confirmed_available & ~reviewed_available
+        unknown_mask = (
+            price_positive
+            & ~transfer_blocked
+            & ~connector_blocked
+            & ~confirmed_available
+            & ~reviewed_available
+            & ~connector_reviewed_available
+        )
         route_transfer.loc[unknown_mask, "route_delivery_tier"] = "capacity_unknown"
         route_transfer.loc[unknown_mask, "route_delivery_signal"] = "EXPORT_CAPACITY_UNKNOWN"
         route_transfer.loc[unknown_mask, "deliverable_mw_proxy"] = pd.concat(
@@ -485,6 +581,20 @@ def build_fact_route_score_hourly(
         ("connector_headroom_proxy_mw", np.nan),
         ("connector_gate_state", pd.NA),
         ("connector_gate_reason", pd.NA),
+        ("reviewed_publication_state", pd.NA),
+        ("reviewed_publication_evidence_tier", pd.NA),
+        ("reviewed_publication_tier_accepted_flag", False),
+        ("reviewed_publication_capacity_policy_action", pd.NA),
+        ("reviewed_publication_capacity_limit_mw", np.nan),
+        ("reviewed_publication_source_provider", pd.NA),
+        ("reviewed_publication_source_family", pd.NA),
+        ("reviewed_publication_source_key", pd.NA),
+        ("reviewed_publication_source_label", pd.NA),
+        ("reviewed_publication_source_document_title", pd.NA),
+        ("reviewed_publication_source_document_url", pd.NA),
+        ("reviewed_publication_source_reference", pd.NA),
+        ("reviewed_publication_source_published_date", pd.NaT),
+        ("reviewed_publication_source_count", np.nan),
     ):
         if column not in fact.columns:
             fact[column] = default
