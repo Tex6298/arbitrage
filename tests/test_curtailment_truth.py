@@ -285,6 +285,49 @@ class CurtailmentTruthTests(unittest.TestCase):
         first_row = fact[fact["settlement_period"] == 1].iloc[0]
         self.assertEqual(first_row["availability_state"], "unknown")
 
+    def test_partial_day_remit_fetch_status_only_degrades_failed_days(self) -> None:
+        dim = sample_dim_bmu_asset()
+        remit_status = pd.DataFrame(
+            [
+                {
+                    "settlement_date": dt.date(2024, 10, 1),
+                    "remit_fetch_ok": False,
+                    "remit_detail_url_count": 10,
+                    "remit_detail_error_count": 1,
+                    "remit_first_fetch_error": "synthetic remit failure",
+                },
+                {
+                    "settlement_date": dt.date(2024, 10, 2),
+                    "remit_fetch_ok": True,
+                    "remit_detail_url_count": 8,
+                    "remit_detail_error_count": 0,
+                    "remit_first_fetch_error": pd.NA,
+                },
+            ]
+        )
+        fact = build_fact_bmu_availability_half_hourly(
+            dim_bmu_asset=dim,
+            raw_remit_frame=pd.DataFrame(),
+            raw_uou_frame=pd.DataFrame(),
+            start_date=dt.date(2024, 10, 1),
+            end_date=dt.date(2024, 10, 2),
+            remit_fetch_ok=False,
+            remit_fetch_status_by_date=remit_status,
+        )
+        first_day = fact[
+            (fact["settlement_date"] == dt.date(2024, 10, 1)) & (fact["settlement_period"] == 1)
+        ].iloc[0]
+        second_day = fact[
+            (fact["settlement_date"] == dt.date(2024, 10, 2)) & (fact["settlement_period"] == 1)
+        ].iloc[0]
+        self.assertEqual(first_day["availability_state"], "unknown")
+        self.assertFalse(bool(first_day["remit_fetch_ok"]))
+        self.assertEqual(int(first_day["remit_detail_error_count"]), 1)
+        self.assertEqual(first_day["remit_first_fetch_error"], "synthetic remit failure")
+        self.assertEqual(second_day["availability_state"], "available")
+        self.assertTrue(bool(second_day["remit_fetch_ok"]))
+        self.assertEqual(int(second_day["remit_detail_error_count"]), 0)
+
     def test_partial_remit_downgrades_to_unknown_before_truth_override(self) -> None:
         dim = sample_dim_bmu_asset()
         raw_remit = pd.DataFrame(

@@ -9,7 +9,7 @@ import pandas as pd
 
 from bmu_availability import (
     build_fact_bmu_availability_half_hourly,
-    fetch_remit_event_detail,
+    fetch_remit_event_detail_with_status,
     fetch_uou2t14d_summary,
 )
 from bmu_dispatch import (
@@ -2242,11 +2242,15 @@ def materialize_bmu_curtailment_truth(
     )
 
     remit_fetch_ok = True
+    remit_fetch_status = pd.DataFrame()
     try:
-        raw_remit = fetch_remit_event_detail(start_date, end_date)
+        raw_remit, remit_fetch_status = fetch_remit_event_detail_with_status(start_date, end_date)
+        if not remit_fetch_status.empty:
+            remit_fetch_ok = bool(remit_fetch_status["remit_fetch_ok"].fillna(False).all())
     except Exception:
         remit_fetch_ok = False
         raw_remit = pd.DataFrame()
+        remit_fetch_status = pd.DataFrame()
 
     try:
         raw_uou = fetch_uou2t14d_summary(dim_bmu_asset["elexon_bm_unit"].tolist())
@@ -2260,6 +2264,7 @@ def materialize_bmu_curtailment_truth(
         start_date=start_date,
         end_date=end_date,
         remit_fetch_ok=remit_fetch_ok,
+        remit_fetch_status_by_date=remit_fetch_status,
     )
 
     try:

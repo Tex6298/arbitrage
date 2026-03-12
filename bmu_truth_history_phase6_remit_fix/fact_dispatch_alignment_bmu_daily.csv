@@ -1,0 +1,118 @@
+settlement_date,elexon_bm_unit,national_grid_bm_unit,cluster_key,cluster_label,parent_region,mapping_status,dispatch_half_hour_count,estimated_dispatch_half_hour_count,blocked_dispatch_half_hour_count,accepted_down_delta_mwh_lower_bound,same_bmu_dispatch_down_increment_mwh_lower_bound,family_day_dispatch_down_increment_mwh_lower_bound,physical_dispatch_down_increment_mwh_lower_bound,estimated_dispatch_down_mwh_lower_bound,blocked_dispatch_down_mwh_lower_bound,blocked_outage_dispatch_down_mwh_lower_bound,blocked_availability_unknown_dispatch_down_mwh_lower_bound,blocked_physical_below_generation_dispatch_down_mwh_lower_bound,blocked_physical_inconsistent_dispatch_down_mwh_lower_bound,lost_energy_mwh,dispatch_alignment_state,primary_dispatch_block_reason
+2024-10-01,T_SGRWO-6,SGRWO-6,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,10,10,0,30.900000000000002,172.5,516.5,689.0,719.9,0.0,0.0,0.0,0.0,0.0,289.9452500000001,fully_estimated,
+2024-10-01,T_SGRWO-1,SGRWO-1,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,9,9,0,16.916666666666668,417.5,282.0,699.5,716.4166666666666,0.0,0.0,0.0,0.0,0.0,260.9634,fully_estimated,
+2024-10-01,T_SGRWO-3,SGRWO-3,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,25,25,0,10.233333333333333,375.5,908.0416666666666,1283.5416666666665,1293.7749999999999,0.0,0.0,0.0,0.0,0.0,1040.3254666666667,fully_estimated,
+2024-10-01,T_SGRWO-4,SGRWO-4,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,31,31,0,6.783333333333333,652.2083333333333,790.0083333333333,1442.2166666666667,1449.0,0.0,0.0,0.0,0.0,0.0,1072.9492434669799,fully_estimated,
+2024-10-01,T_SGRWO-2,SGRWO-2,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,24,24,0,4.15,325.90000000000003,402.31666666666666,728.2166666666667,732.3666666666667,0.0,0.0,0.0,0.0,0.0,401.23566666666665,fully_estimated,
+2024-10-01,T_CLDNW-1,CLDNW-1,,,Scotland,region_only,2,2,0,3.5166666666666666,0.0,0.0,0.0,3.5166666666666666,0.0,0.0,0.0,0.0,0.0,61.99809999999998,fully_estimated,
+2024-10-01,T_PNYCW-1,PNYCW-1,,,England/Wales,region_only,4,4,0,3.316666666666667,28.75,0.0,28.75,32.06666666666666,0.0,0.0,0.0,0.0,0.0,153.32399999999996,fully_estimated,
+2024-10-01,T_SGRWO-5,SGRWO-5,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,27,27,0,3.1333333333333337,509.8666666666667,407.45,917.3166666666666,920.45,0.0,0.0,0.0,0.0,0.0,450.42600000000004,fully_estimated,
+2024-10-01,T_GNFSW-1,GNFSW-1,east_anglia_offshore,East Anglia Offshore,England/Wales,mapped,5,5,0,2.8166666666666664,171.11666666666667,0.0,171.11666666666667,173.93333333333334,0.0,0.0,0.0,0.0,0.0,37.86000000000001,fully_estimated,
+2024-10-01,T_RCBKO-1,RCBKO-1,humber_offshore,Humber Offshore,England/Wales,mapped,5,5,0,2.8166666666666664,264.68333333333334,301.0,565.6833333333334,568.5,0.0,0.0,0.0,0.0,0.0,128.715,fully_estimated,
+2024-10-01,T_GNFSW-2,GNFSW-2,east_anglia_offshore,East Anglia Offshore,England/Wales,mapped,4,4,0,1.6,81.98333333333333,0.0,81.98333333333333,83.58333333333333,0.0,0.0,0.0,0.0,0.0,22.357200000000002,fully_estimated,
+2024-10-01,T_CLDCW-1,CLDCW-1,,,Scotland,region_only,2,2,0,1.4166666666666665,0.0,0.0,0.0,1.4166666666666665,0.0,0.0,0.0,0.0,0.0,64.12079999999999,fully_estimated,
+2024-10-01,T_RCBKO-2,RCBKO-2,humber_offshore,Humber Offshore,England/Wales,mapped,4,4,0,1.3333333333333333,128.66666666666666,290.75,419.41666666666663,420.75,0.0,0.0,0.0,0.0,0.0,158.098,fully_estimated,
+2024-10-02,T_SHRSW-1,SHRSO-1,,,,unmapped,4,3,1,5.8999999999999995,202.06666666666666,0.0,202.06666666666666,206.0,1.9666666666666666,0.0,0.0,1.9666666666666666,0.0,10.176000000000002,partially_blocked,physical_below_generation
+2024-10-02,E_BTUIW-3,BTUIW-3,,,,unmapped,5,4,1,0.36666666666666664,43.5,0.0,43.5,43.5,0.36666666666666664,0.0,0.0,0.36666666666666664,0.0,12.302999999999999,partially_blocked,physical_below_generation
+2024-10-02,T_SGRWO-6,SGRWO-6,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,1,1,0,10.266666666666666,0.0,0.0,0.0,10.266666666666666,0.0,0.0,0.0,0.0,0.0,39.8655,fully_estimated,
+2024-10-02,T_SGRWO-1,SGRWO-1,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,1,1,0,7.216666666666668,0.0,0.0,0.0,7.216666666666668,0.0,0.0,0.0,0.0,0.0,39.935599999999994,fully_estimated,
+2024-10-02,T_PNYCW-1,PNYCW-1,,,England/Wales,region_only,1,1,0,2.033333333333333,0.0,0.0,0.0,2.033333333333333,0.0,0.0,0.0,0.0,0.0,73.95199999999998,fully_estimated,
+2024-10-02,T_KYPEW-1,KYPEW-1,,,,unmapped,5,5,0,0.5333333333333333,43.46666666666667,0.0,43.46666666666667,44.0,0.0,0.0,0.0,0.0,0.0,26.14,fully_estimated,
+2024-10-02,T_SGRWO-2,SGRWO-2,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,2,2,0,0.18333333333333332,30.5,0.0,30.5,30.683333333333334,0.0,0.0,0.0,0.0,0.0,25.6938,fully_estimated,
+2024-10-02,T_SGRWO-5,SGRWO-5,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,1,1,0,0.13333333333333333,0.0,0.0,0.0,0.13333333333333333,0.0,0.0,0.0,0.0,0.0,9.055999999999994,fully_estimated,
+2024-10-03,T_MOWEO-3,MOWEO-3,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,9,8,1,4.833333333333334,723.8499999999999,121.5,845.3499999999999,849.0,1.1833333333333333,0.0,0.0,1.1833333333333333,0.0,507.046,partially_blocked,physical_below_generation
+2024-10-03,T_GORDW-2,GORDW-2,,,,unmapped,2,1,1,0.16666666666666666,5.5,0.0,5.5,5.5,0.16666666666666666,0.0,0.0,0.16666666666666666,0.0,5.506,partially_blocked,physical_below_generation
+2024-10-03,T_MOWEO-1,MOWEO-1,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,12,11,1,11.466666666666667,826.6833333333333,86.5,913.1833333333333,924.5,0.15,0.0,0.0,0.15,0.0,588.161,partially_blocked,physical_below_generation
+2024-10-03,T_MOWEO-2,MOWEO-2,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,11,11,0,2.65,576.8499999999999,252.5,829.3499999999999,832.0,0.0,0.0,0.0,0.0,0.0,504.65200000000004,fully_estimated,
+2024-10-03,T_SGRWO-6,SGRWO-6,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,3,3,0,1.4666666666666668,3.95,0.0,3.95,5.416666666666666,0.0,0.0,0.0,0.0,0.0,57.1007,fully_estimated,
+2024-10-03,T_SGRWO-1,SGRWO-1,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,3,3,0,1.2166666666666668,3.0666666666666664,0.0,3.0666666666666664,4.283333333333333,0.0,0.0,0.0,0.0,0.0,59.423866666666655,fully_estimated,
+2024-10-03,T_SGRWO-3,SGRWO-3,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,3,3,0,0.6,1.6,0.0,1.6,2.2,0.0,0.0,0.0,0.0,0.0,30.593999999999998,fully_estimated,
+2024-10-03,T_SGRWO-4,SGRWO-4,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,3,3,0,0.5333333333333333,1.325,0.0,1.325,1.8583333333333332,0.0,0.0,0.0,0.0,0.0,23.9226,fully_estimated,
+2024-10-03,T_SGRWO-5,SGRWO-5,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,3,3,0,0.4,1.0083333333333333,0.0,1.0083333333333333,1.4083333333333332,0.0,0.0,0.0,0.0,0.0,17.22378333333333,fully_estimated,
+2024-10-03,T_SGRWO-2,SGRWO-2,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,3,3,0,0.35,0.9333333333333333,0.0,0.9333333333333333,1.2833333333333334,0.0,0.0,0.0,0.0,0.0,22.47233333333333,fully_estimated,
+2024-10-03,T_VKNGW-1,VKNGW-1,shetland_wind,Shetland Wind,Scotland,mapped,1,1,0,0.3,0.0,0.0,0.0,0.3,0.0,0.0,0.0,0.0,0.0,17.12875,fully_estimated,
+2024-10-03,T_VKNGW-3,VKNGW-3,shetland_wind,Shetland Wind,Scotland,mapped,1,1,0,0.21666666666666667,0.0,0.0,0.0,0.21666666666666667,0.0,0.0,0.0,0.0,0.0,19.699399999999994,fully_estimated,
+2024-10-03,T_VKNGW-2,VKNGW-2,shetland_wind,Shetland Wind,Scotland,mapped,2,2,0,0.2,0.2583333333333333,0.0,0.2583333333333333,0.4583333333333333,0.0,0.0,0.0,0.0,0.0,12.87498333333333,fully_estimated,
+2024-10-03,T_VKNGW-4,VKNGW-4,shetland_wind,Shetland Wind,Scotland,mapped,1,1,0,0.18333333333333332,0.0,0.0,0.0,0.18333333333333332,0.0,0.0,0.0,0.0,0.0,17.653400000000005,fully_estimated,
+2024-10-04,T_MOWEO-1,MOWEO-1,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,38,26,12,5.033333333333333,1560.9666666666667,1917.0,3477.9666666666667,2357.5,1125.5,0.0,1125.5,0.0,0.0,1405.51,partially_blocked,availability_unknown
+2024-10-04,T_MOWEO-2,MOWEO-2,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,39,27,12,11.799999999999999,1545.2,1872.5,3417.7,2428.0,1001.5,0.0,997.0,0.0,4.5,958.957,partially_blocked,availability_unknown
+2024-10-04,T_MOWEO-3,MOWEO-3,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,37,32,5,7.183333333333333,1389.15,2711.5,4100.65,3615.5,492.3333333333333,0.0,488.0,0.0,4.333333333333333,2005.4099999999996,partially_blocked,availability_unknown
+2024-10-04,T_WISTW-2,WISTW-2,,,,unmapped,2,1,1,3.666666666666667,0.0,0.0,0.0,2.3333333333333335,1.3333333333333333,0.0,0.0,1.3333333333333333,0.0,13.601,partially_blocked,physical_below_generation
+2024-10-04,E_BRYBW-1,BRYBW-1,,,,unmapped,4,3,1,2.1,37.15,0.0,37.15,38.0,1.25,0.0,0.0,1.25,0.0,38.007999999999996,partially_blocked,physical_below_generation
+2024-10-04,T_WDRGW-1,WDRGW-1,,,,unmapped,4,3,1,2.4833333333333334,0.0,0.0,0.0,1.6500000000000001,0.8333333333333334,0.0,0.0,0.8333333333333334,0.0,25.502000000000002,partially_blocked,physical_below_generation
+2024-10-04,T_GORDW-1,GORDW-1,,,,unmapped,2,1,1,0.5833333333333334,0.5333333333333333,0.0,0.5333333333333333,0.5333333333333333,0.5833333333333334,0.0,0.0,0.5833333333333334,0.0,0.6573333333333333,partially_blocked,physical_below_generation
+2024-10-04,T_DUNGW-1,DUNGW-1,,,,unmapped,5,5,0,12.6,156.8083333333333,0.0,156.8083333333333,169.40833333333333,0.0,0.0,0.0,0.0,0.0,93.02833333333334,fully_estimated,
+2024-10-04,T_SAKNW-1,SAKNW-1,,,,unmapped,12,12,0,10.633333333333333,193.86666666666665,0.0,193.86666666666665,204.5,0.0,0.0,0.0,0.0,0.0,115.678,fully_estimated,
+2024-10-04,T_VKNGW-2,VKNGW-2,shetland_wind,Shetland Wind,Scotland,mapped,11,11,0,2.866666666666667,6.8,0.0,6.8,9.666666666666666,0.0,0.0,0.0,0.0,0.0,90.13654999999997,fully_estimated,
+2024-10-04,T_VKNGW-4,VKNGW-4,shetland_wind,Shetland Wind,Scotland,mapped,7,7,0,2.683333333333333,41.416666666666664,0.0,41.416666666666664,44.099999999999994,0.0,0.0,0.0,0.0,0.0,86.04256666666669,fully_estimated,
+2024-10-04,T_VKNGW-1,VKNGW-1,shetland_wind,Shetland Wind,Scotland,mapped,6,6,0,2.1166666666666667,25.125,0.0,25.125,27.241666666666667,0.0,0.0,0.0,0.0,0.0,86.15833333333333,fully_estimated,
+2024-10-04,T_TWSHW-1,TWSHW-1,,,,unmapped,8,8,0,2.0833333333333335,88.91666666666666,0.0,88.91666666666666,91.0,0.0,0.0,0.0,0.0,0.0,54.784,fully_estimated,
+2024-10-04,T_DOREW-1,DOREW-1,,,,unmapped,3,3,0,1.4166666666666667,78.08333333333333,0.0,78.08333333333333,79.5,0.0,0.0,0.0,0.0,0.0,65.363,fully_estimated,
+2024-10-04,T_VKNGW-3,VKNGW-3,shetland_wind,Shetland Wind,Scotland,mapped,4,4,0,1.3,16.525,0.0,16.525,17.825,0.0,0.0,0.0,0.0,0.0,49.57029999999998,fully_estimated,
+2024-10-04,T_DOREW-2,DOREW-2,,,,unmapped,3,3,0,1.2,58.55,0.0,58.55,59.75,0.0,0.0,0.0,0.0,0.0,49.672,fully_estimated,
+2024-10-04,T_RCBKO-1,RCBKO-1,humber_offshore,Humber Offshore,England/Wales,mapped,1,1,0,1.1,40.65,0.0,40.65,41.75,0.0,0.0,0.0,0.0,0.0,2.2319999999999993,fully_estimated,
+2024-10-04,E_BABAW-1,BABAW-1,,,,unmapped,4,4,0,0.7,45.8,0.0,45.8,46.5,0.0,0.0,0.0,0.0,0.0,47.012,fully_estimated,
+2024-10-04,T_HALSW-1,HALSW-1,,,,unmapped,3,3,0,0.6666666666666666,31.333333333333336,0.0,31.333333333333336,32.0,0.0,0.0,0.0,0.0,0.0,30.900000000000002,fully_estimated,
+2024-10-05,T_WHIHW-1,WHIHW-1,,,,unmapped,5,3,2,1.7333333333333334,38.0,0.0,38.0,38.0,1.7333333333333334,0.0,0.0,0.0,1.7333333333333334,38.135,partially_blocked,physical_inconsistent
+2024-10-05,T_DRSLW-1,DRSLW-1,,,,unmapped,8,7,1,2.666666666666667,170.13333333333333,0.0,170.13333333333333,171.5,1.3,0.0,0.0,1.3,0.0,84.328,partially_blocked,physical_below_generation
+2024-10-05,T_SANQW-1,SANQW-1,,,,unmapped,2,1,1,2.7,0.0,0.0,0.0,1.5,1.2000000000000002,0.0,0.0,1.2000000000000002,0.0,1.5199999999999996,partially_blocked,physical_below_generation
+2024-10-05,E_HRHLW-1,HRHLW-1,,,,unmapped,8,7,1,1.4,77.76666666666667,0.0,77.76666666666667,78.5,0.6666666666666666,0.0,0.0,0.6666666666666666,0.0,56.623000000000005,partially_blocked,physical_below_generation
+2024-10-05,T_SAKNW-1,SAKNW-1,,,,unmapped,5,3,2,0.6333333333333333,44.25,0.0,44.25,44.25,0.6333333333333333,0.0,0.0,0.6333333333333333,0.0,42.976,partially_blocked,physical_below_generation
+2024-10-05,T_GORDW-2,GORDW-2,,,,unmapped,6,4,2,0.3333333333333333,9.483333333333333,0.0,9.483333333333333,9.483333333333333,0.3333333333333333,0.0,0.0,0.3333333333333333,0.0,9.499333333333333,partially_blocked,physical_below_generation
+2024-10-05,T_MOWEO-2,MOWEO-2,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,15,13,2,6.0,681.7666666666667,302.5,984.2666666666667,990.0,0.26666666666666666,0.0,0.0,0.26666666666666666,0.0,473.50600000000003,partially_blocked,physical_below_generation
+2024-10-05,T_HALSW-1,HALSW-1,,,,unmapped,8,7,1,0.3833333333333333,39.33333333333333,0.0,39.33333333333333,39.5,0.21666666666666667,0.0,0.0,0.21666666666666667,0.0,28.256999999999998,partially_blocked,physical_below_generation
+2024-10-05,T_MOWEO-1,MOWEO-1,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,19,18,1,8.033333333333333,980.6333333333332,542.0,1522.6333333333332,1530.5,0.16666666666666666,0.0,0.0,0.16666666666666666,0.0,659.5479999999999,partially_blocked,physical_below_generation
+2024-10-05,E_BRYBW-1,BRYBW-1,,,,unmapped,3,2,1,0.03333333333333333,6.25,0.0,6.25,6.25,0.03333333333333333,0.0,0.0,0.03333333333333333,0.0,6.260999999999999,partially_blocked,physical_below_generation
+2024-10-05,T_MOWEO-3,MOWEO-3,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,11,10,1,2.083333333333333,633.4333333333333,144.0,777.4333333333333,779.5,0.016666666666666666,0.0,0.0,0.016666666666666666,0.0,109.72999999999999,partially_blocked,physical_below_generation
+2024-10-05,T_SGRWO-1,SGRWO-1,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,9,9,0,19.316666666666666,285.68333333333334,0.0,285.68333333333334,305.0,0.0,0.0,0.0,0.0,0.0,660.6977333333333,fully_estimated,
+2024-10-05,T_PNYCW-1,PNYCW-1,,,England/Wales,region_only,2,2,0,13.200000000000001,0.0,0.0,0.0,13.200000000000001,0.0,0.0,0.0,0.0,0.0,50.018,fully_estimated,
+2024-10-05,T_WISTW-2,WISTW-2,,,,unmapped,2,2,0,11.2,0.0,0.0,0.0,11.2,0.0,0.0,0.0,0.0,0.0,33.733000000000004,fully_estimated,
+2024-10-05,T_SGRWO-6,SGRWO-6,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,5,5,0,7.116666666666667,184.95,0.0,184.95,192.06666666666666,0.0,0.0,0.0,0.0,0.0,425.57375,fully_estimated,
+2024-10-05,T_TWSHW-1,TWSHW-1,,,,unmapped,8,8,0,3.866666666666667,136.13333333333333,0.0,136.13333333333333,140.0,0.0,0.0,0.0,0.0,0.0,100.529,fully_estimated,
+2024-10-05,T_WDRGW-1,WDRGW-1,,,,unmapped,1,1,0,3.583333333333333,0.0,0.0,0.0,3.583333333333333,0.0,0.0,0.0,0.0,0.0,16.636,fully_estimated,
+2024-10-05,T_KYPEW-1,KYPEW-1,,,,unmapped,1,1,0,2.466666666666667,16.03333333333333,0.0,16.03333333333333,18.5,0.0,0.0,0.0,0.0,0.0,14.356,fully_estimated,
+2024-10-05,T_SGRWO-5,SGRWO-5,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,10,10,0,2.3833333333333333,151.825,0.0,151.825,154.20833333333331,0.0,0.0,0.0,0.0,0.0,185.38133333333334,fully_estimated,
+2024-10-05,T_SGRWO-3,SGRWO-3,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,4,4,0,2.3666666666666667,79.03333333333333,0.0,79.03333333333333,81.4,0.0,0.0,0.0,0.0,0.0,199.32633333333337,fully_estimated,
+2024-10-05,T_DOREW-1,DOREW-1,,,,unmapped,4,4,0,2.1,86.9,0.0,86.9,89.0,0.0,0.0,0.0,0.0,0.0,62.569,fully_estimated,
+2024-10-05,T_SGRWO-4,SGRWO-4,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,3,3,0,1.9833333333333334,66.60833333333333,0.0,66.60833333333333,68.59166666666667,0.0,0.0,0.0,0.0,0.0,102.34423333333332,fully_estimated,
+2024-10-05,T_KLGLW-1,KLGLW-1,,,,unmapped,5,5,0,1.8666666666666667,532.6333333333333,0.0,532.6333333333333,534.5,0.0,0.0,0.0,0.0,0.0,188.392,fully_estimated,
+2024-10-05,E_BTUIW-3,BTUIW-3,,,,unmapped,4,4,0,1.5666666666666667,92.43333333333334,0.0,92.43333333333334,94.0,0.0,0.0,0.0,0.0,0.0,50.617000000000004,fully_estimated,
+2024-10-05,T_DOREW-2,DOREW-2,,,,unmapped,5,5,0,1.2666666666666666,94.73333333333333,0.0,94.73333333333333,96.0,0.0,0.0,0.0,0.0,0.0,77.737,fully_estimated,
+2024-10-05,T_GNAPW-1,GNAPW-1,,,,unmapped,9,9,0,1.1333333333333333,74.86666666666667,0.0,74.86666666666667,76.0,0.0,0.0,0.0,0.0,0.0,41.70700000000001,fully_estimated,
+2024-10-05,T_SGRWO-2,SGRWO-2,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,9,9,0,1.1166666666666667,73.53333333333333,0.0,73.53333333333333,74.65,0.0,0.0,0.0,0.0,0.0,159.21366666666665,fully_estimated,
+2024-10-05,T_VKNGW-1,VKNGW-1,shetland_wind,Shetland Wind,Scotland,mapped,6,6,0,0.5,21.766666666666666,0.0,21.766666666666666,22.266666666666666,0.0,0.0,0.0,0.0,0.0,26.901,fully_estimated,
+2024-10-05,T_VKNGW-2,VKNGW-2,shetland_wind,Shetland Wind,Scotland,mapped,6,6,0,0.41666666666666663,6.658333333333333,0.0,6.658333333333333,7.075,0.0,0.0,0.0,0.0,0.0,11.100733333333334,fully_estimated,
+2024-10-05,T_VKNGW-3,VKNGW-3,shetland_wind,Shetland Wind,Scotland,mapped,6,6,0,0.3833333333333333,21.541666666666664,0.0,21.541666666666664,21.925,0.0,0.0,0.0,0.0,0.0,23.02613333333333,fully_estimated,
+2024-10-05,T_VKNGW-4,VKNGW-4,shetland_wind,Shetland Wind,Scotland,mapped,6,6,0,0.3666666666666667,15.733333333333334,0.0,15.733333333333334,16.1,0.0,0.0,0.0,0.0,0.0,16.680833333333332,fully_estimated,
+2024-10-05,T_CGTHW-1,CGTHW-1,,,,unmapped,3,3,0,0.26666666666666666,28.233333333333334,0.0,28.233333333333334,28.5,0.0,0.0,0.0,0.0,0.0,15.45,fully_estimated,
+2024-10-05,E_BABAW-1,BABAW-1,,,,unmapped,4,4,0,0.1,16.15,0.0,16.15,16.25,0.0,0.0,0.0,0.0,0.0,16.773,fully_estimated,
+2024-10-05,T_BDCHW-1,BDCHW-1,,,,unmapped,3,3,0,0.08333333333333333,8.416666666666666,0.0,8.416666666666666,8.5,0.0,0.0,0.0,0.0,0.0,8.275,fully_estimated,
+2024-10-06,T_GORDW-2,GORDW-2,,,,unmapped,6,4,2,0.41666666666666663,14.058333333333334,0.0,14.058333333333334,14.058333333333334,0.41666666666666663,0.0,0.0,0.41666666666666663,0.0,8.147333333333334,partially_blocked,physical_below_generation
+2024-10-06,T_MOWEO-1,MOWEO-1,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,4,3,1,1.7666666666666668,304.8333333333333,0.0,304.8333333333333,306.5,0.1,0.0,0.0,0.1,0.0,159.753,partially_blocked,physical_below_generation
+2024-10-06,T_SGRWO-6,SGRWO-6,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,8,8,0,11.5,321.3,0.0,321.3,332.8,0.0,0.0,0.0,0.0,0.0,806.13,fully_estimated,
+2024-10-06,T_PNYCW-1,PNYCW-1,,,England/Wales,region_only,2,2,0,7.933333333333334,0.0,0.0,0.0,7.933333333333334,0.0,0.0,0.0,0.0,0.0,105.38899999999997,fully_estimated,
+2024-10-06,T_SGRWO-5,SGRWO-5,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,13,13,0,3.716666666666667,366.8666666666667,0.0,366.8666666666667,370.5833333333333,0.0,0.0,0.0,0.0,0.0,250.70409999999998,fully_estimated,
+2024-10-06,T_SGRWO-2,SGRWO-2,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,7,7,0,2.1166666666666667,149.25833333333333,0.0,149.25833333333333,151.375,0.0,0.0,0.0,0.0,0.0,116.13266666666665,fully_estimated,
+2024-10-06,T_SGRWO-4,SGRWO-4,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,6,6,0,1.65,67.76666666666667,0.0,67.76666666666667,69.41666666666667,0.0,0.0,0.0,0.0,0.0,119.73246666666664,fully_estimated,
+2024-10-06,T_DOREW-1,DOREW-1,,,,unmapped,4,4,0,1.3333333333333333,73.91666666666667,0.0,73.91666666666667,75.25,0.0,0.0,0.0,0.0,0.0,44.03399999999999,fully_estimated,
+2024-10-06,T_HALSW-1,HALSW-1,,,,unmapped,4,4,0,0.7,42.8,0.0,42.8,43.5,0.0,0.0,0.0,0.0,0.0,29.782,fully_estimated,
+2024-10-06,T_VKNGW-3,VKNGW-3,shetland_wind,Shetland Wind,Scotland,mapped,3,3,0,0.65,1.4083333333333332,0.0,1.4083333333333332,2.0583333333333336,0.0,0.0,0.0,0.0,0.0,33.40483333333332,fully_estimated,
+2024-10-06,T_VKNGW-4,VKNGW-4,shetland_wind,Shetland Wind,Scotland,mapped,3,3,0,0.6333333333333333,1.3416666666666668,0.0,1.3416666666666668,1.9749999999999999,0.0,0.0,0.0,0.0,0.0,26.662166666666664,fully_estimated,
+2024-10-06,T_VKNGW-1,VKNGW-1,shetland_wind,Shetland Wind,Scotland,mapped,1,1,0,0.36666666666666664,0.0,0.0,0.0,0.36666666666666664,0.0,0.0,0.0,0.0,0.0,9.7695,fully_estimated,
+2024-10-06,T_DOREW-2,DOREW-2,,,,unmapped,4,4,0,0.2833333333333333,37.96666666666667,0.0,37.96666666666667,38.25,0.0,0.0,0.0,0.0,0.0,25.066000000000003,fully_estimated,
+2024-10-06,T_VKNGW-2,VKNGW-2,shetland_wind,Shetland Wind,Scotland,mapped,1,1,0,0.21666666666666667,0.0,0.0,0.0,0.21666666666666667,0.0,0.0,0.0,0.0,0.0,7.5299499999999995,fully_estimated,
+2024-10-07,T_VKNGW-1,VKNGW-1,shetland_wind,Shetland Wind,Scotland,mapped,9,8,1,1.3,3.6333333333333333,0.0,3.6333333333333333,4.300000000000001,0.6333333333333333,0.0,0.0,0.6333333333333333,0.0,72.94643333333333,partially_blocked,physical_below_generation
+2024-10-07,T_VKNGW-2,VKNGW-2,shetland_wind,Shetland Wind,Scotland,mapped,11,10,1,1.6166666666666665,4.0,0.0,4.0,5.066666666666666,0.55,0.0,0.0,0.55,0.0,71.42899999999999,partially_blocked,physical_below_generation
+2024-10-07,T_DOREW-1,DOREW-1,,,,unmapped,2,1,1,0.15,5.5,0.0,5.5,5.5,0.15,0.0,0.0,0.15,0.0,3.6109999999999998,partially_blocked,physical_below_generation
+2024-10-07,T_DOREW-2,DOREW-2,,,,unmapped,1,0,1,0.1,0.0,0.0,0.0,0.0,0.1,0.0,0.0,0.1,0.0,0.0,fully_blocked,physical_below_generation
+2024-10-07,T_KYPEW-1,KYPEW-1,,,,unmapped,8,6,2,0.11666666666666667,6.716666666666667,0.0,6.716666666666667,6.75,0.08333333333333334,0.0,0.0,0.08333333333333334,0.0,6.214,partially_blocked,physical_below_generation
+2024-10-07,T_KENNW-1,KENNW-1,,,,unmapped,11,10,1,0.16666666666666669,18.4,0.0,18.4,18.5,0.06666666666666667,0.0,0.0,0.06666666666666667,0.0,11.754999999999999,partially_blocked,physical_below_generation
+2024-10-07,T_MOWEO-1,MOWEO-1,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,12,12,0,7.2,392.3,657.0,1049.3,1056.5,0.0,0.0,0.0,0.0,0.0,267.242,fully_estimated,
+2024-10-07,T_MOWEO-2,MOWEO-2,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,14,14,0,1.6333333333333333,145.0,1099.5,1244.5,1246.1333333333334,0.0,0.0,0.0,0.0,0.0,183.96800000000005,fully_estimated,
+2024-10-07,T_HALSW-1,HALSW-1,,,,unmapped,3,3,0,0.6333333333333333,29.366666666666667,0.0,29.366666666666667,30.0,0.0,0.0,0.0,0.0,0.0,19.713,fully_estimated,
+2024-10-07,T_GORDW-2,GORDW-2,,,,unmapped,2,2,0,0.4,11.991666666666667,0.0,11.991666666666667,12.391666666666667,0.0,0.0,0.0,0.0,0.0,6.778666666666667,fully_estimated,
+2024-10-07,T_VKNGW-3,VKNGW-3,shetland_wind,Shetland Wind,Scotland,mapped,5,5,0,0.31666666666666665,8.766666666666666,0.0,8.766666666666666,9.083333333333334,0.0,0.0,0.0,0.0,0.0,50.84026666666666,fully_estimated,
+2024-10-07,E_BTUIW-3,BTUIW-3,,,,unmapped,11,11,0,0.3,30.2,0.0,30.2,30.5,0.0,0.0,0.0,0.0,0.0,26.538,fully_estimated,
+2024-10-07,T_SGRWO-5,SGRWO-5,east_coast_scotland_offshore,East Coast Scotland Offshore,Scotland,mapped,3,3,0,0.26666666666666666,1.0416666666666665,0.0,1.0416666666666665,1.3083333333333333,0.0,0.0,0.0,0.0,0.0,13.46566666666667,fully_estimated,
+2024-10-07,T_VKNGW-4,VKNGW-4,shetland_wind,Shetland Wind,Scotland,mapped,3,3,0,0.25,6.0,0.0,6.0,6.25,0.0,0.0,0.0,0.0,0.0,42.96480000000001,fully_estimated,
+2024-10-07,T_MOWEO-3,MOWEO-3,moray_firth_offshore,Moray Firth Offshore,Scotland,mapped,12,12,0,0.0,0.0,1195.0,1195.0,1195.0,0.0,0.0,0.0,0.0,0.0,169.09399999999997,fully_estimated,

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import datetime as dt
 import json
+import time
 import urllib.parse
 from pathlib import Path
-from typing import Dict, Iterable, Sequence
+from typing import Any, Dict, Iterable, Sequence
 
 import numpy as np
 import pandas as pd
@@ -23,6 +25,29 @@ from bmu_truth_utils import (
 )
 
 
+def _fetch_remit_json_with_retry(
+    url: str,
+    attempts: int = 3,
+    base_sleep_seconds: float = 1.0,
+) -> Any:
+    last_error: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return fetch_json(url)
+        except Exception as exc:  # pragma: no cover - exercised through caller behavior
+            last_error = exc
+            if attempt >= attempts:
+                raise
+            time.sleep(base_sleep_seconds * attempt)
+    if last_error is not None:  # pragma: no cover - defensive
+        raise last_error
+    raise RuntimeError("REMIT fetch retry loop exited without a result")
+
+
+def _fetch_remit_detail_rows(detail_url: str) -> list[dict]:
+    return unwrap_data_rows(_fetch_remit_json_with_retry(detail_url))
+
+
 def _remit_detail_urls(start_date: dt.date, end_date: dt.date) -> Iterable[str]:
     day = start_date
     while day <= end_date:
@@ -31,7 +56,7 @@ def _remit_detail_urls(start_date: dt.date, end_date: dt.date) -> Iterable[str]:
             f"{ELEXON_BASE}/remit/list/by-event/stream?"
             f"{urllib.parse.urlencode({'from': rfc3339_utc(start_utc), 'to': rfc3339_utc(end_utc)})}"
         )
-        rows = unwrap_data_rows(fetch_json(url))
+        rows = unwrap_data_rows(_fetch_remit_json_with_retry(url))
         for row in rows:
             detail_url = row.get("url")
             if isinstance(detail_url, str) and detail_url.strip():
@@ -39,23 +64,85 @@ def _remit_detail_urls(start_date: dt.date, end_date: dt.date) -> Iterable[str]:
         day += dt.timedelta(days=1)
 
 
-def fetch_remit_event_detail(start_date: dt.date, end_date: dt.date) -> pd.DataFrame:
+def fetch_remit_event_detail_with_status(
+    start_date: dt.date,
+    end_date: dt.date,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     frames = []
-    for detail_url in dict.fromkeys(_remit_detail_urls(start_date, end_date)):
-        rows = unwrap_data_rows(fetch_json(detail_url))
-        if not rows:
-            continue
-        frames.append(pd.DataFrame(rows))
-    if not frames:
-        return pd.DataFrame()
-    frame = pd.concat(frames, ignore_index=True)
-    if "mrid" in frame.columns:
-        frame["revisionNumber"] = pd.to_numeric(frame.get("revisionNumber"), errors="coerce")
-        frame["publishTime"] = pd.to_datetime(frame.get("publishTime"), utc=True, errors="coerce")
-        frame["createdTime"] = pd.to_datetime(frame.get("createdTime"), utc=True, errors="coerce")
-        frame = frame.sort_values(["mrid", "revisionNumber", "publishTime", "createdTime"], na_position="last")
-        frame = frame.drop_duplicates(subset=["mrid"], keep="last")
-    return frame.reset_index(drop=True)
+    status_rows = []
+    day = start_date
+    while day <= end_date:
+        start_utc, end_utc = local_date_range_to_utc_window(day, day)
+        list_url = (
+            f"{ELEXON_BASE}/remit/list/by-event/stream?"
+            f"{urllib.parse.urlencode({'from': rfc3339_utc(start_utc), 'to': rfc3339_utc(end_utc)})}"
+        )
+        detail_urls: list[str] = []
+        detail_error_count = 0
+        first_fetch_error: str | None = None
+        day_fetch_ok = True
+        try:
+            rows = unwrap_data_rows(_fetch_remit_json_with_retry(list_url))
+            for row in rows:
+                detail_url = row.get("url")
+                if isinstance(detail_url, str) and detail_url.strip():
+                    detail_urls.append(detail_url.strip())
+        except Exception as exc:
+            rows = []
+            day_fetch_ok = False
+            first_fetch_error = str(exc)
+
+        unique_detail_urls = list(dict.fromkeys(detail_urls))
+        if unique_detail_urls:
+            worker_count = min(8, len(unique_detail_urls))
+            with ThreadPoolExecutor(max_workers=worker_count) as executor:
+                future_map = {
+                    executor.submit(_fetch_remit_detail_rows, detail_url): detail_url
+                    for detail_url in unique_detail_urls
+                }
+                for future in as_completed(future_map):
+                    try:
+                        detail_rows = future.result()
+                    except Exception as exc:
+                        detail_error_count += 1
+                        day_fetch_ok = False
+                        if not first_fetch_error:
+                            first_fetch_error = str(exc)
+                        continue
+                    if not detail_rows:
+                        continue
+                    frames.append(pd.DataFrame(detail_rows))
+
+        status_rows.append(
+            {
+                "settlement_date": day,
+                "remit_fetch_ok": day_fetch_ok,
+                "remit_detail_url_count": len(unique_detail_urls),
+                "remit_detail_error_count": detail_error_count,
+                "remit_first_fetch_error": first_fetch_error,
+            }
+        )
+        day += dt.timedelta(days=1)
+
+    if frames:
+        frame = pd.concat(frames, ignore_index=True)
+        if "mrid" in frame.columns:
+            frame["revisionNumber"] = pd.to_numeric(frame.get("revisionNumber"), errors="coerce")
+            frame["publishTime"] = pd.to_datetime(frame.get("publishTime"), utc=True, errors="coerce")
+            frame["createdTime"] = pd.to_datetime(frame.get("createdTime"), utc=True, errors="coerce")
+            frame = frame.sort_values(["mrid", "revisionNumber", "publishTime", "createdTime"], na_position="last")
+            frame = frame.drop_duplicates(subset=["mrid"], keep="last")
+        frame = frame.reset_index(drop=True)
+    else:
+        frame = pd.DataFrame()
+
+    status_frame = pd.DataFrame(status_rows)
+    return frame, status_frame.reset_index(drop=True)
+
+
+def fetch_remit_event_detail(start_date: dt.date, end_date: dt.date) -> pd.DataFrame:
+    frame, _ = fetch_remit_event_detail_with_status(start_date, end_date)
+    return frame
 
 
 def fetch_uou2t14d_summary(
@@ -162,16 +249,56 @@ def build_fact_bmu_availability_half_hourly(
     start_date: dt.date,
     end_date: dt.date,
     remit_fetch_ok: bool,
+    remit_fetch_status_by_date: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     spine = build_bmu_interval_spine(dim_bmu_asset, start_date, end_date)
     frame = spine.copy()
     frame["source_key"] = "REMIT|UOU2T14D"
     frame["source_label"] = "REMIT outage windows with UOU availability QA"
     frame["target_is_proxy"] = False
-    frame["remit_fetch_ok"] = remit_fetch_ok
+
+    if remit_fetch_status_by_date is None or remit_fetch_status_by_date.empty:
+        remit_status = pd.DataFrame(
+            {"settlement_date": pd.date_range(start=start_date, end=end_date, freq="D").date}
+        )
+        remit_status["remit_fetch_ok"] = remit_fetch_ok
+        remit_status["remit_detail_url_count"] = pd.NA
+        remit_status["remit_detail_error_count"] = 0
+        remit_status["remit_first_fetch_error"] = pd.NA
+    else:
+        remit_status = remit_fetch_status_by_date.copy()
+        remit_status["settlement_date"] = pd.to_datetime(remit_status["settlement_date"], errors="coerce").dt.date
+        if "remit_fetch_ok" not in remit_status.columns:
+            remit_status["remit_fetch_ok"] = remit_fetch_ok
+        if "remit_detail_url_count" not in remit_status.columns:
+            remit_status["remit_detail_url_count"] = pd.NA
+        remit_status["remit_detail_url_count"] = pd.to_numeric(
+            remit_status["remit_detail_url_count"], errors="coerce"
+        ).astype("Int64")
+        if "remit_detail_error_count" not in remit_status.columns:
+            remit_status["remit_detail_error_count"] = 0
+        remit_status["remit_detail_error_count"] = pd.to_numeric(
+            remit_status["remit_detail_error_count"], errors="coerce"
+        ).fillna(0).astype("Int64")
+        if "remit_first_fetch_error" not in remit_status.columns:
+            remit_status["remit_first_fetch_error"] = pd.NA
+        remit_status = remit_status[
+            [
+                "settlement_date",
+                "remit_fetch_ok",
+                "remit_detail_url_count",
+                "remit_detail_error_count",
+                "remit_first_fetch_error",
+            ]
+        ].drop_duplicates(subset=["settlement_date"], keep="last")
+
+    frame = frame.merge(remit_status, on="settlement_date", how="left")
+    frame["remit_fetch_ok"] = frame["remit_fetch_ok"].where(frame["remit_fetch_ok"].notna(), remit_fetch_ok).astype(bool)
+    frame["remit_detail_error_count"] = pd.to_numeric(frame["remit_detail_error_count"], errors="coerce").fillna(0).astype(int)
+    frame["remit_detail_url_count"] = pd.to_numeric(frame["remit_detail_url_count"], errors="coerce").astype("Int64")
 
     remit_interval_rows = []
-    if remit_fetch_ok and not raw_remit_frame.empty:
+    if not raw_remit_frame.empty:
         lookup = _build_bmu_lookup(dim_bmu_asset)
         remit = raw_remit_frame.rename(
             columns={
@@ -331,14 +458,12 @@ def build_fact_bmu_availability_half_hourly(
         ).drop(columns="forecast_date")
 
     frame["availability_state"] = "unknown"
-    if remit_fetch_ok:
-        frame["availability_state"] = "available"
+    frame.loc[frame["remit_fetch_ok"], "availability_state"] = "available"
     frame.loc[frame["remit_active_flag"], "availability_state"] = "outage"
     frame.loc[frame["remit_partial_availability_flag"], "availability_state"] = "unknown"
 
     frame["availability_confidence"] = "low"
-    if remit_fetch_ok:
-        frame["availability_confidence"] = "medium"
+    frame.loc[frame["remit_fetch_ok"], "availability_confidence"] = "medium"
     frame.loc[frame["remit_active_flag"], "availability_confidence"] = "high"
     frame.loc[frame["remit_partial_availability_flag"], "availability_confidence"] = "medium"
     frame.loc[
@@ -372,6 +497,9 @@ def build_fact_bmu_availability_half_hourly(
         "cluster_label",
         "parent_region",
         "remit_fetch_ok",
+        "remit_detail_url_count",
+        "remit_detail_error_count",
+        "remit_first_fetch_error",
         "remit_event_count",
         "remit_overlap_hours",
         "remit_active_flag",
@@ -397,11 +525,15 @@ def materialize_bmu_availability_history(
     dim_bmu_asset = build_dim_bmu_asset(reference)
 
     remit_fetch_ok = True
+    remit_fetch_status = pd.DataFrame()
     try:
-        raw_remit = fetch_remit_event_detail(start_date, end_date)
+        raw_remit, remit_fetch_status = fetch_remit_event_detail_with_status(start_date, end_date)
+        if not remit_fetch_status.empty:
+            remit_fetch_ok = bool(remit_fetch_status["remit_fetch_ok"].fillna(False).all())
     except Exception:
         remit_fetch_ok = False
         raw_remit = pd.DataFrame()
+        remit_fetch_status = pd.DataFrame()
 
     try:
         raw_uou = fetch_uou2t14d_summary(dim_bmu_asset["elexon_bm_unit"].tolist())
@@ -415,6 +547,7 @@ def materialize_bmu_availability_history(
         start_date=start_date,
         end_date=end_date,
         remit_fetch_ok=remit_fetch_ok,
+        remit_fetch_status_by_date=remit_fetch_status,
     )
 
     frames = {
