@@ -1,0 +1,519 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Dict, Tuple
+
+import numpy as np
+import pandas as pd
+
+from gb_topology import INTERCONNECTOR_HUBS, ROUTE_HUB_OPTIONS
+from network_overlay import build_border_network_overlay
+from physical_constraints import ROUTE_BORDER_KEYS, ROUTES, compute_netbacks
+
+
+ROUTE_SCORE_TABLE = "fact_route_score_hourly"
+
+
+def _empty_route_score_frame() -> pd.DataFrame:
+    return pd.DataFrame(
+        columns=[
+            "date",
+            "interval_start_local",
+            "interval_end_local",
+            "interval_start_utc",
+            "interval_end_utc",
+            "cluster_key",
+            "cluster_label",
+            "parent_region",
+            "hub_key",
+            "hub_label",
+            "hub_target_zone",
+            "hub_neighbor_domain_key",
+            "hub_current_route_fit",
+            "route_name",
+            "route_label",
+            "route_target_zone",
+            "route_hub_preference_rank",
+            "route_border_key",
+            "route_price_score_eur_per_mwh",
+            "route_price_feasible_flag",
+            "route_price_bottleneck",
+            "transfer_gate_mw_proxy",
+            "transfer_gate_utilization_proxy",
+            "transfer_gate_state",
+            "transfer_gate_reason",
+            "border_observed_flow_mw",
+            "first_pass_border_offered_capacity_mw",
+            "first_pass_border_headroom_proxy_mw",
+            "first_pass_border_gate_state",
+            "first_pass_border_flow_state",
+            "first_pass_border_capacity_state",
+            "review_state",
+            "reviewed_evidence_tier",
+            "reviewed_tier_accepted_flag",
+            "capacity_policy_action",
+            "reviewed_border_offered_capacity_mw",
+            "reviewed_border_headroom_proxy_mw",
+            "reviewed_border_gate_state",
+            "reviewed_border_flow_state",
+            "reviewed_border_capacity_state",
+            "connector_key",
+            "connector_label",
+            "connector_operator",
+            "connector_operator_source_provider",
+            "connector_operator_availability_state",
+            "connector_operator_capacity_evidence_tier",
+            "connector_operator_capacity_limit_mw",
+            "connector_nominal_capacity_mw",
+            "connector_nominal_capacity_share_of_border",
+            "connector_capacity_evidence_tier",
+            "connector_headroom_proxy_mw",
+            "connector_gate_state",
+            "connector_gate_reason",
+            "route_delivery_tier",
+            "route_delivery_signal",
+            "deliverable_mw_proxy",
+            "deliverable_route_score_eur_per_mwh",
+            "route_delivery_reason",
+        ]
+    )
+
+
+def _route_hub_preferences() -> Dict[str, Tuple[str, ...]]:
+    return {option.route_name: option.preferred_hubs for option in ROUTE_HUB_OPTIONS}
+
+
+def _overlay_lookup(frame: pd.DataFrame, prefix: str) -> pd.DataFrame:
+    if frame.empty:
+        return pd.DataFrame(
+            columns=[
+                "interval_start_utc",
+                "border_key",
+                f"{prefix}_border_offered_capacity_mw",
+                f"{prefix}_border_headroom_proxy_mw",
+                f"{prefix}_border_gate_state",
+                f"{prefix}_border_flow_state",
+                f"{prefix}_border_capacity_state",
+                f"{prefix}_border_observed_flow_mw",
+            ]
+        )
+    overlay = frame[
+        [
+            "interval_start_utc",
+            "border_key",
+            "border_offered_capacity_mw",
+            "border_headroom_proxy_mw",
+            "border_gate_state",
+            "border_flow_state",
+            "border_capacity_state",
+            "border_flow_mw",
+        ]
+    ].copy()
+    return overlay.rename(
+        columns={
+            "border_offered_capacity_mw": f"{prefix}_border_offered_capacity_mw",
+            "border_headroom_proxy_mw": f"{prefix}_border_headroom_proxy_mw",
+            "border_gate_state": f"{prefix}_border_gate_state",
+            "border_flow_state": f"{prefix}_border_flow_state",
+            "border_capacity_state": f"{prefix}_border_capacity_state",
+            "border_flow_mw": f"{prefix}_border_observed_flow_mw",
+        }
+    )
+
+
+def build_fact_route_score_hourly(
+    prices: pd.DataFrame,
+    gb_transfer_gate: pd.DataFrame,
+    interconnector_flow: pd.DataFrame | None = None,
+    interconnector_capacity: pd.DataFrame | None = None,
+    interconnector_capacity_reviewed: pd.DataFrame | None = None,
+    interconnector_capacity_review_policy: pd.DataFrame | None = None,
+    france_connector: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    if gb_transfer_gate is None or gb_transfer_gate.empty:
+        return _empty_route_score_frame()
+
+    netbacks = compute_netbacks(
+        prices,
+        interconnector_flow=interconnector_flow,
+        interconnector_capacity=interconnector_capacity,
+    ).copy()
+    netbacks.index = pd.to_datetime(netbacks.index, utc=True)
+    netbacks = netbacks.reset_index(names="interval_start_utc")
+    netbacks["interval_start_local"] = netbacks["interval_start_utc"].dt.tz_convert("Europe/London")
+    netbacks["interval_end_utc"] = netbacks["interval_start_utc"] + pd.Timedelta(hours=1)
+    netbacks["interval_end_local"] = netbacks["interval_end_utc"].dt.tz_convert("Europe/London")
+    netbacks["date"] = netbacks["interval_start_local"].dt.date
+
+    review_policy = interconnector_capacity_review_policy.copy() if interconnector_capacity_review_policy is not None else pd.DataFrame()
+    if review_policy.empty:
+        review_policy = pd.DataFrame(
+            columns=[
+                "border_key",
+                "direction_key",
+                "review_state",
+                "reviewed_evidence_tier",
+                "reviewed_tier_accepted_flag",
+                "capacity_policy_action",
+            ]
+        )
+    review_policy = review_policy[review_policy["direction_key"] == "gb_to_neighbor"].copy()
+    review_policy = review_policy[
+        [
+            "border_key",
+            "review_state",
+            "reviewed_evidence_tier",
+            "reviewed_tier_accepted_flag",
+            "capacity_policy_action",
+        ]
+    ].drop_duplicates(subset=["border_key"])
+
+    reviewed_overlay = _overlay_lookup(
+        build_border_network_overlay(interconnector_flow, interconnector_capacity_reviewed),
+        prefix="reviewed",
+    )
+    reviewed_overlay = reviewed_overlay.sort_values(["interval_start_utc", "border_key"]).reset_index(drop=True)
+    connector_lookup = france_connector.copy() if france_connector is not None else pd.DataFrame()
+    if connector_lookup.empty:
+        connector_lookup = pd.DataFrame(
+            columns=[
+                "interval_start_utc",
+                "connector_key",
+                "connector_label",
+                "operator_name",
+                "operator_source_provider",
+                "operator_availability_state",
+                "operator_capacity_evidence_tier",
+                "operator_capacity_limit_mw",
+                "nominal_capacity_mw",
+                "nominal_capacity_share_of_border",
+                "connector_capacity_evidence_tier",
+                "connector_headroom_proxy_mw",
+                "connector_gate_state",
+                "connector_gate_reason",
+            ]
+        )
+    for column, default in (
+        ("connector_key", pd.NA),
+        ("connector_label", pd.NA),
+        ("operator_name", pd.NA),
+        ("operator_source_provider", pd.NA),
+        ("operator_availability_state", pd.NA),
+        ("operator_capacity_evidence_tier", pd.NA),
+        ("operator_capacity_limit_mw", np.nan),
+        ("nominal_capacity_mw", np.nan),
+        ("nominal_capacity_share_of_border", np.nan),
+        ("connector_capacity_evidence_tier", pd.NA),
+        ("connector_headroom_proxy_mw", np.nan),
+        ("connector_gate_state", pd.NA),
+        ("connector_gate_reason", pd.NA),
+    ):
+        if column not in connector_lookup.columns:
+            connector_lookup[column] = default
+    connector_lookup["interval_start_utc"] = pd.to_datetime(
+        connector_lookup["interval_start_utc"],
+        utc=True,
+        errors="coerce",
+    )
+
+    route_preferences = _route_hub_preferences()
+    transfer_gate = gb_transfer_gate.copy()
+    transfer_gate["interval_start_utc"] = pd.to_datetime(transfer_gate["interval_start_utc"], utc=True, errors="coerce")
+
+    rows = []
+    for route_name, preferred_hubs in route_preferences.items():
+        route_transfer = transfer_gate[transfer_gate["hub_key"].isin(preferred_hubs)].copy()
+        if route_transfer.empty:
+            continue
+
+        border_key = ROUTE_BORDER_KEYS[route_name]
+        route_label = ROUTES[route_name].label
+        target_zone = next(
+            (INTERCONNECTOR_HUBS[hub_key].target_zone for hub_key in preferred_hubs if hub_key in INTERCONNECTOR_HUBS),
+            None,
+        )
+
+        route_transfer["route_name"] = route_name
+        route_transfer["route_label"] = route_label
+        route_transfer["route_target_zone"] = target_zone
+        route_transfer["route_hub_preference_rank"] = route_transfer["hub_key"].map(
+            {hub_key: rank + 1 for rank, hub_key in enumerate(preferred_hubs)}
+        )
+        route_transfer["route_border_key"] = border_key
+        for source_column, target_column in (
+            ("border_offered_capacity_mw", "first_pass_border_offered_capacity_mw"),
+            ("border_headroom_proxy_mw", "first_pass_border_headroom_proxy_mw"),
+            ("border_gate_state", "first_pass_border_gate_state"),
+            ("border_flow_state", "first_pass_border_flow_state"),
+            ("border_capacity_state", "first_pass_border_capacity_state"),
+        ):
+            if source_column in route_transfer.columns and target_column not in route_transfer.columns:
+                route_transfer[target_column] = route_transfer[source_column]
+
+        required_netback_columns = [
+            route_name,
+            f"{route_name}_feasible",
+            f"{route_name}_bottleneck",
+            f"{route_name}_gb_border_observed_flow_mw",
+            f"{route_name}_gb_border_offered_capacity_mw",
+            f"{route_name}_gb_border_headroom_proxy_mw",
+            f"{route_name}_gb_border_network_gate_state",
+            f"{route_name}_gb_border_flow_state",
+            f"{route_name}_gb_border_capacity_state",
+        ]
+        for column in required_netback_columns:
+            if column in netbacks.columns:
+                continue
+            if column.endswith("_gate_state") or column.endswith("_flow_state"):
+                netbacks[column] = "capacity_unknown" if column.endswith("_gate_state") else "flow_unknown"
+            elif column.endswith("_capacity_state"):
+                netbacks[column] = "capacity_unknown"
+            else:
+                netbacks[column] = np.nan
+
+        merge_columns = ["interval_start_utc", route_name, f"{route_name}_feasible", f"{route_name}_bottleneck"]
+        rename_map = {
+            route_name: "route_price_score_eur_per_mwh",
+            f"{route_name}_feasible": "route_price_feasible_flag",
+            f"{route_name}_bottleneck": "route_price_bottleneck",
+        }
+        optional_first_pass_sources = {
+            f"{route_name}_gb_border_observed_flow_mw": "border_observed_flow_mw",
+            f"{route_name}_gb_border_offered_capacity_mw": "first_pass_border_offered_capacity_mw",
+            f"{route_name}_gb_border_headroom_proxy_mw": "first_pass_border_headroom_proxy_mw",
+            f"{route_name}_gb_border_network_gate_state": "first_pass_border_gate_state",
+            f"{route_name}_gb_border_flow_state": "first_pass_border_flow_state",
+            f"{route_name}_gb_border_capacity_state": "first_pass_border_capacity_state",
+        }
+        for source_column, target_column in optional_first_pass_sources.items():
+            if target_column in route_transfer.columns:
+                continue
+            merge_columns.append(source_column)
+            rename_map[source_column] = target_column
+
+        route_transfer = route_transfer.merge(
+            netbacks[merge_columns].rename(columns=rename_map),
+            on=["interval_start_utc"],
+            how="left",
+        )
+        route_transfer = route_transfer.merge(review_policy, left_on="route_border_key", right_on="border_key", how="left")
+        route_transfer = route_transfer.drop(columns=["border_key_y"], errors="ignore").rename(
+            columns={"border_key_x": "border_key"}
+        )
+        route_transfer = route_transfer.merge(
+            reviewed_overlay,
+            left_on=["interval_start_utc", "route_border_key"],
+            right_on=["interval_start_utc", "border_key"],
+            how="left",
+        )
+        route_transfer = route_transfer.drop(columns=["border_key"], errors="ignore")
+        if border_key == "GB-FR" and not connector_lookup.empty:
+            route_transfer = route_transfer.merge(
+                connector_lookup[
+                    [
+                        "interval_start_utc",
+                        "connector_key",
+                        "connector_label",
+                        "operator_name",
+                        "operator_source_provider",
+                        "operator_availability_state",
+                        "operator_capacity_evidence_tier",
+                        "operator_capacity_limit_mw",
+                        "nominal_capacity_mw",
+                        "nominal_capacity_share_of_border",
+                        "connector_capacity_evidence_tier",
+                        "connector_headroom_proxy_mw",
+                        "connector_gate_state",
+                        "connector_gate_reason",
+                    ]
+                ],
+                left_on=["interval_start_utc", "hub_key"],
+                right_on=["interval_start_utc", "connector_key"],
+                how="left",
+            )
+        for column, default in (
+            ("connector_key", pd.NA),
+            ("connector_label", pd.NA),
+            ("operator_name", pd.NA),
+            ("operator_source_provider", pd.NA),
+            ("operator_availability_state", pd.NA),
+            ("operator_capacity_evidence_tier", pd.NA),
+            ("operator_capacity_limit_mw", np.nan),
+            ("nominal_capacity_mw", np.nan),
+            ("nominal_capacity_share_of_border", np.nan),
+            ("connector_capacity_evidence_tier", pd.NA),
+            ("connector_headroom_proxy_mw", np.nan),
+            ("connector_gate_state", pd.NA),
+            ("connector_gate_reason", pd.NA),
+        ):
+            if column not in route_transfer.columns:
+                route_transfer[column] = default
+
+        price_positive = (
+            pd.to_numeric(route_transfer["route_price_score_eur_per_mwh"], errors="coerce").gt(0)
+            & route_transfer["route_price_feasible_flag"].where(
+                route_transfer["route_price_feasible_flag"].notna(),
+                False,
+            ).astype(bool)
+        )
+        transfer_blocked = (
+            route_transfer["gate_state"].fillna("").astype(str).str.startswith("blocked_")
+            | pd.to_numeric(route_transfer["transfer_gate_mw_proxy"], errors="coerce").fillna(0).le(0)
+        )
+        connector_limit = pd.to_numeric(route_transfer.get("connector_headroom_proxy_mw"), errors="coerce")
+        connector_blocked = price_positive & ~transfer_blocked & connector_limit.fillna(np.inf).le(0)
+        confirmed_available = route_transfer["first_pass_border_gate_state"].eq("pass")
+        reviewed_available = (
+            route_transfer["capacity_policy_action"].eq("allow_reviewed_explicit_daily")
+            & route_transfer["reviewed_border_gate_state"].isin(["pass", "flow_unknown_capacity_published"])
+        )
+
+        route_transfer["route_delivery_tier"] = "blocked"
+        route_transfer["route_delivery_signal"] = "HOLD"
+        route_transfer["deliverable_mw_proxy"] = np.nan
+        route_transfer["deliverable_route_score_eur_per_mwh"] = np.nan
+        route_transfer["route_delivery_reason"] = "The route is not yet deliverable under the current gate stack."
+
+        route_transfer.loc[~price_positive, "route_delivery_tier"] = "no_price_signal"
+        route_transfer.loc[~price_positive, "route_delivery_reason"] = (
+            "The route netback is not positive after route-leg losses and fees."
+        )
+        route_transfer.loc[price_positive & transfer_blocked, "route_delivery_tier"] = "blocked_internal_transfer"
+        route_transfer.loc[price_positive & transfer_blocked, "route_delivery_reason"] = (
+            "The cluster-to-hub transfer gate blocks or zeroes this route before border capacity matters."
+        )
+        route_transfer.loc[connector_blocked, "route_delivery_tier"] = "blocked_connector_capacity"
+        route_transfer.loc[connector_blocked, "route_delivery_reason"] = (
+            "The selected connector has no deliverable headroom after cable limits and operator availability are applied."
+        )
+
+        confirmed_mask = price_positive & ~transfer_blocked & ~connector_blocked & confirmed_available
+        route_transfer.loc[confirmed_mask, "route_delivery_tier"] = "confirmed"
+        route_transfer.loc[confirmed_mask, "route_delivery_signal"] = "EXPORT_CONFIRMED"
+        route_transfer.loc[confirmed_mask, "deliverable_mw_proxy"] = pd.concat(
+            [
+                pd.to_numeric(route_transfer.loc[confirmed_mask, "transfer_gate_mw_proxy"], errors="coerce"),
+                pd.to_numeric(route_transfer.loc[confirmed_mask, "first_pass_border_headroom_proxy_mw"], errors="coerce"),
+                connector_limit.loc[confirmed_mask],
+            ],
+            axis=1,
+        ).min(axis=1)
+        route_transfer.loc[confirmed_mask, "deliverable_route_score_eur_per_mwh"] = route_transfer.loc[
+            confirmed_mask, "route_price_score_eur_per_mwh"
+        ]
+        route_transfer.loc[confirmed_mask, "route_delivery_reason"] = (
+            "The route passes both the internal transfer gate and the first-pass direct border-capacity gate."
+        )
+
+        reviewed_mask = price_positive & ~transfer_blocked & ~connector_blocked & ~confirmed_available & reviewed_available
+        route_transfer.loc[reviewed_mask, "route_delivery_tier"] = "reviewed"
+        route_transfer.loc[reviewed_mask, "route_delivery_signal"] = "EXPORT_REVIEWED"
+        reviewed_headroom = pd.to_numeric(route_transfer.loc[reviewed_mask, "reviewed_border_headroom_proxy_mw"], errors="coerce")
+        reviewed_capacity = pd.to_numeric(route_transfer.loc[reviewed_mask, "reviewed_border_offered_capacity_mw"], errors="coerce")
+        reviewed_gate_state = route_transfer.loc[reviewed_mask, "reviewed_border_gate_state"]
+        reviewed_limit = reviewed_headroom.where(~reviewed_gate_state.eq("flow_unknown_capacity_published"), reviewed_capacity)
+        route_transfer.loc[reviewed_mask, "deliverable_mw_proxy"] = pd.concat(
+            [
+                pd.to_numeric(route_transfer.loc[reviewed_mask, "transfer_gate_mw_proxy"], errors="coerce"),
+                reviewed_limit,
+                connector_limit.loc[reviewed_mask],
+            ],
+            axis=1,
+        ).min(axis=1)
+        route_transfer.loc[reviewed_mask, "deliverable_route_score_eur_per_mwh"] = route_transfer.loc[
+            reviewed_mask, "route_price_score_eur_per_mwh"
+        ]
+        route_transfer.loc[reviewed_mask, "route_delivery_reason"] = (
+            "The first-pass direct border-capacity gate is unavailable, but an accepted reviewed-capacity tier exists for this border."
+        )
+
+        unknown_mask = price_positive & ~transfer_blocked & ~connector_blocked & ~confirmed_available & ~reviewed_available
+        route_transfer.loc[unknown_mask, "route_delivery_tier"] = "capacity_unknown"
+        route_transfer.loc[unknown_mask, "route_delivery_signal"] = "EXPORT_CAPACITY_UNKNOWN"
+        route_transfer.loc[unknown_mask, "deliverable_mw_proxy"] = pd.concat(
+            [
+                pd.to_numeric(route_transfer.loc[unknown_mask, "transfer_gate_mw_proxy"], errors="coerce"),
+                connector_limit.loc[unknown_mask],
+            ],
+            axis=1,
+        ).min(axis=1)
+        route_transfer.loc[unknown_mask, "deliverable_route_score_eur_per_mwh"] = route_transfer.loc[
+            unknown_mask, "route_price_score_eur_per_mwh"
+        ]
+        route_transfer.loc[unknown_mask, "route_delivery_reason"] = (
+            "The route is price-positive and internally reachable, but border capacity remains unpublished or unaccepted for gating."
+        )
+        france_unknown_mask = unknown_mask & route_transfer["route_border_key"].eq("GB-FR") & connector_limit.notna()
+        route_transfer.loc[france_unknown_mask, "route_delivery_reason"] = (
+            "The route is price-positive and internally reachable, but GB-FR cable deliverability is still only a nominal-share proxy because published France border capacity is unavailable."
+        )
+
+        rows.append(route_transfer)
+
+    if not rows:
+        return _empty_route_score_frame()
+
+    fact = pd.concat(rows, ignore_index=True)
+    fact = fact.rename(
+        columns={
+            "gate_state": "transfer_gate_state",
+            "gate_reason": "transfer_gate_reason",
+            "operator_name": "connector_operator",
+            "operator_source_provider": "connector_operator_source_provider",
+            "operator_availability_state": "connector_operator_availability_state",
+            "operator_capacity_evidence_tier": "connector_operator_capacity_evidence_tier",
+            "operator_capacity_limit_mw": "connector_operator_capacity_limit_mw",
+            "nominal_capacity_mw": "connector_nominal_capacity_mw",
+            "nominal_capacity_share_of_border": "connector_nominal_capacity_share_of_border",
+        }
+    )
+    fact["reviewed_tier_accepted_flag"] = fact["reviewed_tier_accepted_flag"].where(
+        fact["reviewed_tier_accepted_flag"].notna(),
+        False,
+    ).astype(bool)
+    for column, default in (
+        ("connector_key", pd.NA),
+        ("connector_label", pd.NA),
+        ("connector_operator", pd.NA),
+        ("connector_operator_source_provider", pd.NA),
+        ("connector_operator_availability_state", pd.NA),
+        ("connector_operator_capacity_evidence_tier", pd.NA),
+        ("connector_operator_capacity_limit_mw", np.nan),
+        ("connector_nominal_capacity_mw", np.nan),
+        ("connector_nominal_capacity_share_of_border", np.nan),
+        ("connector_capacity_evidence_tier", pd.NA),
+        ("connector_headroom_proxy_mw", np.nan),
+        ("connector_gate_state", pd.NA),
+        ("connector_gate_reason", pd.NA),
+    ):
+        if column not in fact.columns:
+            fact[column] = default
+    column_order = list(_empty_route_score_frame().columns)
+    return fact[column_order].sort_values(
+        ["interval_start_utc", "cluster_key", "route_name", "route_hub_preference_rank", "hub_key"]
+    ).reset_index(drop=True)
+
+
+def materialize_route_score_history(
+    output_dir: str | Path,
+    prices: pd.DataFrame,
+    gb_transfer_gate: pd.DataFrame,
+    interconnector_flow: pd.DataFrame | None = None,
+    interconnector_capacity: pd.DataFrame | None = None,
+    interconnector_capacity_reviewed: pd.DataFrame | None = None,
+    interconnector_capacity_review_policy: pd.DataFrame | None = None,
+    france_connector: pd.DataFrame | None = None,
+) -> Dict[str, pd.DataFrame]:
+    fact = build_fact_route_score_hourly(
+        prices=prices,
+        gb_transfer_gate=gb_transfer_gate,
+        interconnector_flow=interconnector_flow,
+        interconnector_capacity=interconnector_capacity,
+        interconnector_capacity_reviewed=interconnector_capacity_reviewed,
+        interconnector_capacity_review_policy=interconnector_capacity_review_policy,
+        france_connector=france_connector,
+    )
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    fact.to_csv(output_path / f"{ROUTE_SCORE_TABLE}.csv", index=False)
+    return {ROUTE_SCORE_TABLE: fact}

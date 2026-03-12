@@ -294,6 +294,76 @@ Key behavior:
      --truth-store-db-path bmu_truth_store.sqlite
    ```
 
+14. Materialize first-pass border-level interconnector offered-capacity history from ENTSO-E:
+
+   ```bash
+   python inline_arbitrage_live.py ^
+     --materialize-interconnector-capacity ^
+     --capacity-start 2024-10-01 ^
+     --capacity-end 2024-10-03 ^
+     --capacity-output-dir interconnector_capacity_history ^
+     --truth-store-db-path bmu_truth_store.sqlite
+   ```
+
+15. Materialize a broader official ENTSO-E capacity-source audit before using capacity as a full-border gate:
+
+   ```bash
+   python inline_arbitrage_live.py ^
+     --materialize-interconnector-capacity-audit ^
+     --capacity-audit-start 2024-10-01 ^
+     --capacity-audit-end 2024-10-03 ^
+     --capacity-audit-output-dir interconnector_capacity_audit
+   ```
+
+16. Materialize the reviewed-capacity policy so explicit-daily ENTSO-E capacity for GB-NL, GB-BE, and GB-DK1 stays separate from the first-pass gate:
+
+   ```bash
+   python inline_arbitrage_live.py ^
+     --materialize-interconnector-capacity-review-policy ^
+     --capacity-review-start 2024-10-01 ^
+     --capacity-review-end 2024-10-03 ^
+     --capacity-review-output-dir interconnector_capacity_review
+   ```
+
+17. Materialize the first-pass hourly GB transfer-gate proxy from cluster to interconnector hub:
+
+   ```bash
+   python inline_arbitrage_live.py ^
+     --materialize-gb-transfer-gate ^
+     --transfer-start 2024-10-01 ^
+     --transfer-end 2024-10-03 ^
+     --transfer-output-dir gb_transfer_gate_history ^
+     --truth-store-db-path bmu_truth_store.sqlite
+   ```
+
+18. Materialize the first-pass cluster-aware route-score history:
+
+   ```bash
+   python inline_arbitrage_live.py ^
+     --materialize-route-score-history ^
+     --route-score-start 2024-10-01 ^
+     --route-score-end 2024-10-02 ^
+     --route-score-output-dir route_score_history ^
+     --truth-store-db-path bmu_truth_store.sqlite
+   ```
+
+19. Materialize the France-specific connector layer for `IFA`, `IFA2`, and `ElecLink`:
+
+   ```bash
+   python inline_arbitrage_live.py ^
+     --materialize-france-connector-layer ^
+     --france-start 2024-10-01 ^
+     --france-end 2024-10-02 ^
+     --france-output-dir france_connector_history ^
+     --truth-store-db-path bmu_truth_store.sqlite
+   ```
+
+   If you have a local Nord Pool UMM export for `ElecLink`, add:
+
+   ```bash
+     --eleclink-umm-export-path eleclink_umm_export.csv
+   ```
+
 ## Notes
 
 - GB prices come from the Elexon market-index feed and are published in GBP, so an FX rate
@@ -369,14 +439,61 @@ Key behavior:
 - `fact_weather_hourly` carries observed anchor weather plus capacity-weighted cluster and parent-region aggregates.
 - The repo now materializes the first network-deliverability surface:
   - `fact_interconnector_flow_hourly`
+- The repo now also materializes the first commercial-capacity surface:
+  - `fact_interconnector_capacity_hourly`
 - The current first pass is real ENTSO-E `A11` border flow, but it is still border-level rather than cable-specific.
   Shared borders like GB-FR are therefore carried as aggregate border truth plus candidate hub sets, not attributed to `IFA`,
   `IFA2`, or `ElecLink` individually.
-- The repo still does not yet materialize:
-  - `fact_interconnector_capacity_hourly`
+- `fact_interconnector_capacity_hourly` is a first-pass ENTSO-E offered-capacity layer from article `11.1.A`
+  using `documentType=A31`, `auction.Type=A01`, and daily contract type `A01`. It is commercial offered capacity,
+  not yet ATC/NTC, outage truth, or post-auction headroom.
+- `interconnector_capacity.py` also materializes a broader source-audit surface:
+  - `fact_interconnector_capacity_source_audit_daily`
+  - `fact_interconnector_capacity_source_audit_variant`
+- `interconnector_capacity.py` now also materializes:
+  - `fact_interconnector_capacity_review_policy`
+  - `fact_interconnector_capacity_reviewed_hourly`
+- `fact_interconnector_capacity_review_policy` is the decision surface for alternate official capacity coverage.
+  It accepts `a31_explicit_daily` as a reviewed evidence tier for `GB-NL`, `GB-BE`, and `GB-DK1`, but it keeps that
+  tier separate from the first-pass direct gate so route scoring does not silently promote it.
+- `fact_interconnector_capacity_reviewed_hourly` is the accepted reviewed-capacity surface itself.
+  It currently fetches explicit-daily `A31` only for the borders allowed by the review policy, and it stays separate from
+  `fact_interconnector_capacity_hourly` so reviewed coverage can be audited explicitly.
+- `france_connector.py` now materializes:
+  - `dim_interconnector_cable`
+  - `fact_france_connector_hourly`
+- `france_connector_availability.py` now materializes:
+  - `fact_france_connector_operator_event`
+  - `fact_france_connector_availability_hourly`
+- `dim_interconnector_cable` is the first cable-level connector dimension. Current scope is France-facing cables only:
+  `IFA`, `IFA2`, and `ElecLink`.
+- `fact_france_connector_hourly` decomposes the shared `GB-FR` border into cable rows using nominal-capacity shares,
+  border flow, and any published or reviewed border-capacity overlays. It is explicitly a cable proxy layer, not
+  cable-level operational truth.
+- `fact_france_connector_operator_event` is the event-level source-truth surface for France connector outages. Today it
+  uses Elexon REMIT for `IFA` and `IFA2`, and supports an optional Nord Pool UMM export path for `ElecLink`.
+- `fact_france_connector_availability_hourly` is the hourly operator-availability layer. It can block or cap `IFA` and
+  `IFA2` directly from REMIT, and it keeps `ElecLink` explicitly at `unknown_source` unless a UMM export is provided.
+- The live route scorer now joins `fact_interconnector_flow_hourly` and `fact_interconnector_capacity_hourly`
+  into the GB border leg only.
+  It keeps:
+  - confirmed route scores when published capacity and flow imply positive headroom
+  - relaxed route scores when price is positive but capacity is unpublished
+  - `export_signal_network` with explicit `EXPORT_CONFIRMED`, `EXPORT_CAPACITY_UNKNOWN`, or `HOLD`
+- `gb_transfer_gate.py` now materializes:
   - `fact_gb_transfer_gate_hourly`
-- That means the current stack can now tell you whether the border was physically flowing and in which direction, but not yet
-  whether unused headroom was commercially available or whether curtailed GB clusters could actually reach the landing hub internally.
+- `fact_gb_transfer_gate_hourly` is a first-pass hourly proxy for internal GB deliverability from a generation cluster to an
+  interconnector hub. It combines static reachability status with observed border flow and offered-capacity overlays, so it is
+  useful for screening but is still not a validated internal-network transfer truth layer.
+- `route_score_history.py` now materializes:
+  - `fact_route_score_hourly`
+- `fact_route_score_hourly` is the first cluster-aware route-screening surface. It joins route netbacks to
+  `fact_gb_transfer_gate_hourly`, first-pass border capacity, the reviewed-capacity tier, and the France connector layer, then labels each row as
+  `confirmed`, `reviewed`, `capacity_unknown`, `blocked_internal_transfer`, `blocked_connector_capacity`, or `no_price_signal`.
+- France route rows now carry cable-specific connector metadata and headroom proxies, so `GB-FR` is no longer treated
+  as one undifferentiated border inside `fact_route_score_hourly`.
+- France route rows now also carry operator-availability fields, so `IFA` and `IFA2` can be capped or blocked by
+  REMIT-backed connector outages before the route is scored.
 - `fact_bmu_curtailment_truth_half_hourly` is tiered, not flattened. It keeps:
   - `dispatch_only` rows when dispatch truth exists but a lost-energy estimate is not valid
   - `physical_baseline` rows when PN or QPN provides a valid half-hour counterfactual
@@ -511,6 +628,24 @@ Key behavior:
 - `fact_interconnector_flow_hourly` is a first-pass border-level physical flow surface from ENTSO-E `A11`.
   It carries GB-signed direction, observed hourly MW, and candidate hub sets. It is not yet a cable-specific truth layer and it does
   not yet include ATC/NTC, outages, or utilization versus technical capacity.
+- `interconnector_capacity.py` now materializes:
+  - `fact_interconnector_capacity_hourly`
+- `fact_interconnector_capacity_hourly` is a first-pass border-level offered-capacity surface from ENTSO-E article `11.1.A`.
+  It carries hourly offered MW by border and direction plus auction and contract metadata. It is not yet cable-specific, outage-aware,
+  or equivalent to post-auction available headroom.
+- `fact_interconnector_capacity_source_audit_daily` and `fact_interconnector_capacity_source_audit_variant` rank whether the
+  official first-pass query publishes any rows for each border and direction, and whether alternate official query variants
+  publish anything at all. They are the guardrail for deciding whether missing capacity should remain `capacity_unknown`.
+- `fact_interconnector_capacity_review_policy` is the next policy layer above that audit. It records whether alternate
+  explicit-daily capacity is acceptable as a reviewed evidence tier, and keeps GB-FR and GB-IE on `keep_capacity_unknown`
+  until a better source story exists.
+- `fact_france_connector_hourly` is the current workaround for the France gap. It gives the model a cable-specific
+  screen for `IFA`, `IFA2`, and `ElecLink` without pretending ENTSO-E border rows are already cable-level truth.
+- `fact_france_connector_availability_hourly` is the first place where France connector operator truth enters the stack.
+  It already improves `IFA` and `IFA2`; `ElecLink` still needs a stable Nord Pool UMM ingest path.
+- `fact_route_score_hourly` is the first place where the reviewed-capacity tier is actually consumed.
+  It still does not change the legacy national route CSV path; it is a separate historical screening surface so reviewed
+  capacity stays explicit and auditable.
 - Partial REMIT windows no longer behave like hard outages by default. When REMIT still reports
   positive available capacity, the availability table now downgrades those rows to `unknown`.
 - The truth table keeps both raw and effective availability fields. It can promote a partial-REMIT
@@ -520,10 +655,10 @@ Key behavior:
 ## Next steps
 
 - Replace the seed asset registry with confirmed wind farm, node, and owner metadata
-- Turn the topology scaffold into actual transfer gates between clusters and hubs
-- Materialize `fact_gb_transfer_gate_hourly` so cluster-to-hub deliverability is an hourly data surface instead of a static reachability assumption
-- Join `fact_interconnector_flow_hourly` into route scoring so observed border loading and direction can actually block or derate export paths
-- Materialize `fact_interconnector_capacity_hourly` so route scoring can distinguish physical flow from tradable headroom, outages, and constrained availability
+- Decide whether the reviewed explicit-daily tier should be promoted from `fact_route_score_hourly` into the legacy live route path
+- Add real cluster-aware source signals so `fact_route_score_hourly` can consume curtailment truth instead of only national price spreads
+- Wire `ElecLink` onto a stable Nord Pool UMM or equivalent operator outage feed
+- Upgrade `fact_interconnector_capacity_hourly` toward ATC/NTC, outages, and post-allocation headroom
 - Add forecast weather history and feature versioning so weather forecast error can be backtested
 - Improve dispatch-to-lost-energy capture against the wind-only QA target before relying on the precision profile
 - Start with a cluster-point time-slider map, then add hub arcs and error/drift layers

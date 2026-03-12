@@ -36,15 +36,55 @@ import numpy as np
 import pandas as pd
 
 from asset_mapping import cluster_frame, parent_region_frame, signal_source_frame, weather_anchor_frame
+from bmu_availability import fetch_remit_event_detail_with_status
 from bmu_dispatch import materialize_bmu_dispatch_history, parse_iso_date as parse_dispatch_iso_date
 from bmu_generation import materialize_bmu_generation_history, parse_iso_date as parse_bmu_iso_date
 from curtailment_truth import materialize_bmu_curtailment_truth
 from curtailment_signals import materialize_curtailed_history, parse_iso_date
 from exploration_plan import backtest_plan_frame, dataset_plan_frame, drift_monitor_plan_frame, map_layer_plan_frame
+from france_connector import (
+    DIM_INTERCONNECTOR_CABLE_TABLE,
+    FRANCE_CONNECTOR_TABLE,
+    build_fact_france_connector_hourly,
+    interconnector_cable_frame,
+    materialize_france_connector_history,
+)
+from france_connector_availability import (
+    FRANCE_CONNECTOR_AVAILABILITY_TABLE,
+    FRANCE_CONNECTOR_OPERATOR_EVENT_TABLE,
+    build_fact_france_connector_availability_hourly,
+    build_france_connector_operator_event_frame,
+    load_eleclink_umm_export,
+)
+from gb_transfer_gate import (
+    GB_TRANSFER_GATE_TABLE,
+    build_fact_gb_transfer_gate_hourly,
+    materialize_gb_transfer_gate_history,
+    parse_iso_date as parse_transfer_iso_date,
+)
 from gb_topology import cluster_hub_matrix, interconnector_hub_frame, reachability_frame, route_hub_frame
 from history_store import ingest_truth_csv_tree_to_sqlite, upsert_truth_frames_to_sqlite
-from interconnector_flow import materialize_interconnector_flow_history, parse_iso_date as parse_flow_iso_date
+from interconnector_capacity import (
+    INTERCONNECTOR_CAPACITY_AUDIT_DAILY_TABLE,
+    INTERCONNECTOR_CAPACITY_AUDIT_VARIANT_TABLE,
+    INTERCONNECTOR_CAPACITY_REVIEW_POLICY_TABLE,
+    INTERCONNECTOR_CAPACITY_REVIEWED_TABLE,
+    build_fact_interconnector_capacity_hourly,
+    build_interconnector_capacity_reviewed_hourly,
+    build_interconnector_capacity_source_audit,
+    build_interconnector_capacity_review_policy,
+    materialize_interconnector_capacity_review_policy,
+    materialize_interconnector_capacity_source_audit,
+    materialize_interconnector_capacity_history,
+    parse_iso_date as parse_capacity_iso_date,
+)
+from interconnector_flow import (
+    build_fact_interconnector_flow_hourly,
+    materialize_interconnector_flow_history,
+    parse_iso_date as parse_flow_iso_date,
+)
 from physical_constraints import assumption_frame, compute_netbacks
+from route_score_history import ROUTE_SCORE_TABLE, materialize_route_score_history
 from support_resolution import (
     SUPPORT_CASE_RESOLUTION_TABLE,
     SUPPORT_OPEN_CASE_PRIORITY_FAMILY_TABLE,
@@ -308,8 +348,6 @@ def parse_entsoe_price_xml(xml_bytes: bytes) -> Tuple[pd.DataFrame, str, str]:
         raise RuntimeError(f"mixed currencies in ENTSO-E payload: {sorted(currencies)}")
 
     resolution = sorted(resolutions)[0] if len(resolutions) == 1 else "mixed"
-    if resolution == "mixed":
-        raise RuntimeError(f"mixed resolutions in ENTSO-E payload: {sorted(resolutions)}")
 
     out = pd.concat(frames, ignore_index=True).drop_duplicates(subset=["time_utc"]).sort_values("time_utc")
     out.set_index("time_utc", inplace=True)
@@ -335,6 +373,9 @@ def normalize_currency(df: pd.DataFrame, currency: str, zone_name: str, gbp_eur:
 def normalize_resolution(df: pd.DataFrame, resolution: str) -> pd.DataFrame:
     if resolution in {"PT60M", "PT1H"}:
         return df
+
+    if resolution == "mixed":
+        return df.resample("1h").mean()
 
     step = parse_resolution_to_timedelta(resolution)
     if step > pd.Timedelta(hours=1):
@@ -796,12 +837,106 @@ def main() -> int:
         action="store_true",
         help="Fetch and save border-level ENTSO-E physical interconnector flow history, then exit",
     )
+    parser.add_argument(
+        "--materialize-interconnector-capacity",
+        action="store_true",
+        help="Fetch and save border-level ENTSO-E offered interconnector capacity history, then exit",
+    )
+    parser.add_argument(
+        "--materialize-interconnector-capacity-audit",
+        action="store_true",
+        help="Fetch and save a broader ENTSO-E interconnector-capacity source audit across border and query variants, then exit",
+    )
+    parser.add_argument(
+        "--materialize-interconnector-capacity-review-policy",
+        action="store_true",
+        help="Fetch and save the interconnector-capacity review policy that keeps alternate explicit-daily evidence separate from the first-pass gate, then exit",
+    )
+    parser.add_argument(
+        "--materialize-gb-transfer-gate",
+        action="store_true",
+        help="Fetch network overlays and save the hourly GB cluster-to-hub transfer-gate proxy, then exit",
+    )
+    parser.add_argument(
+        "--materialize-france-connector-layer",
+        action="store_true",
+        help="Fetch network overlays and save the France-specific cable layer for IFA, IFA2, and ElecLink, then exit",
+    )
+    parser.add_argument(
+        "--materialize-route-score-history",
+        action="store_true",
+        help="Fetch prices and network overlays, then save the first-pass cluster-to-hub-to-route score history, then exit",
+    )
     parser.add_argument("--flow-start", help="Interconnector flow materialization start date, inclusive (YYYY-MM-DD)")
     parser.add_argument("--flow-end", help="Interconnector flow materialization end date, inclusive (YYYY-MM-DD)")
     parser.add_argument(
         "--flow-output-dir",
         default="interconnector_flow_history",
         help="Output directory for interconnector flow history",
+    )
+    parser.add_argument(
+        "--capacity-start",
+        help="Interconnector capacity materialization start date, inclusive (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--capacity-end",
+        help="Interconnector capacity materialization end date, inclusive (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--capacity-output-dir",
+        default="interconnector_capacity_history",
+        help="Output directory for interconnector capacity history",
+    )
+    parser.add_argument(
+        "--capacity-audit-start",
+        help="Interconnector capacity source-audit start date, inclusive (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--capacity-audit-end",
+        help="Interconnector capacity source-audit end date, inclusive (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--capacity-audit-output-dir",
+        default="interconnector_capacity_audit",
+        help="Output directory for interconnector capacity source audit",
+    )
+    parser.add_argument(
+        "--capacity-review-start",
+        help="Interconnector capacity review-policy start date, inclusive (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--capacity-review-end",
+        help="Interconnector capacity review-policy end date, inclusive (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--capacity-review-output-dir",
+        default="interconnector_capacity_review",
+        help="Output directory for interconnector capacity review policy",
+    )
+    parser.add_argument("--transfer-start", help="GB transfer-gate materialization start date, inclusive (YYYY-MM-DD)")
+    parser.add_argument("--transfer-end", help="GB transfer-gate materialization end date, inclusive (YYYY-MM-DD)")
+    parser.add_argument(
+        "--transfer-output-dir",
+        default="gb_transfer_gate_history",
+        help="Output directory for GB transfer-gate history",
+    )
+    parser.add_argument("--france-start", help="France connector-layer materialization start date, inclusive (YYYY-MM-DD)")
+    parser.add_argument("--france-end", help="France connector-layer materialization end date, inclusive (YYYY-MM-DD)")
+    parser.add_argument(
+        "--france-output-dir",
+        default="france_connector_history",
+        help="Output directory for the France connector layer",
+    )
+    parser.add_argument(
+        "--eleclink-umm-export-path",
+        help="Optional local CSV or JSON export of ElecLink Nord Pool UMM outages to tighten France connector availability",
+    )
+    parser.add_argument("--route-score-start", help="Route-score materialization start date, inclusive (YYYY-MM-DD)")
+    parser.add_argument("--route-score-end", help="Route-score materialization end date, inclusive (YYYY-MM-DD)")
+    parser.add_argument(
+        "--route-score-output-dir",
+        default="route_score_history",
+        help="Output directory for route-score history",
     )
     parser.add_argument("--weather-start", help="Weather materialization start date, inclusive (YYYY-MM-DD)")
     parser.add_argument("--weather-end", help="Weather materialization end date, inclusive (YYYY-MM-DD)")
@@ -1594,6 +1729,360 @@ def main() -> int:
             print(f"ERROR: {exc}", file=sys.stderr)
             return 1
 
+    if args.materialize_interconnector_capacity:
+        if not args.capacity_start or not args.capacity_end:
+            raise SystemExit("--materialize-interconnector-capacity requires --capacity-start and --capacity-end")
+
+        capacity_start = parse_capacity_iso_date(args.capacity_start)
+        capacity_end = parse_capacity_iso_date(args.capacity_end)
+        if capacity_end < capacity_start:
+            raise SystemExit("--capacity-end must be on or after --capacity-start")
+
+        entsoe_token = os.environ.get("ENTOS_E_TOKEN") or os.environ.get("ENTSOE_TOKEN") or ""
+        if not entsoe_token:
+            raise SystemExit("--materialize-interconnector-capacity requires ENTOS_E_TOKEN or ENTSOE_TOKEN")
+
+        try:
+            frames = materialize_interconnector_capacity_history(
+                start_date=capacity_start,
+                end_date=capacity_end,
+                output_dir=args.capacity_output_dir,
+                token=entsoe_token,
+            )
+            print(
+                f"[source=entsoe] Materialized {len(frames)} tables for {capacity_start} to {capacity_end} (inclusive)"
+            )
+            for table_name, frame in frames.items():
+                output_path = os.path.join(args.capacity_output_dir, f"{table_name}.csv")
+                print(f"{table_name}: rows={len(frame)} path={output_path}")
+            if args.truth_store_db_path:
+                summary = upsert_truth_frames_to_sqlite(frames, args.truth_store_db_path)
+                print(f"[store=sqlite] Upserted interconnector capacity tables into {args.truth_store_db_path}")
+                for _, row in summary.iterrows():
+                    print(
+                        f"{row['table_name']}: rows_loaded={int(row['rows_loaded'])} "
+                        f"table_rows={int(row['table_row_count'])}"
+                    )
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
+    if args.materialize_interconnector_capacity_audit:
+        if not args.capacity_audit_start or not args.capacity_audit_end:
+            raise SystemExit(
+                "--materialize-interconnector-capacity-audit requires --capacity-audit-start and --capacity-audit-end"
+            )
+
+        capacity_audit_start = parse_capacity_iso_date(args.capacity_audit_start)
+        capacity_audit_end = parse_capacity_iso_date(args.capacity_audit_end)
+        if capacity_audit_end < capacity_audit_start:
+            raise SystemExit("--capacity-audit-end must be on or after --capacity-audit-start")
+
+        entsoe_token = os.environ.get("ENTOS_E_TOKEN") or os.environ.get("ENTSOE_TOKEN") or ""
+        if not entsoe_token:
+            raise SystemExit("--materialize-interconnector-capacity-audit requires ENTOS_E_TOKEN or ENTSOE_TOKEN")
+
+        try:
+            frames = materialize_interconnector_capacity_source_audit(
+                start_date=capacity_audit_start,
+                end_date=capacity_audit_end,
+                output_dir=args.capacity_audit_output_dir,
+                token=entsoe_token,
+            )
+            print(
+                f"[source=entsoe] Materialized {len(frames)} tables for {capacity_audit_start} to {capacity_audit_end} "
+                f"(inclusive)"
+            )
+            for table_name, frame in frames.items():
+                output_path = os.path.join(args.capacity_audit_output_dir, f"{table_name}.csv")
+                print(f"{table_name}: rows={len(frame)} path={output_path}")
+            if args.truth_store_db_path:
+                summary = upsert_truth_frames_to_sqlite(frames, args.truth_store_db_path)
+                print(f"[store=sqlite] Upserted interconnector capacity audit tables into {args.truth_store_db_path}")
+                for _, row in summary.iterrows():
+                    print(
+                        f"{row['table_name']}: rows_loaded={int(row['rows_loaded'])} "
+                        f"table_rows={int(row['table_row_count'])}"
+                    )
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
+    if args.materialize_interconnector_capacity_review_policy:
+        if not args.capacity_review_start or not args.capacity_review_end:
+            raise SystemExit(
+                "--materialize-interconnector-capacity-review-policy requires --capacity-review-start and --capacity-review-end"
+            )
+
+        capacity_review_start = parse_capacity_iso_date(args.capacity_review_start)
+        capacity_review_end = parse_capacity_iso_date(args.capacity_review_end)
+        if capacity_review_end < capacity_review_start:
+            raise SystemExit("--capacity-review-end must be on or after --capacity-review-start")
+
+        entsoe_token = os.environ.get("ENTOS_E_TOKEN") or os.environ.get("ENTSOE_TOKEN") or ""
+        if not entsoe_token:
+            raise SystemExit(
+                "--materialize-interconnector-capacity-review-policy requires ENTOS_E_TOKEN or ENTSOE_TOKEN"
+            )
+
+        try:
+            frames = materialize_interconnector_capacity_review_policy(
+                start_date=capacity_review_start,
+                end_date=capacity_review_end,
+                output_dir=args.capacity_review_output_dir,
+                token=entsoe_token,
+            )
+            print(
+                f"[source=entsoe] Materialized {len(frames)} tables for {capacity_review_start} to {capacity_review_end} "
+                f"(inclusive)"
+            )
+            for table_name, frame in frames.items():
+                output_path = os.path.join(args.capacity_review_output_dir, f"{table_name}.csv")
+                print(f"{table_name}: rows={len(frame)} path={output_path}")
+            policy = frames[INTERCONNECTOR_CAPACITY_REVIEW_POLICY_TABLE]
+            if not policy.empty:
+                print()
+                print("Interconnector Capacity Review Policy")
+                print(policy.to_string(index=False))
+            if args.truth_store_db_path:
+                summary = upsert_truth_frames_to_sqlite(frames, args.truth_store_db_path)
+                print(f"[store=sqlite] Upserted interconnector capacity review tables into {args.truth_store_db_path}")
+                for _, row in summary.iterrows():
+                    print(
+                        f"{row['table_name']}: rows_loaded={int(row['rows_loaded'])} "
+                        f"table_rows={int(row['table_row_count'])}"
+                    )
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
+    if args.materialize_gb_transfer_gate:
+        if not args.transfer_start or not args.transfer_end:
+            raise SystemExit("--materialize-gb-transfer-gate requires --transfer-start and --transfer-end")
+
+        transfer_start = parse_transfer_iso_date(args.transfer_start)
+        transfer_end = parse_transfer_iso_date(args.transfer_end)
+        if transfer_end < transfer_start:
+            raise SystemExit("--transfer-end must be on or after --transfer-start")
+
+        entsoe_token = os.environ.get("ENTOS_E_TOKEN") or os.environ.get("ENTSOE_TOKEN") or ""
+        if not entsoe_token:
+            raise SystemExit("--materialize-gb-transfer-gate requires ENTOS_E_TOKEN or ENTSOE_TOKEN")
+
+        try:
+            frames = materialize_gb_transfer_gate_history(
+                start_date=transfer_start,
+                end_date=transfer_end,
+                output_dir=args.transfer_output_dir,
+                token=entsoe_token,
+            )
+            print(
+                f"[source=entsoe+topology] Materialized {len(frames)} tables for {transfer_start} to {transfer_end} "
+                f"(inclusive)"
+            )
+            for table_name, frame in frames.items():
+                output_path = os.path.join(args.transfer_output_dir, f"{table_name}.csv")
+                print(f"{table_name}: rows={len(frame)} path={output_path}")
+            if args.truth_store_db_path:
+                summary = upsert_truth_frames_to_sqlite(frames, args.truth_store_db_path)
+                print(f"[store=sqlite] Upserted GB transfer-gate tables into {args.truth_store_db_path}")
+                for _, row in summary.iterrows():
+                    print(
+                        f"{row['table_name']}: rows_loaded={int(row['rows_loaded'])} "
+                        f"table_rows={int(row['table_row_count'])}"
+                    )
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
+    if args.materialize_france_connector_layer:
+        if not args.france_start or not args.france_end:
+            raise SystemExit("--materialize-france-connector-layer requires --france-start and --france-end")
+
+        france_start = parse_transfer_iso_date(args.france_start)
+        france_end = parse_transfer_iso_date(args.france_end)
+        if france_end < france_start:
+            raise SystemExit("--france-end must be on or after --france-start")
+
+        entsoe_token = os.environ.get("ENTOS_E_TOKEN") or os.environ.get("ENTSOE_TOKEN") or ""
+        if not entsoe_token:
+            raise SystemExit("--materialize-france-connector-layer requires ENTOS_E_TOKEN or ENTSOE_TOKEN")
+
+        try:
+            raw_remit, remit_status = fetch_remit_event_detail_with_status(france_start, france_end)
+            eleclink_export = load_eleclink_umm_export(args.eleclink_umm_export_path)
+            france_operator_event = build_france_connector_operator_event_frame(
+                raw_remit,
+                eleclink_umm_export=eleclink_export,
+            )
+            france_availability = build_fact_france_connector_availability_hourly(
+                start_date=france_start,
+                end_date=france_end,
+                operator_event_frame=france_operator_event,
+                remit_fetch_status_by_date=remit_status,
+                eleclink_export_loaded=not eleclink_export.empty,
+            )
+            frames = materialize_france_connector_history(
+                start_date=france_start,
+                end_date=france_end,
+                output_dir=args.france_output_dir,
+                token=entsoe_token,
+                france_connector_availability=france_availability,
+            )
+            frames[FRANCE_CONNECTOR_OPERATOR_EVENT_TABLE] = france_operator_event
+            frames[FRANCE_CONNECTOR_AVAILABILITY_TABLE] = france_availability
+            france_operator_event.to_csv(
+                os.path.join(args.france_output_dir, f"{FRANCE_CONNECTOR_OPERATOR_EVENT_TABLE}.csv"),
+                index=False,
+            )
+            france_availability.to_csv(
+                os.path.join(args.france_output_dir, f"{FRANCE_CONNECTOR_AVAILABILITY_TABLE}.csv"),
+                index=False,
+            )
+            print(
+                f"[source=entsoe+elexon_remit+france_connector_policy] Materialized {len(frames)} tables for "
+                f"{france_start} to {france_end} (inclusive)"
+            )
+            for table_name, frame in frames.items():
+                output_path = os.path.join(args.france_output_dir, f"{table_name}.csv")
+                print(f"{table_name}: rows={len(frame)} path={output_path}")
+            if args.truth_store_db_path:
+                summary = upsert_truth_frames_to_sqlite(frames, args.truth_store_db_path)
+                print(f"[store=sqlite] Upserted France connector-layer tables into {args.truth_store_db_path}")
+                for _, row in summary.iterrows():
+                    print(
+                        f"{row['table_name']}: rows_loaded={int(row['rows_loaded'])} "
+                        f"table_rows={int(row['table_row_count'])}"
+                    )
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
+    if args.materialize_route_score_history:
+        if not args.route_score_start or not args.route_score_end:
+            raise SystemExit("--materialize-route-score-history requires --route-score-start and --route-score-end")
+
+        route_score_start = parse_market_day(args.route_score_start)
+        route_score_end = parse_market_day(args.route_score_end)
+        if route_score_end < route_score_start:
+            raise SystemExit("--route-score-end must be on or after --route-score-start")
+
+        market_days = list(iter_market_days(route_score_start, route_score_end + dt.timedelta(days=1)))
+        entsoe_token = os.environ.get("ENTOS_E_TOKEN") or os.environ.get("ENTSOE_TOKEN") or ""
+        if not entsoe_token:
+            raise SystemExit("--materialize-route-score-history requires ENTOS_E_TOKEN or ENTSOE_TOKEN")
+
+        bmrs_api_key = next((os.environ.get(name) for name in BMRS_KEY_ENV_NAMES if os.environ.get(name)), None)
+        gbp_eur = args.gbp_eur
+        if gbp_eur is None:
+            for env_name in FX_ENV_NAMES:
+                if os.environ.get(env_name):
+                    gbp_eur = parse_gbp_eur(os.environ[env_name])
+                    break
+        gb_provider = args.gb_provider or next(
+            (os.environ.get(name) for name in GB_PROVIDER_ENV_NAMES if os.environ.get(name)),
+            DEFAULT_GB_PROVIDER,
+        )
+
+        try:
+            prices, provider_used = fetch_prices(market_days, entsoe_token, gbp_eur, bmrs_api_key, gb_provider)
+            network_start = market_days[0]
+            network_end = market_days[-1]
+            interconnector_flow = build_fact_interconnector_flow_hourly(
+                start_date=network_start,
+                end_date=network_end,
+                token=entsoe_token,
+            )
+            interconnector_capacity = build_fact_interconnector_capacity_hourly(
+                start_date=network_start,
+                end_date=network_end,
+                token=entsoe_token,
+            )
+            review_audit = build_interconnector_capacity_source_audit(
+                start_date=network_start,
+                end_date=network_end,
+                token=entsoe_token,
+            )
+            review_policy = build_interconnector_capacity_review_policy(
+                review_audit[INTERCONNECTOR_CAPACITY_AUDIT_DAILY_TABLE]
+            )
+            reviewed_capacity = build_interconnector_capacity_reviewed_hourly(
+                start_date=network_start,
+                end_date=network_end,
+                token=entsoe_token,
+                review_policy=review_policy,
+            )
+            raw_remit, remit_status = fetch_remit_event_detail_with_status(network_start, network_end)
+            eleclink_export = load_eleclink_umm_export(args.eleclink_umm_export_path)
+            france_operator_event = build_france_connector_operator_event_frame(
+                raw_remit,
+                eleclink_umm_export=eleclink_export,
+            )
+            france_availability = build_fact_france_connector_availability_hourly(
+                start_date=network_start,
+                end_date=network_end,
+                operator_event_frame=france_operator_event,
+                remit_fetch_status_by_date=remit_status,
+                eleclink_export_loaded=not eleclink_export.empty,
+            )
+            france_connector = build_fact_france_connector_hourly(
+                start_date=network_start,
+                end_date=network_end,
+                interconnector_flow=interconnector_flow,
+                interconnector_capacity=interconnector_capacity,
+                interconnector_capacity_review_policy=review_policy,
+                interconnector_capacity_reviewed=reviewed_capacity,
+                france_connector_availability=france_availability,
+            )
+            gb_transfer_gate = build_fact_gb_transfer_gate_hourly(
+                start_date=network_start,
+                end_date=network_end,
+                interconnector_flow=interconnector_flow,
+                interconnector_capacity=interconnector_capacity,
+            )
+            frames = materialize_route_score_history(
+                output_dir=args.route_score_output_dir,
+                prices=prices,
+                gb_transfer_gate=gb_transfer_gate,
+                interconnector_flow=interconnector_flow,
+                interconnector_capacity=interconnector_capacity,
+                interconnector_capacity_reviewed=reviewed_capacity,
+                interconnector_capacity_review_policy=review_policy,
+                france_connector=france_connector,
+            )
+            print(
+                f"[source=elexon_mid:{provider_used}+entsoe+entsoe_network] Materialized {len(frames)} tables for "
+                f"{route_score_start} to {route_score_end} (inclusive)"
+            )
+            for table_name, frame in frames.items():
+                output_path = os.path.join(args.route_score_output_dir, f"{table_name}.csv")
+                print(f"{table_name}: rows={len(frame)} path={output_path}")
+            if args.truth_store_db_path:
+                store_frames = dict(frames)
+                store_frames[GB_TRANSFER_GATE_TABLE] = gb_transfer_gate
+                store_frames[INTERCONNECTOR_CAPACITY_REVIEW_POLICY_TABLE] = review_policy
+                store_frames[INTERCONNECTOR_CAPACITY_REVIEWED_TABLE] = reviewed_capacity
+                store_frames[DIM_INTERCONNECTOR_CABLE_TABLE] = interconnector_cable_frame()
+                store_frames[FRANCE_CONNECTOR_OPERATOR_EVENT_TABLE] = france_operator_event
+                store_frames[FRANCE_CONNECTOR_AVAILABILITY_TABLE] = france_availability
+                store_frames[FRANCE_CONNECTOR_TABLE] = france_connector
+                summary = upsert_truth_frames_to_sqlite(store_frames, args.truth_store_db_path)
+                print(f"[store=sqlite] Upserted route-score and reviewed-capacity tables into {args.truth_store_db_path}")
+                for _, row in summary.iterrows():
+                    print(
+                        f"{row['table_name']}: rows_loaded={int(row['rows_loaded'])} "
+                        f"table_rows={int(row['table_row_count'])}"
+                    )
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
     market_days = resolve_market_days(args)
     entsoe_token = os.environ.get("ENTOS_E_TOKEN") or os.environ.get("ENTSOE_TOKEN") or ""
     bmrs_api_key = next((os.environ.get(name) for name in BMRS_KEY_ENV_NAMES if os.environ.get(name)), None)
@@ -1612,13 +2101,31 @@ def main() -> int:
         if args.dry:
             prices = synthetic_prices(market_days)
             used_source = "synthetic (--dry)"
+            interconnector_flow = None
+            interconnector_capacity = None
         else:
             if not entsoe_token:
                 raise RuntimeError("missing ENTSO-E token; set ENTOS_E_TOKEN or ENTSOE_TOKEN, or use --dry")
             prices, provider_used = fetch_prices(market_days, entsoe_token, gbp_eur, bmrs_api_key, gb_provider)
-            used_source = f"elexon_mid:{provider_used}+entsoe"
+            network_start = market_days[0]
+            network_end = market_days[-1]
+            interconnector_flow = build_fact_interconnector_flow_hourly(
+                start_date=network_start,
+                end_date=network_end,
+                token=entsoe_token,
+            )
+            interconnector_capacity = build_fact_interconnector_capacity_hourly(
+                start_date=network_start,
+                end_date=network_end,
+                token=entsoe_token,
+            )
+            used_source = f"elexon_mid:{provider_used}+entsoe+entsoe_network"
 
-        out = compute_netbacks(prices)
+        out = compute_netbacks(
+            prices,
+            interconnector_flow=interconnector_flow,
+            interconnector_capacity=interconnector_capacity,
+        )
         out.to_csv(args.save)
 
         market_day_end = market_days[-1] + dt.timedelta(days=1)

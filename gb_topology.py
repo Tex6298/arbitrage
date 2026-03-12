@@ -39,7 +39,7 @@ class RouteHubOption:
 INTERCONNECTOR_HUBS: Dict[str, InterconnectorHub] = {
     "ifa": InterconnectorHub("ifa", "IFA", "south-east", "FR", "current", "French landing option from the south-east corridor."),
     "ifa2": InterconnectorHub("ifa2", "IFA2", "south coast", "FR", "current", "French landing option with a south-coast bias."),
-    "eleclink": InterconnectorHub("eleclink", "ElecLink", "south-east", "FR", "future", "Additional French route candidate if the model expands beyond the current two routes."),
+    "eleclink": InterconnectorHub("eleclink", "ElecLink", "south-east", "FR", "current", "Merchant French landing option through the Channel Tunnel corridor."),
     "britned": InterconnectorHub("britned", "BritNed", "south-east east-coast", "NL", "current", "Dutch landing option and the most direct fit to the current NL route."),
     "nemo": InterconnectorHub("nemo", "Nemo", "south-east east-coast", "BE", "future", "Belgian landing option and a proxy for east-coast exportability."),
     "nsl": InterconnectorHub("nsl", "North Sea Link", "north-east", "NO", "future", "North-east landing useful for testing northern export reachability."),
@@ -53,7 +53,7 @@ ROUTE_HUB_OPTIONS: Tuple[RouteHubOption, ...] = (
         route_name="R1_netback_GB_FR_DE_PL",
         target_zone="FR",
         preferred_hubs=("ifa", "ifa2", "eleclink"),
-        note="Current FR route should eventually choose from real French-facing interconnector hubs instead of treating GB as one node.",
+        note="Current FR route now scores explicit French-facing hubs, but still needs cable-specific operator capacity and outage truth beyond the shared GB-FR border.",
     ),
     RouteHubOption(
         route_name="R2_netback_GB_NL_DE_PL",
@@ -98,6 +98,14 @@ REACHABILITY_RULES: Tuple[ReachabilityRule, ...] = (
         "Treat as an even weaker version of the French route until detailed topology is added.",
     ),
     ReachabilityRule(
+        "moray_firth_offshore",
+        "eleclink",
+        "stretched",
+        "north_to_south_transfer",
+        "low",
+        "ElecLink remains a long southbound transfer chain from Moray in the first-pass topology.",
+    ),
+    ReachabilityRule(
         "east_coast_scotland_offshore",
         "nsl",
         "conditional",
@@ -130,6 +138,14 @@ REACHABILITY_RULES: Tuple[ReachabilityRule, ...] = (
         "French export remains a second-order candidate in this first-pass scaffold.",
     ),
     ReachabilityRule(
+        "east_coast_scotland_offshore",
+        "eleclink",
+        "stretched",
+        "north_to_south_transfer",
+        "low",
+        "ElecLink is still a second-order southbound candidate until detailed internal transfer is modeled.",
+    ),
+    ReachabilityRule(
         "shetland_wind",
         "nsl",
         "upstream_dependency",
@@ -152,6 +168,14 @@ REACHABILITY_RULES: Tuple[ReachabilityRule, ...] = (
         "island_to_mainland_then_transfer",
         "low",
         "French export is structurally weaker than the already-unproven mainland path.",
+    ),
+    ReachabilityRule(
+        "shetland_wind",
+        "eleclink",
+        "upstream_dependency",
+        "island_to_mainland_then_transfer",
+        "low",
+        "ElecLink is no more reachable than the mainland path that Shetland still lacks in this scaffold.",
     ),
     ReachabilityRule(
         "dogger_hornsea_offshore",
@@ -186,6 +210,14 @@ REACHABILITY_RULES: Tuple[ReachabilityRule, ...] = (
         "French export requires moving beyond the more natural east-coast hub set.",
     ),
     ReachabilityRule(
+        "dogger_hornsea_offshore",
+        "eleclink",
+        "stretched",
+        "east_to_south_transfer",
+        "low",
+        "ElecLink is a viable France cable candidate only after the same southbound transfer needed for IFA.",
+    ),
+    ReachabilityRule(
         "east_anglia_offshore",
         "britned",
         "near",
@@ -218,6 +250,14 @@ REACHABILITY_RULES: Tuple[ReachabilityRule, ...] = (
         "Still a transfer problem, but materially more plausible than a Scottish route.",
     ),
     ReachabilityRule(
+        "east_anglia_offshore",
+        "eleclink",
+        "conditional",
+        "south_east_bias",
+        "medium",
+        "ElecLink sits in the same broad south-east export corridor as IFA for a first-pass East Anglia route.",
+    ),
+    ReachabilityRule(
         "humber_offshore",
         "britned",
         "conditional",
@@ -242,6 +282,14 @@ REACHABILITY_RULES: Tuple[ReachabilityRule, ...] = (
         "French export requires leaving the more natural east-coast route family.",
     ),
     ReachabilityRule(
+        "humber_offshore",
+        "eleclink",
+        "stretched",
+        "east_to_south_transfer",
+        "low",
+        "ElecLink is a France option only after the same southbound transfer stretch as IFA from Humber.",
+    ),
+    ReachabilityRule(
         "north_wales_offshore",
         "ewic",
         "near",
@@ -256,6 +304,14 @@ REACHABILITY_RULES: Tuple[ReachabilityRule, ...] = (
         "west_to_south_transfer",
         "low",
         "French export is not a first-pass natural fit for North Wales offshore generation.",
+    ),
+    ReachabilityRule(
+        "north_wales_offshore",
+        "eleclink",
+        "stretched",
+        "west_to_south_transfer",
+        "low",
+        "ElecLink is still a weak west-to-south transfer case for North Wales in the current scaffold.",
     ),
     ReachabilityRule(
         "north_wales_offshore",

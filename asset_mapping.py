@@ -178,8 +178,8 @@ SIGNAL_SOURCES: Tuple[SignalSource, ...] = (
         granularity="hourly",
         coverage="Hub and corridor level",
         role="Physical feasibility gate for route scoring.",
-        status="missing",
-        note="Still required before route scores can be treated as operational decisions.",
+        status="implemented_first_pass",
+        note="First pass now covers border flow, offered capacity, and a proxy cluster-to-hub transfer gate. It is still not ATC/NTC truth or a validated internal-network model.",
     ),
 )
 
