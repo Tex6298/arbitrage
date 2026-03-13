@@ -347,7 +347,22 @@ Key behavior:
      --truth-store-db-path bmu_truth_store.sqlite
    ```
 
-19. Materialize the France-specific connector layer for `IFA`, `IFA2`, and `ElecLink`:
+19. Materialize the first curtailment-opportunity history surface:
+
+   ```bash
+   python inline_arbitrage_live.py ^
+     --materialize-curtailment-opportunity-history ^
+     --opportunity-start 2024-10-01 ^
+     --opportunity-end 2024-10-02 ^
+     --opportunity-output-dir curtailment_opportunity_history ^
+     --opportunity-truth-profile proxy ^
+     --truth-store-db-path bmu_truth_store.sqlite
+   ```
+
+   This writes `fact_curtailment_opportunity_hourly.csv` plus the supporting `fact_route_score_hourly.csv` and
+   `fact_regional_curtailment_hourly_proxy.csv` inputs in the same output directory.
+
+20. Materialize the France-specific connector layer for `IFA`, `IFA2`, and `ElecLink`:
 
    ```bash
    python inline_arbitrage_live.py ^
@@ -357,6 +372,31 @@ Key behavior:
      --france-output-dir france_connector_history ^
      --truth-store-db-path bmu_truth_store.sqlite
    ```
+
+   If you have a reviewed manual input assembled from ElecLink public documents and JAO notices, add:
+
+   ```bash
+     --france-reviewed-input-path france_connector_reviewed_input.csv
+   ```
+
+   A checked-in template is available at:
+
+   ```text
+   france_connector_reviewed_input.example.csv
+   ```
+
+   If your source is a messy CSV, TSV, TXT, or PDF-extracted table, normalize it first:
+
+   ```bash
+   python inline_arbitrage_live.py ^
+     --normalize-france-reviewed-input ^
+     --france-reviewed-raw-path france_connector_reviewed_raw.txt ^
+     --france-reviewed-normalized-output france_connector_reviewed_input.csv
+   ```
+
+   The normalizer accepts common alias columns such as `delivery date`, `delivery period (GMT)`,
+   `capacity limit MW`, `available capacity MW`, `connector`, `cable`, `source key`, and plain-text
+   tabular extracts with tab or repeated-space separators.
 
    If you have a local Nord Pool UMM export for `ElecLink`, add:
 
@@ -474,6 +514,8 @@ Key behavior:
   - `fact_france_connector_operator_event`
   - `fact_france_connector_availability_hourly`
   - `fact_france_connector_operator_source_compare`
+- `france_connector_reviewed.py` now materializes:
+  - `fact_france_connector_reviewed_period`
 - `dim_interconnector_cable` is the first cable-level connector dimension. Current scope is France-facing cables only:
   `IFA`, `IFA2`, and `ElecLink`.
 - `fact_france_connector_hourly` decomposes the shared `GB-FR` border into cable rows using nominal-capacity shares,
@@ -487,6 +529,36 @@ Key behavior:
   Nord Pool UMM session or a reviewed manual export is selected for the requested window.
 - `fact_france_connector_operator_source_compare` is the ElecLink source-selection surface. It compares the authenticated
   Nord Pool path and the manual export path, then records which source was selected for the requested window and why.
+- `fact_france_connector_reviewed_period` is a separate reviewed-evidence tier built from manual inputs normalized from
+  ElecLink public documents and JAO notices. It is intentionally kept separate from operator truth so the repo can use
+  reviewed public period caps now, and later swap in better API/operator sources without rewriting the route scorer.
+- `fact_france_connector_notice_hourly` is the as-of publication-time feature layer derived from the same reviewed
+  public inputs. It keeps notice state, lead time, publication timestamp, and revision count separate from live gating
+  so future backtests can model what the market already knew without leaking later document revisions into earlier hours.
+- The France source stack is now explicit:
+  - operator/API truth first when available (`fact_france_connector_availability_hourly`)
+  - reviewed public period inputs second (`fact_france_connector_reviewed_period`)
+  - border reviewed-capacity tiers third when applicable
+  - nominal connector proxies last
+- `--france-reviewed-input-path` expects a reviewed CSV or JSON with normalized period rows. The minimum practical fields are:
+  - `connector_key`
+  - `source_key`
+  - `period_start_utc` and `period_end_utc`, or `start_date` and `end_date`
+  - one of `capacity_limit_mw`, `available_capacity_mw`, or an explicit `reviewed_publication_state`
+- `source_published_utc` is strongly recommended. If it is missing, the normalizer falls back to `source_published_date`
+  at midnight UTC, which is acceptable for coarse historical replay but weak for any notice-lead-time feature work.
+- A ready-to-fill example is checked in as `france_connector_reviewed_input.example.csv`.
+- A one-command normalizer is available for messy raw extracts:
+  - `--normalize-france-reviewed-input`
+  - `--france-reviewed-raw-path`
+  - `--france-reviewed-normalized-output`
+- Supported `source_key` values in the current first pass are:
+  - `eleclink_planned_outage_programme`
+  - `eleclink_capacity_split`
+  - `eleclink_ntc_restriction`
+  - `jao_ifa_notice`
+  - `jao_ifa2_notice`
+  - `jao_frgb_notice_generic`
 - The live route scorer now joins `fact_interconnector_flow_hourly` and `fact_interconnector_capacity_hourly`
   into the GB border leg only.
   It keeps:
@@ -507,10 +579,81 @@ Key behavior:
   as one undifferentiated border inside `fact_route_score_hourly`.
 - France route rows now also carry operator-availability fields, so `IFA` and `IFA2` can be capped or blocked by
   REMIT-backed connector outages before the route is scored.
+- France route rows now also carry reviewed-publication fields, so `GB-FR` can move from `capacity_unknown` to an
+  auditable reviewed tier when a connector-specific public period cap exists even though border capacity is still unpublished.
+- France route rows now also carry connector notice fields from `fact_france_connector_notice_hourly`, including
+  whether a reviewed restriction was already known, whether it was upcoming or active in that hour, how long remained
+  until start, and how long since the document was published.
+- `curtailment_opportunity.py` now materializes:
+  - `fact_curtailment_opportunity_hourly`
+- `fact_curtailment_opportunity_hourly` is the first actual curtailment-opportunity surface. It joins
+  `fact_route_score_hourly` to hourly cluster curtailment magnitude, keeps the curtailment source tier explicit
+  (`regional_proxy` first pass, with optional BMU-truth override), and carries the France connector notice timing fields
+  into a model-ready opportunity table.
+- `opportunity_backtest.py` now materializes:
+  - `fact_backtest_prediction_hourly`
+- `opportunity_backtest.py` also now materializes:
+  - `fact_backtest_summary_slice`
+  - `fact_backtest_top_error_hourly`
+  - `fact_drift_window`
+- `fact_backtest_prediction_hourly` is the first backtest audit trail over the opportunity surface. The current model is
+  a non-leaky walk-forward audit surface over the opportunity layer. It now supports:
+  - `opportunity_group_mean_notice_v1`
+  - `opportunity_potential_ratio_v2`
+- The backtest is now horizonized. Each prediction row carries:
+  - `forecast_horizon_hours`
+  - `forecast_origin_utc`
+  - `feature_asof_utc`
+  - as-of feature columns such as route tier, connector-notice state, curtailment magnitude, route score, and connector-tightness flags
+- The horizon logic is forecast-safe by construction: each target hour is joined to its own origin-hour feature row, and
+  each model only trains on earlier forecast origins for the same horizon.
+- The backtest table keeps:
+  - prediction basis (`exact_notice_hour`, `cluster_route_state`, `route_state`, `global`)
+  - and for `v2`, calibrated ratio bases (`ratio_exact_notice_hour`, `ratio_route_notice_state`, `ratio_route_delivery_tier`, `ratio_global`)
+  - training sample count
+  - actuals, predictions, residuals, and absolute errors for both deliverable MWh and gross value
+  - explicit `model_key` and `split_strategy`
+- `fact_backtest_summary_slice` is the first slice-aware QA surface over the backtest. It aggregates error and bias by
+  model, forecast horizon, cluster, connector hub, route, delivery tier, connector-notice market state, curtailment source tier, and hour of day.
+- The summary slice table now also carries:
+  - `error_focus_area`
+  - `error_reduction_priority_rank`
+- Those fields make the “hard error-reduction loop” explicit for:
+  - `reviewed`
+  - `capacity_unknown`
+  - connector-restriction states
+  - specific GB-FR cable routes via `hub_key`
+- `fact_backtest_top_error_hourly` is the ranked forensic surface for the worst eligible backtest hours by deliverable
+  and gross-value error. It is now also horizon-aware and tags the same focus regimes directly on the worst hours.
+- `fact_drift_window` is the first drift surface derived directly from backtest predictions. The initial implementation
+  is now daily and horizon-aware across:
+  - `global_daily`
+  - `route_daily`
+  - `cluster_daily`
+- Each drift row keeps explicit feature-mix, target-shift, and residual-shift scores plus `warmup`, `pass`, and `warn`
+  states so the warnings can be tied back to a specific route or cluster instead of only the whole system.
+- The opportunity layer now distinguishes:
+  - capacity is tight now
+  - the market already knew a connector restriction was coming
+  - no public connector restriction signal
+- `--opportunity-truth-profile proxy` keeps the surface fast and reproducible. `research`, `precision`, and `all`
+  can optionally pull BMU truth and override the proxy where valid cluster truth exists.
+- To backtest an existing opportunity export:
+  - `python inline_arbitrage_live.py --materialize-opportunity-backtest --opportunity-input-path curtailment_opportunity_history --backtest-output-dir opportunity_backtest_history`
+- The backtest CLI now accepts:
+  - `--backtest-model-key all`
+  - `--backtest-model-key opportunity_group_mean_notice_v1`
+  - `--backtest-model-key opportunity_potential_ratio_v2`
+- It also accepts:
+  - `--backtest-horizons 1,6,24,168`
+- `all` is now the default so both baselines can be compared on the same CLI path and stored in the same backtest tables.
 - For `ElecLink`, the current policy is explicit:
   - near-current windows prefer authenticated Nord Pool UMM if credentials are available
   - historical replay windows prefer a manual UMM export when supplied
   - if neither source is usable, `ElecLink` remains `unknown_source`
+- The same switch pattern now applies to France reviewed evidence more broadly: manual reviewed public-doc inputs can be
+  used immediately, and if a better public or authenticated API ever appears, it can replace the reviewed input path
+  without changing the route-scoring contract.
 - `fact_bmu_curtailment_truth_half_hourly` is tiered, not flattened. It keeps:
   - `dispatch_only` rows when dispatch truth exists but a lost-energy estimate is not valid
   - `physical_baseline` rows when PN or QPN provides a valid half-hour counterfactual
@@ -673,11 +816,13 @@ Key behavior:
 
 - Replace the seed asset registry with confirmed wind farm, node, and owner metadata
 - Decide whether the reviewed explicit-daily tier should be promoted from `fact_route_score_hourly` into the legacy live route path
-- Add real cluster-aware source signals so `fact_route_score_hourly` can consume curtailment truth instead of only national price spreads
+- Upgrade `fact_curtailment_opportunity_hourly` from proxy-first source selection toward broader cluster truth coverage and stronger model-ready source-policy slices
 - Wire `ElecLink` onto a stable Nord Pool UMM or equivalent operator outage feed
 - Upgrade `fact_interconnector_capacity_hourly` toward ATC/NTC, outages, and post-allocation headroom
 - Add forecast weather history and feature versioning so weather forecast error can be backtested
 - Improve dispatch-to-lost-energy capture against the wind-only QA target before relying on the precision profile
+- Strengthen the drift window from global-daily into route and cluster slices once the current audit trail is stable
+- Add true forecast horizons on top of the opportunity backtest once the same-hour baselines stop moving
 - Start with a cluster-point time-slider map, then add hub arcs and error/drift layers
 - Add physical flow and ATC checks
 - Calibrate fee and capacity costs with auction history

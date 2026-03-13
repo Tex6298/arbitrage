@@ -71,6 +71,28 @@ def _empty_route_score_frame() -> pd.DataFrame:
             "reviewed_publication_source_reference",
             "reviewed_publication_source_published_date",
             "reviewed_publication_source_count",
+            "connector_notice_state",
+            "connector_notice_known_flag",
+            "connector_notice_active_flag",
+            "connector_notice_upcoming_flag",
+            "connector_notice_group_key",
+            "connector_notice_planning_state",
+            "connector_notice_planned_outage_flag",
+            "connector_notice_expected_capacity_limit_mw",
+            "connector_notice_hours_until_start",
+            "connector_notice_days_until_start",
+            "connector_notice_hours_since_publication",
+            "connector_notice_lead_time_hours",
+            "connector_notice_revision_count",
+            "connector_notice_source_revision_rank",
+            "connector_notice_source_provider",
+            "connector_notice_source_family",
+            "connector_notice_source_key",
+            "connector_notice_source_label",
+            "connector_notice_source_document_title",
+            "connector_notice_source_document_url",
+            "connector_notice_source_reference",
+            "connector_notice_source_published_utc",
             "connector_key",
             "connector_label",
             "connector_operator",
@@ -143,6 +165,7 @@ def build_fact_route_score_hourly(
     interconnector_capacity_reviewed: pd.DataFrame | None = None,
     interconnector_capacity_review_policy: pd.DataFrame | None = None,
     france_connector: pd.DataFrame | None = None,
+    france_connector_notice: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     if gb_transfer_gate is None or gb_transfer_gate.empty:
         return _empty_route_score_frame()
@@ -187,6 +210,45 @@ def build_fact_route_score_hourly(
         prefix="reviewed",
     )
     reviewed_overlay = reviewed_overlay.sort_values(["interval_start_utc", "border_key"]).reset_index(drop=True)
+    connector_notice_lookup = france_connector_notice.copy() if france_connector_notice is not None else pd.DataFrame()
+    if connector_notice_lookup.empty:
+        connector_notice_lookup = pd.DataFrame(
+            columns=[
+                "interval_start_utc",
+                "connector_key",
+                "direction_key",
+                "notice_state",
+                "notice_known_flag",
+                "notice_active_flag",
+                "notice_upcoming_flag",
+                "notice_group_key",
+                "notice_planning_state",
+                "planned_outage_flag",
+                "expected_capacity_limit_mw",
+                "hours_until_notice_start",
+                "days_until_notice_start",
+                "hours_since_notice_publication",
+                "notice_lead_time_hours",
+                "notice_revision_count",
+                "source_revision_rank",
+                "source_provider",
+                "source_family",
+                "source_key",
+                "source_label",
+                "source_document_title",
+                "source_document_url",
+                "source_reference",
+                "source_published_utc",
+            ]
+        )
+    connector_notice_lookup["interval_start_utc"] = pd.to_datetime(
+        connector_notice_lookup["interval_start_utc"],
+        utc=True,
+        errors="coerce",
+    )
+    connector_notice_lookup = connector_notice_lookup[
+        connector_notice_lookup["direction_key"].eq("gb_to_neighbor")
+    ].copy()
     connector_lookup = france_connector.copy() if france_connector is not None else pd.DataFrame()
     if connector_lookup.empty:
         connector_lookup = pd.DataFrame(
@@ -387,6 +449,42 @@ def build_fact_route_score_hourly(
                 right_on=["interval_start_utc", "connector_key"],
                 how="left",
             )
+        if border_key == "GB-FR" and not connector_notice_lookup.empty:
+            route_transfer = route_transfer.merge(
+                connector_notice_lookup[
+                    [
+                        "interval_start_utc",
+                        "connector_key",
+                        "direction_key",
+                        "notice_state",
+                        "notice_known_flag",
+                        "notice_active_flag",
+                        "notice_upcoming_flag",
+                        "notice_group_key",
+                        "notice_planning_state",
+                        "planned_outage_flag",
+                        "expected_capacity_limit_mw",
+                        "hours_until_notice_start",
+                        "days_until_notice_start",
+                        "hours_since_notice_publication",
+                        "notice_lead_time_hours",
+                        "notice_revision_count",
+                        "source_revision_rank",
+                        "source_provider",
+                        "source_family",
+                        "source_key",
+                        "source_label",
+                        "source_document_title",
+                        "source_document_url",
+                        "source_reference",
+                        "source_published_utc",
+                    ]
+                ],
+                left_on=["interval_start_utc", "hub_key"],
+                right_on=["interval_start_utc", "connector_key"],
+                how="left",
+                suffixes=("", "_notice"),
+            )
         for column, default in (
             ("connector_key", pd.NA),
             ("connector_label", pd.NA),
@@ -415,6 +513,28 @@ def build_fact_route_score_hourly(
             ("reviewed_publication_source_reference", pd.NA),
             ("reviewed_publication_source_published_date", pd.NaT),
             ("reviewed_publication_source_count", np.nan),
+            ("notice_state", pd.NA),
+            ("notice_known_flag", False),
+            ("notice_active_flag", False),
+            ("notice_upcoming_flag", False),
+            ("notice_group_key", pd.NA),
+            ("notice_planning_state", pd.NA),
+            ("planned_outage_flag", False),
+            ("expected_capacity_limit_mw", np.nan),
+            ("hours_until_notice_start", np.nan),
+            ("days_until_notice_start", np.nan),
+            ("hours_since_notice_publication", np.nan),
+            ("notice_lead_time_hours", np.nan),
+            ("notice_revision_count", np.nan),
+            ("source_revision_rank", np.nan),
+            ("source_provider", pd.NA),
+            ("source_family", pd.NA),
+            ("source_key", pd.NA),
+            ("source_label", pd.NA),
+            ("source_document_title", pd.NA),
+            ("source_document_url", pd.NA),
+            ("source_reference", pd.NA),
+            ("source_published_utc", pd.NaT),
         ):
             if column not in route_transfer.columns:
                 route_transfer[column] = default
@@ -561,6 +681,28 @@ def build_fact_route_score_hourly(
             "operator_capacity_limit_mw": "connector_operator_capacity_limit_mw",
             "nominal_capacity_mw": "connector_nominal_capacity_mw",
             "nominal_capacity_share_of_border": "connector_nominal_capacity_share_of_border",
+            "notice_state": "connector_notice_state",
+            "notice_known_flag": "connector_notice_known_flag",
+            "notice_active_flag": "connector_notice_active_flag",
+            "notice_upcoming_flag": "connector_notice_upcoming_flag",
+            "notice_group_key": "connector_notice_group_key",
+            "notice_planning_state": "connector_notice_planning_state",
+            "planned_outage_flag": "connector_notice_planned_outage_flag",
+            "expected_capacity_limit_mw": "connector_notice_expected_capacity_limit_mw",
+            "hours_until_notice_start": "connector_notice_hours_until_start",
+            "days_until_notice_start": "connector_notice_days_until_start",
+            "hours_since_notice_publication": "connector_notice_hours_since_publication",
+            "notice_lead_time_hours": "connector_notice_lead_time_hours",
+            "notice_revision_count": "connector_notice_revision_count",
+            "source_revision_rank": "connector_notice_source_revision_rank",
+            "source_provider": "connector_notice_source_provider",
+            "source_family": "connector_notice_source_family",
+            "source_key": "connector_notice_source_key",
+            "source_label": "connector_notice_source_label",
+            "source_document_title": "connector_notice_source_document_title",
+            "source_document_url": "connector_notice_source_document_url",
+            "source_reference": "connector_notice_source_reference",
+            "source_published_utc": "connector_notice_source_published_utc",
         }
     )
     fact["reviewed_tier_accepted_flag"] = fact["reviewed_tier_accepted_flag"].where(
@@ -595,6 +737,28 @@ def build_fact_route_score_hourly(
         ("reviewed_publication_source_reference", pd.NA),
         ("reviewed_publication_source_published_date", pd.NaT),
         ("reviewed_publication_source_count", np.nan),
+        ("connector_notice_state", pd.NA),
+        ("connector_notice_known_flag", False),
+        ("connector_notice_active_flag", False),
+        ("connector_notice_upcoming_flag", False),
+        ("connector_notice_group_key", pd.NA),
+        ("connector_notice_planning_state", pd.NA),
+        ("connector_notice_planned_outage_flag", False),
+        ("connector_notice_expected_capacity_limit_mw", np.nan),
+        ("connector_notice_hours_until_start", np.nan),
+        ("connector_notice_days_until_start", np.nan),
+        ("connector_notice_hours_since_publication", np.nan),
+        ("connector_notice_lead_time_hours", np.nan),
+        ("connector_notice_revision_count", np.nan),
+        ("connector_notice_source_revision_rank", np.nan),
+        ("connector_notice_source_provider", pd.NA),
+        ("connector_notice_source_family", pd.NA),
+        ("connector_notice_source_key", pd.NA),
+        ("connector_notice_source_label", pd.NA),
+        ("connector_notice_source_document_title", pd.NA),
+        ("connector_notice_source_document_url", pd.NA),
+        ("connector_notice_source_reference", pd.NA),
+        ("connector_notice_source_published_utc", pd.NaT),
     ):
         if column not in fact.columns:
             fact[column] = default
@@ -613,6 +777,7 @@ def materialize_route_score_history(
     interconnector_capacity_reviewed: pd.DataFrame | None = None,
     interconnector_capacity_review_policy: pd.DataFrame | None = None,
     france_connector: pd.DataFrame | None = None,
+    france_connector_notice: pd.DataFrame | None = None,
 ) -> Dict[str, pd.DataFrame]:
     fact = build_fact_route_score_hourly(
         prices=prices,
@@ -622,6 +787,7 @@ def materialize_route_score_history(
         interconnector_capacity_reviewed=interconnector_capacity_reviewed,
         interconnector_capacity_review_policy=interconnector_capacity_review_policy,
         france_connector=france_connector,
+        france_connector_notice=france_connector_notice,
     )
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)

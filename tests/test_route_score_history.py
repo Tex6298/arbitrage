@@ -1,3 +1,4 @@
+import datetime as dt
 import unittest
 
 import pandas as pd
@@ -190,6 +191,39 @@ class RouteScoreHistoryTests(unittest.TestCase):
                 }
             ]
         )
+        france_connector_notice = pd.DataFrame(
+            [
+                {
+                    "interval_start_utc": "2024-09-30T23:00:00Z",
+                    "interval_end_utc": "2024-10-01T00:00:00Z",
+                    "connector_key": "eleclink",
+                    "connector_label": "ElecLink",
+                    "direction_key": "gb_to_neighbor",
+                    "notice_state": "upcoming",
+                    "notice_known_flag": True,
+                    "notice_active_flag": False,
+                    "notice_upcoming_flag": True,
+                    "notice_group_key": "eleclink|gb_to_neighbor|2024-10-01T02:00:00Z|2024-10-01T12:00:00Z",
+                    "notice_planning_state": "operational_restriction",
+                    "planned_outage_flag": False,
+                    "expected_capacity_limit_mw": 250.0,
+                    "hours_until_notice_start": 3.0,
+                    "days_until_notice_start": 3.0 / 24.0,
+                    "hours_since_notice_publication": 13.0,
+                    "notice_lead_time_hours": 16.0,
+                    "notice_revision_count": 1,
+                    "source_revision_rank": 1,
+                    "source_provider": "public_reviewed_doc",
+                    "source_family": "eleclink_public_doc",
+                    "source_key": "eleclink_ntc_restriction",
+                    "source_label": "ElecLink NTC restriction statement",
+                    "source_document_title": "ElecLink restriction",
+                    "source_document_url": "https://www.eleclink.co.uk/publications/ntc-restrictions",
+                    "source_reference": "EL-NTC-1",
+                    "source_published_utc": "2024-09-30T10:00:00Z",
+                }
+            ]
+        )
 
         fact = build_fact_route_score_hourly(
             prices=prices,
@@ -199,6 +233,7 @@ class RouteScoreHistoryTests(unittest.TestCase):
             interconnector_capacity_reviewed=None,
             interconnector_capacity_review_policy=None,
             france_connector=france_connector,
+            france_connector_notice=france_connector_notice,
         )
 
         self.assertEqual(len(fact), 1)
@@ -265,6 +300,39 @@ class RouteScoreHistoryTests(unittest.TestCase):
                 }
             ]
         )
+        france_connector_notice = pd.DataFrame(
+            [
+                {
+                    "interval_start_utc": "2024-09-30T23:00:00Z",
+                    "interval_end_utc": "2024-10-01T00:00:00Z",
+                    "connector_key": "eleclink",
+                    "connector_label": "ElecLink",
+                    "direction_key": "gb_to_neighbor",
+                    "notice_state": "upcoming",
+                    "notice_known_flag": True,
+                    "notice_active_flag": False,
+                    "notice_upcoming_flag": True,
+                    "notice_group_key": "eleclink|gb_to_neighbor|2024-10-01T02:00:00Z|2024-10-01T12:00:00Z",
+                    "notice_planning_state": "operational_restriction",
+                    "planned_outage_flag": False,
+                    "expected_capacity_limit_mw": 250.0,
+                    "hours_until_notice_start": 3.0,
+                    "days_until_notice_start": 3.0 / 24.0,
+                    "hours_since_notice_publication": 13.0,
+                    "notice_lead_time_hours": 16.0,
+                    "notice_revision_count": 1,
+                    "source_revision_rank": 1,
+                    "source_provider": "public_reviewed_doc",
+                    "source_family": "eleclink_public_doc",
+                    "source_key": "eleclink_ntc_restriction",
+                    "source_label": "ElecLink NTC restriction statement",
+                    "source_document_title": "ElecLink restriction",
+                    "source_document_url": "https://www.eleclink.co.uk/publications/ntc-restrictions",
+                    "source_reference": "EL-NTC-1",
+                    "source_published_utc": "2024-09-30T10:00:00Z",
+                }
+            ]
+        )
 
         fact = build_fact_route_score_hourly(
             prices=prices,
@@ -274,6 +342,7 @@ class RouteScoreHistoryTests(unittest.TestCase):
             interconnector_capacity_reviewed=None,
             interconnector_capacity_review_policy=None,
             france_connector=france_connector,
+            france_connector_notice=france_connector_notice,
         )
 
         row = fact.iloc[0]
@@ -281,6 +350,125 @@ class RouteScoreHistoryTests(unittest.TestCase):
         self.assertEqual(row["route_delivery_signal"], "HOLD")
         self.assertTrue(pd.isna(row["deliverable_route_score_eur_per_mwh"]))
         self.assertEqual(row["connector_operator_availability_state"], "outage")
+
+    def test_build_fact_route_score_hourly_uses_reviewed_france_connector_publication_tier(self) -> None:
+        prices = pd.DataFrame(
+            {
+                "GB": [50.0],
+                "FR": [120.0],
+                "NL": [78.0],
+                "DE": [130.0],
+                "PL": [160.0],
+                "CZ": [85.0],
+            },
+            index=pd.DatetimeIndex(["2024-09-30T23:00:00Z"]),
+        )
+        gb_transfer_gate = pd.DataFrame(
+            [
+                {
+                    "date": "2024-10-01",
+                    "interval_start_local": pd.Timestamp("2024-10-01T00:00:00+01:00"),
+                    "interval_end_local": pd.Timestamp("2024-10-01T01:00:00+01:00"),
+                    "interval_start_utc": pd.Timestamp("2024-09-30T23:00:00Z"),
+                    "interval_end_utc": pd.Timestamp("2024-10-01T00:00:00Z"),
+                    "cluster_key": "east_anglia_offshore",
+                    "cluster_label": "East Anglia Offshore",
+                    "parent_region": "England/Wales",
+                    "hub_key": "eleclink",
+                    "hub_label": "ElecLink",
+                    "hub_target_zone": "FR",
+                    "hub_neighbor_domain_key": "FR",
+                    "hub_current_route_fit": "current",
+                    "transfer_gate_mw_proxy": 900.0,
+                    "transfer_gate_utilization_proxy": 0.88,
+                    "gate_state": "capacity_unknown_conditional",
+                    "gate_reason": "Transfer remains plausible, but GB-FR capacity is unpublished.",
+                }
+            ]
+        )
+        france_connector = pd.DataFrame(
+            [
+                {
+                    "interval_start_utc": "2024-09-30T23:00:00Z",
+                    "connector_key": "eleclink",
+                    "connector_label": "ElecLink",
+                    "operator_name": "ElecLink Limited / Getlink",
+                    "nominal_capacity_mw": 1000.0,
+                    "nominal_capacity_share_of_border": 0.25,
+                    "connector_capacity_evidence_tier": "reviewed_public_doc_period",
+                    "connector_headroom_proxy_mw": 250.0,
+                    "connector_gate_state": "reviewed_publication_cap",
+                    "connector_gate_reason": "Reviewed public doc cap.",
+                    "reviewed_publication_state": "partial_capacity",
+                    "reviewed_publication_evidence_tier": "reviewed_public_doc_period",
+                    "reviewed_publication_tier_accepted_flag": True,
+                    "reviewed_publication_capacity_policy_action": "allow_reviewed_public_period",
+                    "reviewed_publication_capacity_limit_mw": 250.0,
+                    "reviewed_publication_source_provider": "public_reviewed_doc",
+                    "reviewed_publication_source_family": "eleclink_public_doc",
+                    "reviewed_publication_source_key": "eleclink_ntc_restriction",
+                    "reviewed_publication_source_label": "ElecLink NTC restriction statement",
+                    "reviewed_publication_source_document_title": "ElecLink restriction",
+                    "reviewed_publication_source_document_url": "https://www.eleclink.co.uk/publications/ntc-restrictions",
+                    "reviewed_publication_source_reference": "EL-NTC-1",
+                    "reviewed_publication_source_published_date": dt.date(2024, 9, 30),
+                    "reviewed_publication_source_count": 1,
+                }
+            ]
+        )
+        france_connector_notice = pd.DataFrame(
+            [
+                {
+                    "interval_start_utc": "2024-09-30T23:00:00Z",
+                    "interval_end_utc": "2024-10-01T00:00:00Z",
+                    "connector_key": "eleclink",
+                    "connector_label": "ElecLink",
+                    "direction_key": "gb_to_neighbor",
+                    "notice_state": "upcoming",
+                    "notice_known_flag": True,
+                    "notice_active_flag": False,
+                    "notice_upcoming_flag": True,
+                    "notice_group_key": "eleclink|gb_to_neighbor|2024-10-01T02:00:00Z|2024-10-01T12:00:00Z",
+                    "notice_planning_state": "operational_restriction",
+                    "planned_outage_flag": False,
+                    "expected_capacity_limit_mw": 250.0,
+                    "hours_until_notice_start": 3.0,
+                    "days_until_notice_start": 3.0 / 24.0,
+                    "hours_since_notice_publication": 13.0,
+                    "notice_lead_time_hours": 16.0,
+                    "notice_revision_count": 1,
+                    "source_revision_rank": 1,
+                    "source_provider": "public_reviewed_doc",
+                    "source_family": "eleclink_public_doc",
+                    "source_key": "eleclink_ntc_restriction",
+                    "source_label": "ElecLink NTC restriction statement",
+                    "source_document_title": "ElecLink restriction",
+                    "source_document_url": "https://www.eleclink.co.uk/publications/ntc-restrictions",
+                    "source_reference": "EL-NTC-1",
+                    "source_published_utc": "2024-09-30T10:00:00Z",
+                }
+            ]
+        )
+
+        fact = build_fact_route_score_hourly(
+            prices=prices,
+            gb_transfer_gate=gb_transfer_gate,
+            interconnector_flow=None,
+            interconnector_capacity=None,
+            interconnector_capacity_reviewed=None,
+            interconnector_capacity_review_policy=None,
+            france_connector=france_connector,
+            france_connector_notice=france_connector_notice,
+        )
+
+        row = fact.iloc[0]
+        self.assertEqual(row["route_delivery_tier"], "reviewed")
+        self.assertEqual(row["route_delivery_signal"], "EXPORT_REVIEWED")
+        self.assertEqual(row["reviewed_publication_source_key"], "eleclink_ntc_restriction")
+        self.assertAlmostEqual(float(row["deliverable_mw_proxy"]), 250.0)
+        self.assertEqual(row["connector_notice_state"], "upcoming")
+        self.assertAlmostEqual(float(row["connector_notice_hours_until_start"]), 3.0)
+        self.assertEqual(row["connector_notice_source_key"], "eleclink_ntc_restriction")
 
 
 if __name__ == "__main__":

@@ -9,7 +9,12 @@ import numpy as np
 import pandas as pd
 
 from gb_topology import INTERCONNECTOR_HUBS
-from france_connector_reviewed import build_fact_france_connector_reviewed_hourly
+from france_connector_reviewed import (
+    FRANCE_CONNECTOR_NOTICE_TABLE,
+    FRANCE_CONNECTOR_REVIEWED_PERIOD_TABLE,
+    build_fact_france_connector_notice_hourly,
+    build_fact_france_connector_reviewed_hourly,
+)
 from interconnector_capacity import (
     INTERCONNECTOR_CAPACITY_AUDIT_DAILY_TABLE,
     INTERCONNECTOR_CAPACITY_REVIEW_POLICY_TABLE,
@@ -593,8 +598,9 @@ def build_fact_france_connector_hourly(
     ).min(axis=1)
     base.loc[reviewed_publication_promote, "connector_capacity_evidence_tier"] = "reviewed_public_doc_period"
 
-    publication_binding = reviewed_publication_promote & publication_limit_effective.lt(
-        current_headroom_before_publication.fillna(np.inf)
+    publication_binding = reviewed_publication_promote & (
+        reviewed_publication_state.eq("partial_capacity")
+        | publication_limit_effective.lt(current_headroom_before_publication.fillna(np.inf))
     )
     publication_non_binding = reviewed_publication_promote & ~publication_binding
     base.loc[publication_binding, "connector_gate_state"] = "reviewed_publication_cap"
@@ -685,6 +691,12 @@ def materialize_france_connector_history(
         )
 
     dim_cable = interconnector_cable_frame()
+    reviewed_period = france_connector_reviewed_period.copy() if france_connector_reviewed_period is not None else pd.DataFrame()
+    reviewed_notice = build_fact_france_connector_notice_hourly(
+        start_date=start_date,
+        end_date=end_date,
+        reviewed_period=reviewed_period,
+    )
     fact = build_fact_france_connector_hourly(
         start_date=start_date,
         end_date=end_date,
@@ -692,14 +704,23 @@ def materialize_france_connector_history(
         interconnector_capacity=resolved_capacity,
         interconnector_capacity_review_policy=resolved_review_policy,
         interconnector_capacity_reviewed=resolved_reviewed_capacity,
-        france_connector_reviewed_period=france_connector_reviewed_period,
+        france_connector_reviewed_period=reviewed_period,
         france_connector_availability=france_connector_availability,
     )
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     dim_cable.to_csv(output_path / f"{DIM_INTERCONNECTOR_CABLE_TABLE}.csv", index=False)
+    if not reviewed_period.empty:
+        reviewed_period.to_csv(output_path / f"{FRANCE_CONNECTOR_REVIEWED_PERIOD_TABLE}.csv", index=False)
+    if not reviewed_notice.empty:
+        reviewed_notice.to_csv(output_path / f"{FRANCE_CONNECTOR_NOTICE_TABLE}.csv", index=False)
     fact.to_csv(output_path / f"{FRANCE_CONNECTOR_TABLE}.csv", index=False)
-    return {
+    materialized = {
         DIM_INTERCONNECTOR_CABLE_TABLE: dim_cable,
         FRANCE_CONNECTOR_TABLE: fact,
     }
+    if not reviewed_period.empty:
+        materialized[FRANCE_CONNECTOR_REVIEWED_PERIOD_TABLE] = reviewed_period
+    if not reviewed_notice.empty:
+        materialized[FRANCE_CONNECTOR_NOTICE_TABLE] = reviewed_notice
+    return materialized

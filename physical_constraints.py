@@ -76,16 +76,16 @@ ASSUMPTIONS: Tuple[ConstraintAssumption, ...] = (
     ConstraintAssumption(
         key="internal_transfer",
         question="Can power move from the national connection point to the international connector in the same hour?",
-        current_assumption="A first-pass fact_gb_transfer_gate_hourly now exists as a cluster-to-hub proxy surface, but live route scoring is still national and does not yet consume cluster-aware transfer gates.",
-        risk="High. The transfer gate is still a proxy, and route scoring can only use it once the opportunity surface is cluster-aware.",
-        next_solution="Join fact_gb_transfer_gate_hourly to cluster-aware curtailment and siting logic, then upgrade the proxy toward zonal/PTDF-style limits.",
+        current_assumption="A first-pass fact_gb_transfer_gate_hourly now exists as a cluster-to-hub proxy surface, and the historical route/opportunity layers now consume it at cluster scope. The legacy live route CSV path is still simpler than the historical cluster-aware stack.",
+        risk="High. The transfer gate is still a proxy, so even the cluster-aware opportunity layer can overstate deliverability when internal GB transfer is actually tighter than the heuristic.",
+        next_solution="Upgrade the cluster-aware transfer proxy toward zonal/PTDF-style limits, then unify the legacy live path with the richer historical opportunity stack.",
     ),
     ConstraintAssumption(
         key="cross_border_capacity",
         question="Is interconnector capacity actually available on the route?",
-        current_assumption="Route scoring now uses first-pass border flow plus first-pass offered capacity, a separate review-policy surface exists for alternate explicit-daily capacity on GB-NL, GB-BE, and GB-DK1, and GB-FR now has a France-specific cable layer plus operator-availability overlays from Elexon REMIT for IFA and IFA2.",
+        current_assumption="Route scoring now uses first-pass border flow plus first-pass offered capacity, a separate review-policy surface exists for alternate explicit-daily capacity on GB-NL, GB-BE, and GB-DK1, and GB-FR now has a France-specific cable layer with separate operator truth, reviewed public-document tiers, and an as-of notice/publication-time feature layer.",
         risk="Medium to high. Auctioned capacity, outages, and counterflows can invalidate the route.",
-        next_solution="Decide whether reviewed explicit-daily tiers should be promoted into route scoring, keep improving the authenticated-vs-export ElecLink source selection, then replace the remaining border proxies with ATC/NTC, auction allocations, and physical flow saturation by border and hour.",
+        next_solution="Decide whether reviewed explicit-daily tiers should be promoted into route scoring, keep improving the switchable ElecLink operator and public-document source stack, then replace the remaining border proxies with ATC/NTC, auction allocations, physical flow saturation by border and hour, and publication-time-aware capacity expectations.",
     ),
     ConstraintAssumption(
         key="route_costs",
@@ -107,7 +107,7 @@ def remaining_workstreams() -> List[str]:
         "Add curtailment or redispatch signals so the model distinguishes generic spreads from forced-export conditions.",
         "Join fact_gb_transfer_gate_hourly into cluster-aware route scoring so internal GB transfer can actually gate a specific source cluster.",
         "Decide whether reviewed explicit-daily ENTSO-E capacity for GB-NL, GB-BE, and GB-DK1 is safe to promote beyond a reviewed evidence tier.",
-        "Upgrade the ElecLink operator path from authenticated-vs-export first pass toward a stable, fully queryable Nord Pool UMM availability feed for both current and historical windows.",
+        "Upgrade the switchable France connector source stack so better operator or API feeds can replace manual reviewed-period inputs without changing route-scoring contracts.",
         "Upgrade fact_interconnector_capacity_hourly from offered-capacity first pass toward ATC/NTC, outages, and post-auction headroom by hour.",
         "Replace static leg fees and losses with connector-specific parameters and time-varying availability.",
     ]

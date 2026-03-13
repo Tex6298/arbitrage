@@ -24,6 +24,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -41,6 +42,25 @@ from bmu_dispatch import materialize_bmu_dispatch_history, parse_iso_date as par
 from bmu_generation import materialize_bmu_generation_history, parse_iso_date as parse_bmu_iso_date
 from curtailment_truth import materialize_bmu_curtailment_truth
 from curtailment_signals import materialize_curtailed_history, parse_iso_date
+from curtailment_opportunity import (
+    CURTAILMENT_OPPORTUNITY_TABLE,
+    VALID_OPPORTUNITY_TRUTH_PROFILES,
+    fetch_cluster_curtailment_proxy_hourly,
+    materialize_curtailment_opportunity_history,
+)
+from opportunity_backtest import (
+    BACKTEST_PREDICTION_TABLE,
+    BACKTEST_SUMMARY_SLICE_TABLE,
+    BACKTEST_TOP_ERROR_TABLE,
+    DEFAULT_BACKTEST_MODEL_SELECTION,
+    DEFAULT_FORECAST_HORIZON_HOURS,
+    DRIFT_WINDOW_TABLE,
+    VALID_BACKTEST_MODEL_SELECTIONS,
+    coerce_forecast_horizons,
+    load_curtailment_opportunity_input,
+    materialize_opportunity_backtest,
+    summarize_backtest_prediction_hourly,
+)
 from exploration_plan import backtest_plan_frame, dataset_plan_frame, drift_monitor_plan_frame, map_layer_plan_frame
 from france_connector import (
     DIM_INTERCONNECTOR_CABLE_TABLE,
@@ -50,8 +70,11 @@ from france_connector import (
     materialize_france_connector_history,
 )
 from france_connector_reviewed import (
+    FRANCE_CONNECTOR_NOTICE_TABLE,
     FRANCE_CONNECTOR_REVIEWED_PERIOD_TABLE,
+    build_fact_france_connector_notice_hourly,
     build_fact_france_connector_reviewed_period,
+    write_normalized_france_connector_reviewed_input,
 )
 from france_connector_availability import (
     FRANCE_CONNECTOR_AVAILABILITY_TABLE,
@@ -897,6 +920,16 @@ def main() -> int:
         action="store_true",
         help="Fetch prices and network overlays, then save the first-pass cluster-to-hub-to-route score history, then exit",
     )
+    parser.add_argument(
+        "--materialize-curtailment-opportunity-history",
+        action="store_true",
+        help="Fetch route inputs plus cluster curtailment and save the hourly curtailment-opportunity surface, then exit",
+    )
+    parser.add_argument(
+        "--materialize-opportunity-backtest",
+        action="store_true",
+        help="Build and save the first-pass walk-forward opportunity backtest from an existing opportunity history, then exit",
+    )
     parser.add_argument("--flow-start", help="Interconnector flow materialization start date, inclusive (YYYY-MM-DD)")
     parser.add_argument("--flow-end", help="Interconnector flow materialization end date, inclusive (YYYY-MM-DD)")
     parser.add_argument(
@@ -916,6 +949,46 @@ def main() -> int:
         "--capacity-output-dir",
         default="interconnector_capacity_history",
         help="Output directory for interconnector capacity history",
+    )
+    parser.add_argument(
+        "--opportunity-start",
+        help="Curtailment-opportunity materialization start date, inclusive (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--opportunity-end",
+        help="Curtailment-opportunity materialization end date, inclusive (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--opportunity-output-dir",
+        default="curtailment_opportunity_history",
+        help="Output directory for hourly curtailment-opportunity history",
+    )
+    parser.add_argument(
+        "--opportunity-input-path",
+        default="curtailment_opportunity_history",
+        help="Input directory or CSV path for fact_curtailment_opportunity_hourly",
+    )
+    parser.add_argument(
+        "--opportunity-truth-profile",
+        default="proxy",
+        choices=sorted(VALID_OPPORTUNITY_TRUTH_PROFILES),
+        help="Curtailment source tier for the opportunity layer: proxy, research, precision, or all",
+    )
+    parser.add_argument(
+        "--backtest-output-dir",
+        default="opportunity_backtest_history",
+        help="Output directory for fact_backtest_prediction_hourly",
+    )
+    parser.add_argument(
+        "--backtest-model-key",
+        default=DEFAULT_BACKTEST_MODEL_SELECTION,
+        choices=sorted(VALID_BACKTEST_MODEL_SELECTIONS),
+        help="Backtest model selection: all, opportunity_group_mean_notice_v1, or opportunity_potential_ratio_v2",
+    )
+    parser.add_argument(
+        "--backtest-horizons",
+        default=",".join(str(value) for value in DEFAULT_FORECAST_HORIZON_HOURS),
+        help="Comma-separated forecast horizons in hours for the opportunity backtest, e.g. 1,6,24,168",
     )
     parser.add_argument(
         "--capacity-audit-start",
@@ -956,6 +1029,20 @@ def main() -> int:
         "--france-output-dir",
         default="france_connector_history",
         help="Output directory for the France connector layer",
+    )
+    parser.add_argument(
+        "--normalize-france-reviewed-input",
+        action="store_true",
+        help="Normalize a messy France reviewed-input CSV, TSV, TXT, or JSON into the canonical reviewed-period CSV schema, then exit",
+    )
+    parser.add_argument(
+        "--france-reviewed-raw-path",
+        help="Raw France reviewed-input file to normalize",
+    )
+    parser.add_argument(
+        "--france-reviewed-normalized-output",
+        default="france_connector_reviewed_input.normalized.csv",
+        help="Output CSV path for the normalized France reviewed input",
     )
     parser.add_argument(
         "--eleclink-umm-export-path",
@@ -1742,6 +1829,23 @@ def main() -> int:
             print(f"ERROR: {exc}", file=sys.stderr)
             return 1
 
+    if args.normalize_france_reviewed_input:
+        if not args.france_reviewed_raw_path:
+            raise SystemExit("--normalize-france-reviewed-input requires --france-reviewed-raw-path")
+        try:
+            normalized = write_normalized_france_connector_reviewed_input(
+                input_path=args.france_reviewed_raw_path,
+                output_path=args.france_reviewed_normalized_output,
+            )
+            print(
+                f"[source=manual_reviewed_input] Normalized France reviewed input rows={len(normalized)} "
+                f"path={args.france_reviewed_normalized_output}"
+            )
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
     if args.materialize_interconnector_flow:
         if not args.flow_start or not args.flow_end:
             raise SystemExit("--materialize-interconnector-flow requires --flow-start and --flow-end")
@@ -1971,6 +2075,11 @@ def main() -> int:
                 end_date=france_end,
                 reviewed_input_path=args.france_reviewed_input_path,
             )
+            france_reviewed_notice = build_fact_france_connector_notice_hourly(
+                start_date=france_start,
+                end_date=france_end,
+                reviewed_period=france_reviewed_period,
+            )
             eleclink_auth_kwargs = resolve_eleclink_umm_auth_args(args)
             eleclink_auth_frame, eleclink_auth_status = fetch_eleclink_umm_authenticated(**eleclink_auth_kwargs)
             eleclink_export = load_eleclink_umm_export(args.eleclink_umm_export_path)
@@ -2002,11 +2111,16 @@ def main() -> int:
                 france_connector_availability=france_availability,
             )
             frames[FRANCE_CONNECTOR_REVIEWED_PERIOD_TABLE] = france_reviewed_period
+            frames[FRANCE_CONNECTOR_NOTICE_TABLE] = france_reviewed_notice
             frames[FRANCE_CONNECTOR_OPERATOR_EVENT_TABLE] = france_operator_event
             frames[FRANCE_CONNECTOR_AVAILABILITY_TABLE] = france_availability
             frames[FRANCE_CONNECTOR_OPERATOR_SOURCE_COMPARE_TABLE] = eleclink_source_compare
             france_reviewed_period.to_csv(
                 os.path.join(args.france_output_dir, f"{FRANCE_CONNECTOR_REVIEWED_PERIOD_TABLE}.csv"),
+                index=False,
+            )
+            france_reviewed_notice.to_csv(
+                os.path.join(args.france_output_dir, f"{FRANCE_CONNECTOR_NOTICE_TABLE}.csv"),
                 index=False,
             )
             france_operator_event.to_csv(
@@ -2032,6 +2146,224 @@ def main() -> int:
                 summary = upsert_truth_frames_to_sqlite(frames, args.truth_store_db_path)
                 print(f"[store=sqlite] Upserted France connector-layer tables into {args.truth_store_db_path}")
                 for _, row in summary.iterrows():
+                    print(
+                        f"{row['table_name']}: rows_loaded={int(row['rows_loaded'])} "
+                        f"table_rows={int(row['table_row_count'])}"
+                    )
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
+    if args.materialize_curtailment_opportunity_history:
+        if not args.opportunity_start or not args.opportunity_end:
+            raise SystemExit(
+                "--materialize-curtailment-opportunity-history requires --opportunity-start and --opportunity-end"
+            )
+
+        opportunity_start = parse_market_day(args.opportunity_start)
+        opportunity_end = parse_market_day(args.opportunity_end)
+        if opportunity_end < opportunity_start:
+            raise SystemExit("--opportunity-end must be on or after --opportunity-start")
+
+        market_days = list(iter_market_days(opportunity_start, opportunity_end + dt.timedelta(days=1)))
+        entsoe_token = os.environ.get("ENTOS_E_TOKEN") or os.environ.get("ENTSOE_TOKEN") or ""
+        if not entsoe_token:
+            raise SystemExit(
+                "--materialize-curtailment-opportunity-history requires ENTOS_E_TOKEN or ENTSOE_TOKEN"
+            )
+
+        bmrs_api_key = next((os.environ.get(name) for name in BMRS_KEY_ENV_NAMES if os.environ.get(name)), None)
+        gbp_eur = args.gbp_eur
+        if gbp_eur is None:
+            for env_name in FX_ENV_NAMES:
+                if os.environ.get(env_name):
+                    gbp_eur = parse_gbp_eur(os.environ[env_name])
+                    break
+        gb_provider = args.gb_provider or next(
+            (os.environ.get(name) for name in GB_PROVIDER_ENV_NAMES if os.environ.get(name)),
+            DEFAULT_GB_PROVIDER,
+        )
+
+        try:
+            prices, provider_used = fetch_prices(market_days, entsoe_token, gbp_eur, bmrs_api_key, gb_provider)
+            network_start = market_days[0]
+            network_end = market_days[-1]
+            interconnector_flow = build_fact_interconnector_flow_hourly(
+                start_date=network_start,
+                end_date=network_end,
+                token=entsoe_token,
+            )
+            interconnector_capacity = build_fact_interconnector_capacity_hourly(
+                start_date=network_start,
+                end_date=network_end,
+                token=entsoe_token,
+            )
+            review_audit = build_interconnector_capacity_source_audit(
+                start_date=network_start,
+                end_date=network_end,
+                token=entsoe_token,
+            )
+            review_policy = build_interconnector_capacity_review_policy(
+                review_audit[INTERCONNECTOR_CAPACITY_AUDIT_DAILY_TABLE]
+            )
+            reviewed_capacity = build_interconnector_capacity_reviewed_hourly(
+                start_date=network_start,
+                end_date=network_end,
+                token=entsoe_token,
+                review_policy=review_policy,
+            )
+            raw_remit, remit_status = fetch_remit_event_detail_with_status(network_start, network_end)
+            france_reviewed_period = build_fact_france_connector_reviewed_period(
+                start_date=network_start,
+                end_date=network_end,
+                reviewed_input_path=args.france_reviewed_input_path,
+            )
+            france_reviewed_notice = build_fact_france_connector_notice_hourly(
+                start_date=network_start,
+                end_date=network_end,
+                reviewed_period=france_reviewed_period,
+            )
+            eleclink_auth_kwargs = resolve_eleclink_umm_auth_args(args)
+            eleclink_auth_frame, eleclink_auth_status = fetch_eleclink_umm_authenticated(**eleclink_auth_kwargs)
+            eleclink_export = load_eleclink_umm_export(args.eleclink_umm_export_path)
+            selected_eleclink, eleclink_source_compare, eleclink_resolution = build_eleclink_operator_source_compare(
+                start_date=network_start,
+                end_date=network_end,
+                authenticated_frame=eleclink_auth_frame,
+                authenticated_status=eleclink_auth_status,
+                export_frame=eleclink_export,
+                export_attempted_flag=bool(args.eleclink_umm_export_path),
+            )
+            france_operator_event = build_france_connector_operator_event_frame(
+                raw_remit,
+                eleclink_umm_export=selected_eleclink,
+            )
+            france_availability = build_fact_france_connector_availability_hourly(
+                start_date=network_start,
+                end_date=network_end,
+                operator_event_frame=france_operator_event,
+                remit_fetch_status_by_date=remit_status,
+                eleclink_source_resolution=eleclink_resolution,
+            )
+            france_connector = build_fact_france_connector_hourly(
+                start_date=network_start,
+                end_date=network_end,
+                interconnector_flow=interconnector_flow,
+                interconnector_capacity=interconnector_capacity,
+                interconnector_capacity_review_policy=review_policy,
+                interconnector_capacity_reviewed=reviewed_capacity,
+                france_connector_reviewed_period=france_reviewed_period,
+                france_connector_availability=france_availability,
+            )
+            gb_transfer_gate = build_fact_gb_transfer_gate_hourly(
+                start_date=network_start,
+                end_date=network_end,
+                interconnector_flow=interconnector_flow,
+                interconnector_capacity=interconnector_capacity,
+            )
+            route_frames = materialize_route_score_history(
+                output_dir=args.opportunity_output_dir,
+                prices=prices,
+                gb_transfer_gate=gb_transfer_gate,
+                interconnector_flow=interconnector_flow,
+                interconnector_capacity=interconnector_capacity,
+                interconnector_capacity_reviewed=reviewed_capacity,
+                interconnector_capacity_review_policy=review_policy,
+                france_connector=france_connector,
+                france_connector_notice=france_reviewed_notice,
+            )
+            route_score = route_frames[ROUTE_SCORE_TABLE]
+            cluster_curtailment_proxy = fetch_cluster_curtailment_proxy_hourly(
+                start_date=network_start,
+                end_date=network_end,
+            )
+            truth_frame = None
+            if args.opportunity_truth_profile != "proxy":
+                with tempfile.TemporaryDirectory() as temp_truth_dir:
+                    truth_frames = materialize_bmu_curtailment_truth(
+                        start_date=network_start,
+                        end_date=network_end,
+                        output_dir=temp_truth_dir,
+                        truth_profile=args.opportunity_truth_profile,
+                    )
+                truth_frame = truth_frames["fact_bmu_curtailment_truth_half_hourly"]
+            opportunity_frames = materialize_curtailment_opportunity_history(
+                output_dir=args.opportunity_output_dir,
+                fact_route_score_hourly=route_score,
+                fact_regional_curtailment_hourly_proxy=cluster_curtailment_proxy,
+                fact_bmu_curtailment_truth_half_hourly=truth_frame,
+                truth_profile=args.opportunity_truth_profile,
+            )
+            cluster_curtailment_proxy.to_csv(
+                os.path.join(args.opportunity_output_dir, "fact_regional_curtailment_hourly_proxy.csv"),
+                index=False,
+            )
+            frames = {
+                ROUTE_SCORE_TABLE: route_score,
+                "fact_regional_curtailment_hourly_proxy": cluster_curtailment_proxy,
+                **opportunity_frames,
+            }
+            print(
+                f"[source=elexon_mid:{provider_used}+entsoe+neso+route_opportunity] Materialized {len(frames)} tables for "
+                f"{opportunity_start} to {opportunity_end} (inclusive)"
+            )
+            for table_name, frame in frames.items():
+                output_path = os.path.join(args.opportunity_output_dir, f"{table_name}.csv")
+                print(f"{table_name}: rows={len(frame)} path={output_path}")
+            if args.truth_store_db_path:
+                store_frames = dict(frames)
+                store_frames[GB_TRANSFER_GATE_TABLE] = gb_transfer_gate
+                store_frames[INTERCONNECTOR_CAPACITY_REVIEW_POLICY_TABLE] = review_policy
+                store_frames[INTERCONNECTOR_CAPACITY_REVIEWED_TABLE] = reviewed_capacity
+                store_frames[DIM_INTERCONNECTOR_CABLE_TABLE] = interconnector_cable_frame()
+                store_frames[FRANCE_CONNECTOR_REVIEWED_PERIOD_TABLE] = france_reviewed_period
+                store_frames[FRANCE_CONNECTOR_NOTICE_TABLE] = france_reviewed_notice
+                store_frames[FRANCE_CONNECTOR_OPERATOR_EVENT_TABLE] = france_operator_event
+                store_frames[FRANCE_CONNECTOR_AVAILABILITY_TABLE] = france_availability
+                store_frames[FRANCE_CONNECTOR_OPERATOR_SOURCE_COMPARE_TABLE] = eleclink_source_compare
+                store_frames[FRANCE_CONNECTOR_TABLE] = france_connector
+                if truth_frame is not None:
+                    store_frames["fact_bmu_curtailment_truth_half_hourly"] = truth_frame
+                summary = upsert_truth_frames_to_sqlite(store_frames, args.truth_store_db_path)
+                print(
+                    f"[store=sqlite] Upserted curtailment opportunity and supporting tables into {args.truth_store_db_path}"
+                )
+                for _, row in summary.iterrows():
+                    print(
+                        f"{row['table_name']}: rows_loaded={int(row['rows_loaded'])} "
+                        f"table_rows={int(row['table_row_count'])}"
+                    )
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
+    if args.materialize_opportunity_backtest:
+        try:
+            opportunity_input = load_curtailment_opportunity_input(args.opportunity_input_path)
+            forecast_horizons = coerce_forecast_horizons(args.backtest_horizons)
+            frames = materialize_opportunity_backtest(
+                output_dir=args.backtest_output_dir,
+                fact_curtailment_opportunity_hourly=opportunity_input,
+                model_key=args.backtest_model_key,
+                forecast_horizons=forecast_horizons,
+            )
+            summary = summarize_backtest_prediction_hourly(frames[BACKTEST_PREDICTION_TABLE])
+            print(
+                f"[source={CURTAILMENT_OPPORTUNITY_TABLE}+horizon_backtest] "
+                f"Materialized {len(frames)} tables from {args.opportunity_input_path} "
+                f"for horizons={','.join(str(value) for value in forecast_horizons)}"
+            )
+            for table_name, frame in frames.items():
+                output_path = os.path.join(args.backtest_output_dir, f"{table_name}.csv")
+                print(f"{table_name}: rows={len(frame)} path={output_path}")
+            if not summary.empty:
+                print(summary.round(4).to_string(index=False))
+            if args.truth_store_db_path:
+                store_summary = upsert_truth_frames_to_sqlite(frames, args.truth_store_db_path)
+                print(f"[store=sqlite] Upserted opportunity backtest tables into {args.truth_store_db_path}")
+                for _, row in store_summary.iterrows():
                     print(
                         f"{row['table_name']}: rows_loaded={int(row['rows_loaded'])} "
                         f"table_rows={int(row['table_row_count'])}"
@@ -2101,6 +2433,11 @@ def main() -> int:
                 end_date=network_end,
                 reviewed_input_path=args.france_reviewed_input_path,
             )
+            france_reviewed_notice = build_fact_france_connector_notice_hourly(
+                start_date=network_start,
+                end_date=network_end,
+                reviewed_period=france_reviewed_period,
+            )
             eleclink_auth_kwargs = resolve_eleclink_umm_auth_args(args)
             eleclink_auth_frame, eleclink_auth_status = fetch_eleclink_umm_authenticated(**eleclink_auth_kwargs)
             eleclink_export = load_eleclink_umm_export(args.eleclink_umm_export_path)
@@ -2148,6 +2485,7 @@ def main() -> int:
                 interconnector_capacity_reviewed=reviewed_capacity,
                 interconnector_capacity_review_policy=review_policy,
                 france_connector=france_connector,
+                france_connector_notice=france_reviewed_notice,
             )
             print(
                 f"[source=elexon_mid:{provider_used}+entsoe+entsoe_network] Materialized {len(frames)} tables for "
@@ -2163,6 +2501,7 @@ def main() -> int:
                 store_frames[INTERCONNECTOR_CAPACITY_REVIEWED_TABLE] = reviewed_capacity
                 store_frames[DIM_INTERCONNECTOR_CABLE_TABLE] = interconnector_cable_frame()
                 store_frames[FRANCE_CONNECTOR_REVIEWED_PERIOD_TABLE] = france_reviewed_period
+                store_frames[FRANCE_CONNECTOR_NOTICE_TABLE] = france_reviewed_notice
                 store_frames[FRANCE_CONNECTOR_OPERATOR_EVENT_TABLE] = france_operator_event
                 store_frames[FRANCE_CONNECTOR_AVAILABILITY_TABLE] = france_availability
                 store_frames[FRANCE_CONNECTOR_OPERATOR_SOURCE_COMPARE_TABLE] = eleclink_source_compare

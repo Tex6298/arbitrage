@@ -102,6 +102,70 @@ class FranceConnectorTests(unittest.TestCase):
         self.assertEqual(ifa2["connector_gate_state"], "operator_partial_capacity_cap")
         self.assertAlmostEqual(float(ifa2["connector_headroom_proxy_mw"]), 500.0)
 
+    def test_build_fact_france_connector_hourly_applies_reviewed_publication_cap(self) -> None:
+        interconnector_flow = pd.DataFrame(
+            [
+                {
+                    "interval_start_utc": "2024-09-30T23:00:00Z",
+                    "border_key": "GB-FR",
+                    "direction_key": "gb_to_neighbor",
+                    "signed_flow_from_gb_mw": 800.0,
+                }
+            ]
+        )
+        reviewed_period = pd.DataFrame(
+            [
+                {
+                    "connector_key": "eleclink",
+                    "connector_label": "ElecLink",
+                    "direction_key": "gb_to_neighbor",
+                    "reviewed_scope": "france_connector_public_doc_period",
+                    "review_state": "accepted_reviewed_tier",
+                    "reviewed_evidence_tier": "reviewed_public_doc_period",
+                    "reviewed_tier_accepted_flag": True,
+                    "capacity_policy_action": "allow_reviewed_public_period",
+                    "reviewed_publication_state": "partial_capacity",
+                    "period_start_utc": pd.Timestamp("2024-09-30T23:00:00Z"),
+                    "period_end_utc": pd.Timestamp("2024-10-01T03:00:00Z"),
+                    "period_timezone": "UTC",
+                    "connector_nominal_capacity_mw": 1000.0,
+                    "reviewed_capacity_limit_mw": 250.0,
+                    "reviewed_available_capacity_mw": 250.0,
+                    "reviewed_unavailable_capacity_mw": 750.0,
+                    "source_provider": "public_reviewed_doc",
+                    "source_family": "eleclink_public_doc",
+                    "source_key": "eleclink_ntc_restriction",
+                    "source_label": "ElecLink NTC restriction statement",
+                    "source_document_title": "ElecLink NTC restriction",
+                    "source_document_url": "https://www.eleclink.co.uk/publications/ntc-restrictions",
+                    "source_reference": "EL-NTC-1",
+                    "source_published_date": dt.date(2024, 9, 30),
+                    "review_note": "Public restriction statement.",
+                    "target_is_proxy": False,
+                }
+            ]
+        )
+
+        fact = build_fact_france_connector_hourly(
+            start_date=dt.date(2024, 10, 1),
+            end_date=dt.date(2024, 10, 1),
+            interconnector_flow=interconnector_flow,
+            interconnector_capacity=None,
+            interconnector_capacity_review_policy=None,
+            interconnector_capacity_reviewed=None,
+            france_connector_reviewed_period=reviewed_period,
+            france_connector_availability=None,
+        )
+
+        eleclink = fact[
+            (fact["connector_key"] == "eleclink")
+            & (fact["interval_start_utc"] == pd.Timestamp("2024-09-30T23:00:00Z"))
+        ].iloc[0]
+        self.assertEqual(eleclink["connector_capacity_evidence_tier"], "reviewed_public_doc_period")
+        self.assertEqual(eleclink["connector_gate_state"], "reviewed_publication_cap")
+        self.assertEqual(eleclink["reviewed_publication_source_key"], "eleclink_ntc_restriction")
+        self.assertAlmostEqual(float(eleclink["connector_headroom_proxy_mw"]), 250.0)
+
     def test_materialize_france_connector_history_writes_dimension_and_fact(self) -> None:
         interconnector_flow = pd.DataFrame(
             [
