@@ -42,6 +42,15 @@ def _empty_route_score_frame() -> pd.DataFrame:
             "transfer_gate_utilization_proxy",
             "transfer_gate_state",
             "transfer_gate_reason",
+            "internal_transfer_evidence_tier",
+            "internal_transfer_review_state",
+            "internal_transfer_tier_accepted_flag",
+            "internal_transfer_capacity_policy_action",
+            "internal_transfer_gate_state",
+            "internal_transfer_capacity_limit_mw",
+            "internal_transfer_source_provider",
+            "internal_transfer_source_family",
+            "internal_transfer_source_key",
             "border_observed_flow_mw",
             "first_pass_border_offered_capacity_mw",
             "first_pass_border_headroom_proxy_mw",
@@ -160,6 +169,7 @@ def _overlay_lookup(frame: pd.DataFrame, prefix: str) -> pd.DataFrame:
 def build_fact_route_score_hourly(
     prices: pd.DataFrame,
     gb_transfer_gate: pd.DataFrame,
+    gb_transfer_reviewed_hourly: pd.DataFrame | None = None,
     interconnector_flow: pd.DataFrame | None = None,
     interconnector_capacity: pd.DataFrame | None = None,
     interconnector_capacity_reviewed: pd.DataFrame | None = None,
@@ -323,6 +333,58 @@ def build_fact_route_score_hourly(
     route_preferences = _route_hub_preferences()
     transfer_gate = gb_transfer_gate.copy()
     transfer_gate["interval_start_utc"] = pd.to_datetime(transfer_gate["interval_start_utc"], utc=True, errors="coerce")
+    internal_review_lookup = gb_transfer_reviewed_hourly.copy() if gb_transfer_reviewed_hourly is not None else pd.DataFrame()
+    if internal_review_lookup.empty:
+        internal_review_lookup = pd.DataFrame(
+            columns=[
+                "interval_start_utc",
+                "cluster_key",
+                "hub_key",
+                "review_state",
+                "reviewed_evidence_tier",
+                "reviewed_tier_accepted_flag",
+                "capacity_policy_action",
+                "reviewed_gate_state",
+                "reviewed_capacity_limit_mw",
+                "source_provider",
+                "source_family",
+                "source_key",
+            ]
+        )
+    internal_review_lookup["interval_start_utc"] = pd.to_datetime(
+        internal_review_lookup["interval_start_utc"],
+        utc=True,
+        errors="coerce",
+    )
+    internal_review_lookup = internal_review_lookup[
+        [
+            "interval_start_utc",
+            "cluster_key",
+            "hub_key",
+            "review_state",
+            "reviewed_evidence_tier",
+            "reviewed_tier_accepted_flag",
+            "capacity_policy_action",
+            "reviewed_gate_state",
+            "reviewed_capacity_limit_mw",
+            "source_provider",
+            "source_family",
+            "source_key",
+        ]
+    ].copy()
+    internal_review_lookup = internal_review_lookup.rename(
+        columns={
+            "review_state": "internal_transfer_review_state",
+            "reviewed_evidence_tier": "internal_transfer_reviewed_evidence_tier",
+            "reviewed_tier_accepted_flag": "internal_transfer_tier_accepted_flag",
+            "capacity_policy_action": "internal_transfer_capacity_policy_action",
+            "reviewed_gate_state": "internal_transfer_reviewed_gate_state",
+            "reviewed_capacity_limit_mw": "internal_transfer_reviewed_capacity_limit_mw",
+            "source_provider": "internal_transfer_source_provider",
+            "source_family": "internal_transfer_source_family",
+            "source_key": "internal_transfer_source_key",
+        }
+    )
 
     rows = []
     for route_name, preferred_hubs in route_preferences.items():
@@ -344,6 +406,11 @@ def build_fact_route_score_hourly(
             {hub_key: rank + 1 for rank, hub_key in enumerate(preferred_hubs)}
         )
         route_transfer["route_border_key"] = border_key
+        route_transfer = route_transfer.merge(
+            internal_review_lookup,
+            on=["interval_start_utc", "cluster_key", "hub_key"],
+            how="left",
+        )
         for source_column, target_column in (
             ("border_offered_capacity_mw", "first_pass_border_offered_capacity_mw"),
             ("border_headroom_proxy_mw", "first_pass_border_headroom_proxy_mw"),
@@ -535,9 +602,63 @@ def build_fact_route_score_hourly(
             ("source_document_url", pd.NA),
             ("source_reference", pd.NA),
             ("source_published_utc", pd.NaT),
+            ("internal_transfer_review_state", pd.NA),
+            ("internal_transfer_reviewed_evidence_tier", pd.NA),
+            ("internal_transfer_tier_accepted_flag", False),
+            ("internal_transfer_capacity_policy_action", pd.NA),
+            ("internal_transfer_reviewed_gate_state", pd.NA),
+            ("internal_transfer_reviewed_capacity_limit_mw", np.nan),
+            ("internal_transfer_source_provider", pd.NA),
+            ("internal_transfer_source_family", pd.NA),
+            ("internal_transfer_source_key", pd.NA),
         ):
             if column not in route_transfer.columns:
                 route_transfer[column] = default
+
+        internal_review_accepted = route_transfer["internal_transfer_tier_accepted_flag"].where(
+            route_transfer["internal_transfer_tier_accepted_flag"].notna(),
+            False,
+        ).astype(bool)
+        route_transfer["internal_transfer_evidence_tier"] = np.where(
+            internal_review_accepted,
+            route_transfer["internal_transfer_reviewed_evidence_tier"],
+            "gb_topology_transfer_gate_proxy",
+        )
+        route_transfer["internal_transfer_review_state"] = np.where(
+            internal_review_accepted,
+            route_transfer["internal_transfer_review_state"],
+            "proxy_fallback",
+        )
+        route_transfer["internal_transfer_capacity_policy_action"] = np.where(
+            internal_review_accepted,
+            route_transfer["internal_transfer_capacity_policy_action"],
+            "proxy_fallback",
+        )
+        route_transfer["internal_transfer_gate_state"] = np.where(
+            internal_review_accepted,
+            route_transfer["internal_transfer_reviewed_gate_state"],
+            route_transfer["gate_state"],
+        )
+        route_transfer["internal_transfer_capacity_limit_mw"] = np.where(
+            internal_review_accepted,
+            route_transfer["internal_transfer_reviewed_capacity_limit_mw"],
+            route_transfer["transfer_gate_mw_proxy"],
+        )
+        route_transfer["internal_transfer_source_provider"] = np.where(
+            internal_review_accepted,
+            route_transfer["internal_transfer_source_provider"],
+            "proxy",
+        )
+        route_transfer["internal_transfer_source_family"] = np.where(
+            internal_review_accepted,
+            route_transfer["internal_transfer_source_family"],
+            "gb_topology_transfer_gate_proxy",
+        )
+        route_transfer["internal_transfer_source_key"] = np.where(
+            internal_review_accepted,
+            route_transfer["internal_transfer_source_key"],
+            "gb_topology_transfer_gate_proxy",
+        )
 
         price_positive = (
             pd.to_numeric(route_transfer["route_price_score_eur_per_mwh"], errors="coerce").gt(0)
@@ -547,8 +668,8 @@ def build_fact_route_score_hourly(
             ).astype(bool)
         )
         transfer_blocked = (
-            route_transfer["gate_state"].fillna("").astype(str).str.startswith("blocked_")
-            | pd.to_numeric(route_transfer["transfer_gate_mw_proxy"], errors="coerce").fillna(0).le(0)
+            route_transfer["internal_transfer_gate_state"].fillna("").astype(str).str.startswith("blocked_")
+            | pd.to_numeric(route_transfer["internal_transfer_capacity_limit_mw"], errors="coerce").fillna(0).le(0)
         )
         connector_limit = pd.to_numeric(route_transfer.get("connector_headroom_proxy_mw"), errors="coerce")
         connector_blocked = price_positive & ~transfer_blocked & connector_limit.fillna(np.inf).le(0)
@@ -581,6 +702,13 @@ def build_fact_route_score_hourly(
         route_transfer.loc[price_positive & transfer_blocked, "route_delivery_reason"] = (
             "The cluster-to-hub transfer gate blocks or zeroes this route before border capacity matters."
         )
+        reviewed_transfer_blocked = (
+            price_positive
+            & route_transfer["internal_transfer_gate_state"].fillna("").astype(str).str.startswith("blocked_reviewed")
+        )
+        route_transfer.loc[reviewed_transfer_blocked, "route_delivery_reason"] = (
+            "An accepted reviewed internal-transfer tier blocks or zeroes this route before border capacity matters."
+        )
         route_transfer.loc[connector_blocked, "route_delivery_tier"] = "blocked_connector_capacity"
         route_transfer.loc[connector_blocked, "route_delivery_reason"] = (
             "The selected connector has no deliverable headroom after cable limits and operator availability are applied."
@@ -591,7 +719,7 @@ def build_fact_route_score_hourly(
         route_transfer.loc[confirmed_mask, "route_delivery_signal"] = "EXPORT_CONFIRMED"
         route_transfer.loc[confirmed_mask, "deliverable_mw_proxy"] = pd.concat(
             [
-                pd.to_numeric(route_transfer.loc[confirmed_mask, "transfer_gate_mw_proxy"], errors="coerce"),
+                pd.to_numeric(route_transfer.loc[confirmed_mask, "internal_transfer_capacity_limit_mw"], errors="coerce"),
                 pd.to_numeric(route_transfer.loc[confirmed_mask, "first_pass_border_headroom_proxy_mw"], errors="coerce"),
                 connector_limit.loc[confirmed_mask],
             ],
@@ -619,7 +747,7 @@ def build_fact_route_score_hourly(
         reviewed_limit = reviewed_headroom.where(~reviewed_gate_state.eq("flow_unknown_capacity_published"), reviewed_capacity)
         route_transfer.loc[reviewed_mask, "deliverable_mw_proxy"] = pd.concat(
             [
-                pd.to_numeric(route_transfer.loc[reviewed_mask, "transfer_gate_mw_proxy"], errors="coerce"),
+                pd.to_numeric(route_transfer.loc[reviewed_mask, "internal_transfer_capacity_limit_mw"], errors="coerce"),
                 reviewed_limit,
                 connector_limit.loc[reviewed_mask],
             ],
@@ -648,7 +776,7 @@ def build_fact_route_score_hourly(
         route_transfer.loc[unknown_mask, "route_delivery_signal"] = "EXPORT_CAPACITY_UNKNOWN"
         route_transfer.loc[unknown_mask, "deliverable_mw_proxy"] = pd.concat(
             [
-                pd.to_numeric(route_transfer.loc[unknown_mask, "transfer_gate_mw_proxy"], errors="coerce"),
+                pd.to_numeric(route_transfer.loc[unknown_mask, "internal_transfer_capacity_limit_mw"], errors="coerce"),
                 connector_limit.loc[unknown_mask],
             ],
             axis=1,
@@ -772,6 +900,7 @@ def materialize_route_score_history(
     output_dir: str | Path,
     prices: pd.DataFrame,
     gb_transfer_gate: pd.DataFrame,
+    gb_transfer_reviewed_hourly: pd.DataFrame | None = None,
     interconnector_flow: pd.DataFrame | None = None,
     interconnector_capacity: pd.DataFrame | None = None,
     interconnector_capacity_reviewed: pd.DataFrame | None = None,
@@ -782,6 +911,7 @@ def materialize_route_score_history(
     fact = build_fact_route_score_hourly(
         prices=prices,
         gb_transfer_gate=gb_transfer_gate,
+        gb_transfer_reviewed_hourly=gb_transfer_reviewed_hourly,
         interconnector_flow=interconnector_flow,
         interconnector_capacity=interconnector_capacity,
         interconnector_capacity_reviewed=interconnector_capacity_reviewed,

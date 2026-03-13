@@ -46,6 +46,8 @@ SUMMARY_SLICE_DIMENSIONS = (
     "hub_key",
     "route_name",
     "route_delivery_tier",
+    "internal_transfer_evidence_tier",
+    "internal_transfer_gate_state",
     "connector_notice_market_state",
     "curtailment_source_tier",
     "feature_hour_of_day",
@@ -73,6 +75,8 @@ def _empty_backtest_prediction_frame() -> pd.DataFrame:
             "route_label",
             "route_border_key",
             "route_delivery_tier",
+            "internal_transfer_evidence_tier",
+            "internal_transfer_gate_state",
             "connector_notice_market_state",
             "curtailment_source_tier",
             "model_key",
@@ -155,6 +159,8 @@ def _empty_backtest_top_error_frame() -> pd.DataFrame:
             "route_label",
             "route_border_key",
             "route_delivery_tier",
+            "internal_transfer_evidence_tier",
+            "internal_transfer_gate_state",
             "connector_notice_market_state",
             "curtailment_source_tier",
             "prediction_basis",
@@ -188,6 +194,9 @@ def _empty_drift_window_frame() -> pd.DataFrame:
             "eligible_row_count",
             "reviewed_route_share",
             "capacity_unknown_route_share",
+            "reviewed_internal_transfer_share",
+            "proxy_internal_transfer_share",
+            "blocked_internal_reviewed_share",
             "known_connector_restriction_share",
             "truth_backed_curtailment_share",
             "actual_opportunity_deliverable_mean_mwh",
@@ -287,6 +296,14 @@ def _prepare_backtest_input(fact_curtailment_opportunity_hourly: pd.DataFrame) -
     frame["feature_hour_of_day"] = frame["interval_start_utc"].dt.hour
     frame["feature_day_of_week"] = frame["interval_start_utc"].dt.dayofweek
     frame["route_delivery_tier"] = frame["route_delivery_tier"].fillna("unknown")
+    frame["internal_transfer_evidence_tier"] = frame.get(
+        "internal_transfer_evidence_tier",
+        pd.Series("gb_topology_transfer_gate_proxy", index=frame.index),
+    ).fillna("gb_topology_transfer_gate_proxy")
+    frame["internal_transfer_gate_state"] = frame.get(
+        "internal_transfer_gate_state",
+        pd.Series("capacity_unknown_reachable", index=frame.index),
+    ).fillna("capacity_unknown_reachable")
     frame["connector_notice_market_state"] = frame["connector_notice_market_state"].fillna(
         "no_public_connector_restriction"
     )
@@ -643,6 +660,13 @@ def summarize_backtest_prediction_hourly(fact_backtest_prediction_hourly: pd.Dat
 def _summary_focus_area(slice_dimension: str, slice_value: object) -> str:
     if slice_dimension == "route_delivery_tier" and slice_value in {"reviewed", "capacity_unknown"}:
         return str(slice_value)
+    if slice_dimension == "internal_transfer_evidence_tier":
+        if slice_value == "gb_topology_transfer_gate_proxy":
+            return "proxy_internal_transfer"
+        if slice_value not in {"<NA>", pd.NA}:
+            return "reviewed_internal_transfer"
+    if slice_dimension == "internal_transfer_gate_state" and str(slice_value).startswith("blocked_reviewed"):
+        return "blocked_internal_reviewed"
     if slice_dimension == "connector_notice_market_state" and slice_value != "no_public_connector_restriction":
         return "connector_restriction_state"
     if slice_dimension == "hub_key" and slice_value in {"ifa", "ifa2", "eleclink"}:
@@ -771,10 +795,34 @@ def build_fact_backtest_top_error_hourly(fact_backtest_prediction_hourly: pd.Dat
     eligible.loc[eligible["route_delivery_tier"].eq("reviewed"), "error_focus_area"] = "reviewed"
     eligible.loc[eligible["route_delivery_tier"].eq("capacity_unknown"), "error_focus_area"] = "capacity_unknown"
     eligible.loc[
+        eligible["internal_transfer_evidence_tier"].ne("gb_topology_transfer_gate_proxy"),
+        "error_focus_area",
+    ] = "reviewed_internal_transfer"
+    eligible.loc[
+        eligible["internal_transfer_evidence_tier"].eq("gb_topology_transfer_gate_proxy"),
+        "error_focus_area",
+    ] = "proxy_internal_transfer"
+    eligible.loc[
+        eligible["internal_transfer_gate_state"].fillna("").astype(str).str.startswith("blocked_reviewed"),
+        "error_focus_area",
+    ] = "blocked_internal_reviewed"
+    eligible.loc[
         eligible["connector_notice_market_state"].ne("no_public_connector_restriction"),
         "error_focus_area",
     ] = "connector_restriction_state"
     eligible.loc[eligible["hub_key"].isin(["ifa", "ifa2", "eleclink"]), "error_focus_area"] = "gb_fr_connector_route"
+    eligible.loc[
+        eligible["internal_transfer_evidence_tier"].eq("gb_topology_transfer_gate_proxy"),
+        "error_focus_area",
+    ] = "proxy_internal_transfer"
+    eligible.loc[
+        eligible["internal_transfer_evidence_tier"].ne("gb_topology_transfer_gate_proxy"),
+        "error_focus_area",
+    ] = "reviewed_internal_transfer"
+    eligible.loc[
+        eligible["internal_transfer_gate_state"].fillna("").astype(str).str.startswith("blocked_reviewed"),
+        "error_focus_area",
+    ] = "blocked_internal_reviewed"
     eligible = eligible.sort_values(
         [
             "model_key",
@@ -825,6 +873,8 @@ def build_fact_drift_window(fact_backtest_prediction_hourly: pd.DataFrame) -> pd
             scope_values = {column: next(key_iter) for column in scope_columns}
             eligible = window_frame[window_frame["prediction_eligible_flag"].fillna(False)].copy()
             route_tier = window_frame["route_delivery_tier"].fillna("unknown")
+            internal_tier = window_frame["internal_transfer_evidence_tier"].fillna("gb_topology_transfer_gate_proxy")
+            internal_gate = window_frame["internal_transfer_gate_state"].fillna("capacity_unknown_reachable")
             notice_state = window_frame["connector_notice_market_state"].fillna("no_public_connector_restriction")
             source_tier = window_frame["curtailment_source_tier"].fillna("unknown")
             rows.append(
@@ -842,6 +892,15 @@ def build_fact_drift_window(fact_backtest_prediction_hourly: pd.DataFrame) -> pd
                     "eligible_row_count": len(eligible),
                     "reviewed_route_share": float(route_tier.eq("reviewed").mean()),
                     "capacity_unknown_route_share": float(route_tier.eq("capacity_unknown").mean()),
+                    "reviewed_internal_transfer_share": float(
+                        internal_tier.ne("gb_topology_transfer_gate_proxy").mean()
+                    ),
+                    "proxy_internal_transfer_share": float(
+                        internal_tier.eq("gb_topology_transfer_gate_proxy").mean()
+                    ),
+                    "blocked_internal_reviewed_share": float(
+                        internal_gate.astype(str).str.startswith("blocked_reviewed").mean()
+                    ),
                     "known_connector_restriction_share": float(
                         notice_state.ne("no_public_connector_restriction").mean()
                     ),
@@ -906,6 +965,9 @@ def build_fact_drift_window(fact_backtest_prediction_hourly: pd.DataFrame) -> pd
             [
                 (model_frame["reviewed_route_share"] - previous["reviewed_route_share"]).abs(),
                 (model_frame["capacity_unknown_route_share"] - previous["capacity_unknown_route_share"]).abs(),
+                (model_frame["reviewed_internal_transfer_share"] - previous["reviewed_internal_transfer_share"]).abs(),
+                (model_frame["proxy_internal_transfer_share"] - previous["proxy_internal_transfer_share"]).abs(),
+                (model_frame["blocked_internal_reviewed_share"] - previous["blocked_internal_reviewed_share"]).abs(),
                 (model_frame["known_connector_restriction_share"] - previous["known_connector_restriction_share"]).abs(),
                 (model_frame["truth_backed_curtailment_share"] - previous["truth_backed_curtailment_share"]).abs(),
             ],

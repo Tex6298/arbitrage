@@ -94,6 +94,16 @@ from gb_transfer_gate import (
     materialize_gb_transfer_gate_history,
     parse_iso_date as parse_transfer_iso_date,
 )
+from gb_transfer_reviewed import (
+    GB_TRANSFER_REVIEW_POLICY_TABLE,
+    GB_TRANSFER_REVIEWED_HOURLY_TABLE,
+    GB_TRANSFER_REVIEWED_PERIOD_TABLE,
+    build_fact_gb_transfer_review_policy,
+    build_fact_gb_transfer_reviewed_hourly,
+    build_fact_gb_transfer_reviewed_period,
+    materialize_gb_transfer_reviewed_history,
+    write_normalized_gb_transfer_reviewed_input,
+)
 from gb_topology import cluster_hub_matrix, interconnector_hub_frame, reachability_frame, route_hub_frame
 from history_store import ingest_truth_csv_tree_to_sqlite, upsert_truth_frames_to_sqlite
 from interconnector_capacity import (
@@ -1023,6 +1033,24 @@ def main() -> int:
         default="gb_transfer_gate_history",
         help="Output directory for GB transfer-gate history",
     )
+    parser.add_argument(
+        "--normalize-gb-transfer-reviewed-input",
+        action="store_true",
+        help="Normalize a messy GB internal-transfer reviewed-input CSV, TSV, TXT, or JSON into the canonical reviewed-period CSV schema, then exit",
+    )
+    parser.add_argument(
+        "--gb-transfer-reviewed-raw-path",
+        help="Raw GB internal-transfer reviewed-input file to normalize",
+    )
+    parser.add_argument(
+        "--gb-transfer-reviewed-normalized-output",
+        default="gb_transfer_reviewed_input.normalized.csv",
+        help="Output CSV path for the normalized GB internal-transfer reviewed input",
+    )
+    parser.add_argument(
+        "--gb-transfer-reviewed-input-path",
+        help="Optional local CSV or JSON input normalized from public internal boundary/constraint evidence to materialize the reviewed GB transfer tier",
+    )
     parser.add_argument("--france-start", help="France connector-layer materialization start date, inclusive (YYYY-MM-DD)")
     parser.add_argument("--france-end", help="France connector-layer materialization end date, inclusive (YYYY-MM-DD)")
     parser.add_argument(
@@ -1829,6 +1857,23 @@ def main() -> int:
             print(f"ERROR: {exc}", file=sys.stderr)
             return 1
 
+    if args.normalize_gb_transfer_reviewed_input:
+        if not args.gb_transfer_reviewed_raw_path:
+            raise SystemExit("--normalize-gb-transfer-reviewed-input requires --gb-transfer-reviewed-raw-path")
+        try:
+            normalized = write_normalized_gb_transfer_reviewed_input(
+                input_path=args.gb_transfer_reviewed_raw_path,
+                output_path=args.gb_transfer_reviewed_normalized_output,
+            )
+            print(
+                f"[source=manual_reviewed_input] Normalized GB transfer reviewed input rows={len(normalized)} "
+                f"path={args.gb_transfer_reviewed_normalized_output}"
+            )
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
     if args.normalize_france_reviewed_input:
         if not args.france_reviewed_raw_path:
             raise SystemExit("--normalize-france-reviewed-input requires --france-reviewed-raw-path")
@@ -2035,8 +2080,16 @@ def main() -> int:
                 output_dir=args.transfer_output_dir,
                 token=entsoe_token,
             )
+            reviewed_frames = materialize_gb_transfer_reviewed_history(
+                start_date=transfer_start,
+                end_date=transfer_end,
+                output_dir=args.transfer_output_dir,
+                reviewed_input_path=args.gb_transfer_reviewed_input_path,
+            )
+            frames = {**frames, **reviewed_frames}
             print(
-                f"[source=entsoe+topology] Materialized {len(frames)} tables for {transfer_start} to {transfer_end} "
+                f"[source=entsoe+topology+internal_reviewed] Materialized {len(frames)} tables for "
+                f"{transfer_start} to {transfer_end} "
                 f"(inclusive)"
             )
             for table_name, frame in frames.items():
@@ -2262,6 +2315,18 @@ def main() -> int:
                 interconnector_flow=interconnector_flow,
                 interconnector_capacity=interconnector_capacity,
             )
+            gb_transfer_reviewed_period = build_fact_gb_transfer_reviewed_period(
+                start_date=network_start,
+                end_date=network_end,
+                reviewed_input_path=args.gb_transfer_reviewed_input_path,
+            )
+            gb_transfer_review_policy = build_fact_gb_transfer_review_policy(gb_transfer_reviewed_period)
+            gb_transfer_reviewed_hourly = build_fact_gb_transfer_reviewed_hourly(
+                start_date=network_start,
+                end_date=network_end,
+                reviewed_period=gb_transfer_reviewed_period,
+                review_policy=gb_transfer_review_policy,
+            )
             route_frames = materialize_route_score_history(
                 output_dir=args.opportunity_output_dir,
                 prices=prices,
@@ -2272,6 +2337,7 @@ def main() -> int:
                 interconnector_capacity_review_policy=review_policy,
                 france_connector=france_connector,
                 france_connector_notice=france_reviewed_notice,
+                gb_transfer_reviewed_hourly=gb_transfer_reviewed_hourly,
             )
             route_score = route_frames[ROUTE_SCORE_TABLE]
             cluster_curtailment_proxy = fetch_cluster_curtailment_proxy_hourly(
@@ -2299,9 +2365,24 @@ def main() -> int:
                 os.path.join(args.opportunity_output_dir, "fact_regional_curtailment_hourly_proxy.csv"),
                 index=False,
             )
+            gb_transfer_reviewed_period.to_csv(
+                os.path.join(args.opportunity_output_dir, f"{GB_TRANSFER_REVIEWED_PERIOD_TABLE}.csv"),
+                index=False,
+            )
+            gb_transfer_review_policy.to_csv(
+                os.path.join(args.opportunity_output_dir, f"{GB_TRANSFER_REVIEW_POLICY_TABLE}.csv"),
+                index=False,
+            )
+            gb_transfer_reviewed_hourly.to_csv(
+                os.path.join(args.opportunity_output_dir, f"{GB_TRANSFER_REVIEWED_HOURLY_TABLE}.csv"),
+                index=False,
+            )
             frames = {
                 ROUTE_SCORE_TABLE: route_score,
                 "fact_regional_curtailment_hourly_proxy": cluster_curtailment_proxy,
+                GB_TRANSFER_REVIEWED_PERIOD_TABLE: gb_transfer_reviewed_period,
+                GB_TRANSFER_REVIEW_POLICY_TABLE: gb_transfer_review_policy,
+                GB_TRANSFER_REVIEWED_HOURLY_TABLE: gb_transfer_reviewed_hourly,
                 **opportunity_frames,
             }
             print(
@@ -2314,6 +2395,9 @@ def main() -> int:
             if args.truth_store_db_path:
                 store_frames = dict(frames)
                 store_frames[GB_TRANSFER_GATE_TABLE] = gb_transfer_gate
+                store_frames[GB_TRANSFER_REVIEWED_PERIOD_TABLE] = gb_transfer_reviewed_period
+                store_frames[GB_TRANSFER_REVIEW_POLICY_TABLE] = gb_transfer_review_policy
+                store_frames[GB_TRANSFER_REVIEWED_HOURLY_TABLE] = gb_transfer_reviewed_hourly
                 store_frames[INTERCONNECTOR_CAPACITY_REVIEW_POLICY_TABLE] = review_policy
                 store_frames[INTERCONNECTOR_CAPACITY_REVIEWED_TABLE] = reviewed_capacity
                 store_frames[DIM_INTERCONNECTOR_CABLE_TABLE] = interconnector_cable_frame()
@@ -2476,6 +2560,18 @@ def main() -> int:
                 interconnector_flow=interconnector_flow,
                 interconnector_capacity=interconnector_capacity,
             )
+            gb_transfer_reviewed_period = build_fact_gb_transfer_reviewed_period(
+                start_date=network_start,
+                end_date=network_end,
+                reviewed_input_path=args.gb_transfer_reviewed_input_path,
+            )
+            gb_transfer_review_policy = build_fact_gb_transfer_review_policy(gb_transfer_reviewed_period)
+            gb_transfer_reviewed_hourly = build_fact_gb_transfer_reviewed_hourly(
+                start_date=network_start,
+                end_date=network_end,
+                reviewed_period=gb_transfer_reviewed_period,
+                review_policy=gb_transfer_review_policy,
+            )
             frames = materialize_route_score_history(
                 output_dir=args.route_score_output_dir,
                 prices=prices,
@@ -2486,6 +2582,22 @@ def main() -> int:
                 interconnector_capacity_review_policy=review_policy,
                 france_connector=france_connector,
                 france_connector_notice=france_reviewed_notice,
+                gb_transfer_reviewed_hourly=gb_transfer_reviewed_hourly,
+            )
+            frames[GB_TRANSFER_REVIEWED_PERIOD_TABLE] = gb_transfer_reviewed_period
+            frames[GB_TRANSFER_REVIEW_POLICY_TABLE] = gb_transfer_review_policy
+            frames[GB_TRANSFER_REVIEWED_HOURLY_TABLE] = gb_transfer_reviewed_hourly
+            gb_transfer_reviewed_period.to_csv(
+                os.path.join(args.route_score_output_dir, f"{GB_TRANSFER_REVIEWED_PERIOD_TABLE}.csv"),
+                index=False,
+            )
+            gb_transfer_review_policy.to_csv(
+                os.path.join(args.route_score_output_dir, f"{GB_TRANSFER_REVIEW_POLICY_TABLE}.csv"),
+                index=False,
+            )
+            gb_transfer_reviewed_hourly.to_csv(
+                os.path.join(args.route_score_output_dir, f"{GB_TRANSFER_REVIEWED_HOURLY_TABLE}.csv"),
+                index=False,
             )
             print(
                 f"[source=elexon_mid:{provider_used}+entsoe+entsoe_network] Materialized {len(frames)} tables for "
@@ -2497,9 +2609,9 @@ def main() -> int:
             if args.truth_store_db_path:
                 store_frames = dict(frames)
                 store_frames[GB_TRANSFER_GATE_TABLE] = gb_transfer_gate
+                store_frames[DIM_INTERCONNECTOR_CABLE_TABLE] = interconnector_cable_frame()
                 store_frames[INTERCONNECTOR_CAPACITY_REVIEW_POLICY_TABLE] = review_policy
                 store_frames[INTERCONNECTOR_CAPACITY_REVIEWED_TABLE] = reviewed_capacity
-                store_frames[DIM_INTERCONNECTOR_CABLE_TABLE] = interconnector_cable_frame()
                 store_frames[FRANCE_CONNECTOR_REVIEWED_PERIOD_TABLE] = france_reviewed_period
                 store_frames[FRANCE_CONNECTOR_NOTICE_TABLE] = france_reviewed_notice
                 store_frames[FRANCE_CONNECTOR_OPERATOR_EVENT_TABLE] = france_operator_event

@@ -76,9 +76,9 @@ ASSUMPTIONS: Tuple[ConstraintAssumption, ...] = (
     ConstraintAssumption(
         key="internal_transfer",
         question="Can power move from the national connection point to the international connector in the same hour?",
-        current_assumption="A first-pass fact_gb_transfer_gate_hourly now exists as a cluster-to-hub proxy surface, and the historical route/opportunity layers now consume it at cluster scope. The legacy live route CSV path is still simpler than the historical cluster-aware stack.",
-        risk="High. The transfer gate is still a proxy, so even the cluster-aware opportunity layer can overstate deliverability when internal GB transfer is actually tighter than the heuristic.",
-        next_solution="Upgrade the cluster-aware transfer proxy toward zonal/PTDF-style limits, then unify the legacy live path with the richer historical opportunity stack.",
+        current_assumption="A first-pass fact_gb_transfer_gate_hourly proxy now exists, and route/opportunity layers can override it with a separate reviewed internal-transfer tier built from public boundary and constraint evidence. The legacy live route CSV path is still simpler than the historical cluster-aware stack.",
+        risk="High. The fallback gate is still a proxy, and the reviewed tier is only as strong as the public evidence provided, so deliverability can still be overstated when internal GB transfer is tighter than the heuristic or the reviewed inputs are incomplete.",
+        next_solution="Keep the reviewed tier explicit, expand the public internal evidence base, and replace the reviewed-input path with stronger operator or API feeds when available before attempting PTDF-style limits.",
     ),
     ConstraintAssumption(
         key="cross_border_capacity",
@@ -105,9 +105,10 @@ def remaining_workstreams() -> List[str]:
     return [
         "Replace the seed cluster registry in asset_mapping.py with confirmed wind farm, node, and ownership metadata.",
         "Add curtailment or redispatch signals so the model distinguishes generic spreads from forced-export conditions.",
-        "Join fact_gb_transfer_gate_hourly into cluster-aware route scoring so internal GB transfer can actually gate a specific source cluster.",
+        "Expand the reviewed internal-transfer evidence tier so more cluster-to-hub corridors are covered by auditable public boundary or constraint evidence instead of proxy fallback.",
         "Decide whether reviewed explicit-daily ENTSO-E capacity for GB-NL, GB-BE, and GB-DK1 is safe to promote beyond a reviewed evidence tier.",
         "Upgrade the switchable France connector source stack so better operator or API feeds can replace manual reviewed-period inputs without changing route-scoring contracts.",
+        "Replace the reviewed internal-transfer input path with a stronger operator or API feed if one appears, without changing route or opportunity contracts.",
         "Upgrade fact_interconnector_capacity_hourly from offered-capacity first pass toward ATC/NTC, outages, and post-auction headroom by hour.",
         "Replace static leg fees and losses with connector-specific parameters and time-varying availability.",
     ]

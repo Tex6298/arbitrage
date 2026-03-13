@@ -33,6 +33,8 @@ def _opportunity_row(
     curtailment_selected_mwh: float | None = None,
     deliverable_mw_proxy: float | None = None,
     curtailment_source_tier: str = "regional_proxy",
+    internal_transfer_evidence_tier: str = "gb_topology_transfer_gate_proxy",
+    internal_transfer_gate_state: str = "capacity_unknown_reachable",
 ) -> dict:
     interval_start = pd.Timestamp(interval_start_utc)
     interval_end = interval_start + pd.Timedelta(hours=1)
@@ -64,6 +66,8 @@ def _opportunity_row(
         "opportunity_deliverable_mwh": opportunity_deliverable_mwh,
         "opportunity_gross_value_eur": opportunity_deliverable_mwh * deliverable_route_score_eur_per_mwh,
         "deliverable_route_score_eur_per_mwh": deliverable_route_score_eur_per_mwh,
+        "internal_transfer_evidence_tier": internal_transfer_evidence_tier,
+        "internal_transfer_gate_state": internal_transfer_gate_state,
     }
 
 
@@ -218,6 +222,8 @@ class OpportunityBacktestTests(unittest.TestCase):
         self.assertIn("all", set(summary["slice_dimension"]))
         self.assertIn("route_name", set(summary["slice_dimension"]))
         self.assertIn("hub_key", set(summary["slice_dimension"]))
+        self.assertIn("internal_transfer_evidence_tier", set(summary["slice_dimension"]))
+        self.assertIn("internal_transfer_gate_state", set(summary["slice_dimension"]))
         route_row = summary[
             (summary["slice_dimension"] == "route_name")
             & (summary["slice_value"] == "R1_netback_GB_FR_DE_PL")
@@ -268,7 +274,54 @@ class OpportunityBacktestTests(unittest.TestCase):
         self.assertEqual(int(ranked.iloc[0]["top_error_rank"]), 1)
         self.assertEqual(ranked.iloc[0]["interval_start_utc"], pd.Timestamp("2024-10-03T09:00:00+00:00"))
         self.assertEqual(int(ranked.iloc[0]["forecast_horizon_hours"]), 24)
-        self.assertEqual(ranked.iloc[0]["error_focus_area"], "gb_fr_connector_route")
+        self.assertEqual(ranked.iloc[0]["error_focus_area"], "proxy_internal_transfer")
+
+    def test_build_fact_backtest_top_error_hourly_flags_reviewed_internal_transfer(self) -> None:
+        base = pd.DataFrame(
+            [
+                _opportunity_row(
+                    "2024-10-01T09:00:00Z",
+                    "east_anglia_offshore",
+                    "R1_netback_GB_FR_DE_PL",
+                    "ifa",
+                    "reviewed",
+                    "known_upcoming_restriction",
+                    10.0,
+                    50.0,
+                    internal_transfer_evidence_tier="reviewed_internal_transfer_period",
+                    internal_transfer_gate_state="reviewed_pass_restricted",
+                ),
+                _opportunity_row(
+                    "2024-10-02T09:00:00Z",
+                    "east_anglia_offshore",
+                    "R1_netback_GB_FR_DE_PL",
+                    "ifa",
+                    "reviewed",
+                    "known_upcoming_restriction",
+                    30.0,
+                    60.0,
+                    internal_transfer_evidence_tier="reviewed_internal_transfer_period",
+                    internal_transfer_gate_state="reviewed_pass_restricted",
+                ),
+                _opportunity_row(
+                    "2024-10-03T09:00:00Z",
+                    "east_anglia_offshore",
+                    "R1_netback_GB_FR_DE_PL",
+                    "ifa",
+                    "reviewed",
+                    "known_upcoming_restriction",
+                    80.0,
+                    60.0,
+                    internal_transfer_evidence_tier="reviewed_internal_transfer_period",
+                    internal_transfer_gate_state="reviewed_pass_restricted",
+                ),
+            ]
+        )
+        backtest = build_fact_backtest_prediction_hourly(
+            base, model_key=MODEL_GROUP_MEAN_NOTICE_V1, forecast_horizons=(24,)
+        )
+        ranked = build_fact_backtest_top_error_hourly(backtest)
+        self.assertEqual(ranked.iloc[0]["error_focus_area"], "reviewed_internal_transfer")
 
     def test_build_fact_drift_window_flags_change_after_warmup(self) -> None:
         rows = []
@@ -304,6 +357,9 @@ class OpportunityBacktestTests(unittest.TestCase):
         self.assertEqual(global_rows.iloc[1]["drift_state"], "warn")
         self.assertTrue(route_rows["route_name"].eq("R1_netback_GB_FR_DE_PL").all())
         self.assertTrue(cluster_rows["cluster_key"].eq("east_anglia_offshore").all())
+        self.assertIn("reviewed_internal_transfer_share", drift.columns)
+        self.assertIn("proxy_internal_transfer_share", drift.columns)
+        self.assertIn("blocked_internal_reviewed_share", drift.columns)
 
     def test_summarize_backtest_prediction_hourly_reports_both_models(self) -> None:
         fact = pd.DataFrame(

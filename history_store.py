@@ -40,6 +40,9 @@ TRUTH_STORE_PRIMARY_KEYS: Dict[str, list[str]] = {
     "fact_france_connector_notice_hourly": ["interval_start_utc", "connector_key", "direction_key"],
     "fact_france_connector_hourly": ["interval_start_utc", "connector_key"],
     "fact_gb_transfer_gate_hourly": ["interval_start_utc", "cluster_key", "hub_key"],
+    "fact_gb_transfer_reviewed_period": ["period_start_utc", "period_end_utc", "scope_key", "hub_key", "source_key"],
+    "fact_gb_transfer_review_policy": ["source_key"],
+    "fact_gb_transfer_reviewed_hourly": ["interval_start_utc", "cluster_key", "hub_key"],
     "fact_route_score_hourly": ["interval_start_utc", "cluster_key", "route_name", "hub_key"],
     "fact_curtailment_opportunity_hourly": ["interval_start_utc", "cluster_key", "route_name", "hub_key"],
     "fact_backtest_prediction_hourly": [

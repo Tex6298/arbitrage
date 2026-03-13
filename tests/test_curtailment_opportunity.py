@@ -32,6 +32,11 @@ def _route_rows() -> pd.DataFrame:
                 "route_delivery_reason": "Reviewed public cap exists.",
                 "deliverable_mw_proxy": 80.0,
                 "deliverable_route_score_eur_per_mwh": 45.0,
+                "internal_transfer_evidence_tier": "reviewed_internal_transfer_period",
+                "internal_transfer_gate_state": "reviewed_pass_restricted",
+                "internal_transfer_capacity_limit_mw": 85.0,
+                "internal_transfer_source_provider": "public_reviewed_doc",
+                "internal_transfer_source_key": "internal_boundary_restriction",
                 "connector_notice_state": "upcoming",
                 "connector_notice_known_flag": True,
                 "connector_notice_active_flag": False,
@@ -82,6 +87,11 @@ class CurtailmentOpportunityTests(unittest.TestCase):
         self.assertFalse(bool(row["connector_capacity_tight_now_flag"]))
         self.assertTrue(bool(row["market_knew_connector_restriction_flag"]))
         self.assertEqual(row["connector_notice_market_state"], "known_upcoming_restriction")
+        self.assertEqual(row["internal_transfer_evidence_tier"], "reviewed_internal_transfer_period")
+        self.assertEqual(row["internal_transfer_gate_state"], "reviewed_pass_restricted")
+        self.assertAlmostEqual(float(row["internal_transfer_capacity_limit_mw"]), 85.0)
+        self.assertEqual(row["internal_transfer_source_provider"], "public_reviewed_doc")
+        self.assertEqual(row["internal_transfer_source_key"], "internal_boundary_restriction")
 
     def test_build_fact_curtailment_opportunity_hourly_truth_overrides_proxy_when_available(self) -> None:
         route_score = _route_rows()

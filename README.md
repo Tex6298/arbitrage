@@ -336,6 +336,27 @@ Key behavior:
      --truth-store-db-path bmu_truth_store.sqlite
    ```
 
+   If you have reviewed public boundary or constraint evidence for internal GB transfer, add:
+
+   ```bash
+     --gb-transfer-reviewed-input-path gb_transfer_reviewed_input.csv
+   ```
+
+   A checked-in template is available at:
+
+   ```text
+   gb_transfer_reviewed_input.example.csv
+   ```
+
+   If your source is a messy CSV, TSV, TXT, or PDF-extracted table, normalize it first:
+
+   ```bash
+   python inline_arbitrage_live.py ^
+     --normalize-gb-transfer-reviewed-input ^
+     --gb-transfer-reviewed-raw-path gb_transfer_reviewed_raw.txt ^
+     --gb-transfer-reviewed-normalized-output gb_transfer_reviewed_input.csv
+   ```
+
 18. Materialize the first-pass cluster-aware route-score history:
 
    ```bash
@@ -570,11 +591,27 @@ Key behavior:
 - `fact_gb_transfer_gate_hourly` is a first-pass hourly proxy for internal GB deliverability from a generation cluster to an
   interconnector hub. It combines static reachability status with observed border flow and offered-capacity overlays, so it is
   useful for screening but is still not a validated internal-network transfer truth layer.
+- `gb_transfer_reviewed.py` now materializes:
+  - `fact_gb_transfer_reviewed_period`
+  - `fact_gb_transfer_review_policy`
+  - `fact_gb_transfer_reviewed_hourly`
+- This is the internal-capacity reviewed tier above the proxy. It is fed from normalized public boundary or constraint evidence,
+  keeps policy acceptance explicit, expands reviewed periods to hourly cluster-hub rows, and lets a stronger future API replace
+  the reviewed-input path without changing route or opportunity contracts.
 - `route_score_history.py` now materializes:
   - `fact_route_score_hourly`
 - `fact_route_score_hourly` is the first cluster-aware route-screening surface. It joins route netbacks to
-  `fact_gb_transfer_gate_hourly`, first-pass border capacity, the reviewed-capacity tier, and the France connector layer, then labels each row as
+  `fact_gb_transfer_gate_hourly`, `fact_gb_transfer_reviewed_hourly`, first-pass border capacity, the reviewed-capacity tier,
+  and the France connector layer, then labels each row as
   `confirmed`, `reviewed`, `capacity_unknown`, `blocked_internal_transfer`, `blocked_connector_capacity`, or `no_price_signal`.
+- Route rows now keep explicit internal-transfer lineage:
+  - `internal_transfer_evidence_tier`
+  - `internal_transfer_gate_state`
+  - `internal_transfer_capacity_limit_mw`
+  - `internal_transfer_source_provider`
+  - `internal_transfer_source_key`
+- Accepted reviewed internal evidence overrides the proxy gate for that cluster-hub-hour. If no accepted reviewed evidence
+  exists, the scorer falls back explicitly to the proxy tier instead of silently relabeling it.
 - France route rows now carry cable-specific connector metadata and headroom proxies, so `GB-FR` is no longer treated
   as one undifferentiated border inside `fact_route_score_hourly`.
 - France route rows now also carry operator-availability fields, so `IFA` and `IFA2` can be capped or blocked by
@@ -590,6 +627,8 @@ Key behavior:
   `fact_route_score_hourly` to hourly cluster curtailment magnitude, keeps the curtailment source tier explicit
   (`regional_proxy` first pass, with optional BMU-truth override), and carries the France connector notice timing fields
   into a model-ready opportunity table.
+- It now also preserves the internal transfer evidence tier and gate state, so opportunity rows distinguish reviewed internal
+  restrictions from proxy-only internal deliverability.
 - `opportunity_backtest.py` now materializes:
   - `fact_backtest_prediction_hourly`
 - `opportunity_backtest.py` also now materializes:
@@ -614,13 +653,16 @@ Key behavior:
   - actuals, predictions, residuals, and absolute errors for both deliverable MWh and gross value
   - explicit `model_key` and `split_strategy`
 - `fact_backtest_summary_slice` is the first slice-aware QA surface over the backtest. It aggregates error and bias by
-  model, forecast horizon, cluster, connector hub, route, delivery tier, connector-notice market state, curtailment source tier, and hour of day.
+  model, forecast horizon, cluster, connector hub, route, delivery tier, internal-transfer tier, internal-transfer gate state,
+  connector-notice market state, curtailment source tier, and hour of day.
 - The summary slice table now also carries:
   - `error_focus_area`
   - `error_reduction_priority_rank`
 - Those fields make the “hard error-reduction loop” explicit for:
   - `reviewed`
   - `capacity_unknown`
+  - reviewed versus proxy internal-transfer regimes
+  - blocked internal reviewed states
   - connector-restriction states
   - specific GB-FR cable routes via `hub_key`
 - `fact_backtest_top_error_hourly` is the ranked forensic surface for the worst eligible backtest hours by deliverable
@@ -632,6 +674,8 @@ Key behavior:
   - `cluster_daily`
 - Each drift row keeps explicit feature-mix, target-shift, and residual-shift scores plus `warmup`, `pass`, and `warn`
   states so the warnings can be tied back to a specific route or cluster instead of only the whole system.
+- Drift rows now also expose reviewed-internal-share, proxy-internal-share, and blocked-reviewed-internal share, so internal
+  transfer regime shifts show up directly in the same route and cluster drift surface.
 - The opportunity layer now distinguishes:
   - capacity is tight now
   - the market already knew a connector restriction was coming

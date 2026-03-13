@@ -186,6 +186,33 @@ DATASET_SPECS: Tuple[DatasetSpec, ...] = (
         note="First pass is an hourly proxy built from topology reachability factors plus border flow and offered-capacity overlays. It is useful for deliverability screening, but it is not yet a validated internal-network transfer truth layer.",
     ),
     DatasetSpec(
+        key="fact_gb_transfer_reviewed_period",
+        grain="reviewed period window",
+        spatial_scope="Cluster or parent region to interconnector hub",
+        role="Normalized reviewed public-evidence tier for internal GB transfer restrictions and transfer-cap windows.",
+        source_plan="Normalize manual inputs from public boundary, transfer-cap, and constraint-period evidence into auditable reviewed period rows.",
+        status="implemented_first_pass",
+        note="This tier is deliberately separate from the proxy gate. It is the switchable reviewed layer that can be replaced later by a stronger operator or API feed without changing route or opportunity contracts.",
+    ),
+    DatasetSpec(
+        key="fact_gb_transfer_review_policy",
+        grain="reviewed source policy",
+        spatial_scope="Internal transfer source family",
+        role="Explicit policy surface that decides whether a reviewed internal-transfer source is accepted, proxy-fallback only, or audit-only.",
+        source_plan="Derived from fact_gb_transfer_reviewed_period by source family and latest reviewed publication state.",
+        status="implemented_first_pass",
+        note="This keeps reviewed internal evidence explicit instead of silently upgrading the proxy path.",
+    ),
+    DatasetSpec(
+        key="fact_gb_transfer_reviewed_hourly",
+        grain="hourly",
+        spatial_scope="Cluster to interconnector hub",
+        role="Accepted reviewed internal-transfer surface after period expansion, scope precedence, and overlap resolution.",
+        source_plan="Expand fact_gb_transfer_reviewed_period to hourly rows, let cluster-specific evidence beat region-level rows, and keep the lowest effective reviewed limit when overlapping sources remain.",
+        status="implemented_first_pass",
+        note="This is the reviewed override tier consumed by route and opportunity scoring. If no accepted reviewed row exists, the proxy gate remains the fallback.",
+    ),
+    DatasetSpec(
         key="fact_market_price_hourly",
         grain="hourly",
         spatial_scope="GB and continental zones",
@@ -586,9 +613,9 @@ DATASET_SPECS: Tuple[DatasetSpec, ...] = (
         grain="hourly",
         spatial_scope="Cluster-to-hub-to-route",
         role="Route feasibility, bottleneck, and netback surface for scenario analysis.",
-        source_plan="Combine price netbacks with fact_interconnector_flow_hourly, fact_interconnector_capacity_hourly, fact_interconnector_capacity_reviewed_hourly, fact_interconnector_capacity_review_policy, fact_france_connector_hourly, fact_france_connector_notice_hourly, and fact_gb_transfer_gate_hourly.",
+        source_plan="Combine price netbacks with fact_interconnector_flow_hourly, fact_interconnector_capacity_hourly, fact_interconnector_capacity_reviewed_hourly, fact_interconnector_capacity_review_policy, fact_france_connector_hourly, fact_france_connector_notice_hourly, fact_gb_transfer_gate_hourly, and fact_gb_transfer_reviewed_hourly.",
         status="implemented_first_pass",
-        note="First pass now exists as a cluster-aware hourly history surface with explicit confirmed, reviewed, capacity-unknown, blocked-internal-transfer, and blocked-connector delivery tiers. France rows also carry cable-level connector, operator-availability, and notice/publication-time fields so GB-FR is no longer treated as one undifferentiated border in route scoring.",
+        note="First pass now exists as a cluster-aware hourly history surface with explicit confirmed, reviewed, capacity-unknown, blocked-internal-transfer, and blocked-connector delivery tiers. France rows carry cable-level connector, operator-availability, and notice/publication-time fields, and route rows now also keep explicit internal-transfer evidence tier, gate state, capacity limit, and source lineage so reviewed internal evidence can override the proxy without hiding it.",
     ),
     DatasetSpec(
         key="fact_curtailment_opportunity_hourly",
@@ -597,7 +624,7 @@ DATASET_SPECS: Tuple[DatasetSpec, ...] = (
         role="Opportunity surface that joins route deliverability to cluster curtailment magnitude and notice context.",
         source_plan="Combine fact_route_score_hourly with fact_regional_curtailment_hourly_proxy, and optionally override cluster curtailment magnitude with aggregated fact_bmu_curtailment_truth_half_hourly where a selected truth profile is available.",
         status="implemented_first_pass",
-        note="This is the first actual opportunity layer. It keeps route gating separate from source-magnitude selection and explicitly distinguishes current connector tightness from already-known upcoming connector restrictions.",
+        note="This is the first actual opportunity layer. It keeps route gating separate from source-magnitude selection, distinguishes current connector tightness from already-known upcoming connector restrictions, and now preserves explicit reviewed-versus-proxy internal-transfer lineage for downstream modeling and QA.",
     ),
     DatasetSpec(
         key="fact_backtest_prediction_hourly",
@@ -615,7 +642,7 @@ DATASET_SPECS: Tuple[DatasetSpec, ...] = (
         role="Summarizes backtest quality by model and slice so error concentration is visible before moving to stronger models or maps.",
         source_plan="Aggregate fact_backtest_prediction_hourly by a fixed set of slice dimensions while preserving eligibility and error metrics.",
         status="implemented_first_pass",
-        note="This is the first slice-aware backtest review surface. It is now horizon-aware and carries explicit error-focus areas and priority ranks for reviewed, capacity-unknown, connector-restriction, and GB-FR connector-route regimes.",
+        note="This is the first slice-aware backtest review surface. It is now horizon-aware and carries explicit error-focus areas and priority ranks for reviewed, capacity-unknown, reviewed-versus-proxy internal-transfer, blocked-reviewed-internal, connector-restriction, and GB-FR connector-route regimes.",
     ),
     DatasetSpec(
         key="fact_backtest_top_error_hourly",
@@ -633,7 +660,7 @@ DATASET_SPECS: Tuple[DatasetSpec, ...] = (
         role="Feature drift, target drift, and residual drift monitoring.",
         source_plan="Computed from historical truth, proxy targets, and stored backtest predictions.",
         status="implemented_first_pass",
-        note="First pass now includes daily global, route, and cluster drift slices over backtest predictions. It tracks route-tier mix, connector-notice mix, truth-backed source share, target shift, and residual shift, with explicit warmup, pass, and warn states.",
+        note="First pass now includes daily global, route, and cluster drift slices over backtest predictions. It tracks route-tier mix, internal-transfer reviewed/proxy mix, blocked-reviewed-internal share, connector-notice mix, truth-backed source share, target shift, and residual shift, with explicit warmup, pass, and warn states.",
     ),
 )
 
