@@ -102,6 +102,15 @@ def _empty_route_score_frame() -> pd.DataFrame:
             "connector_notice_source_document_url",
             "connector_notice_source_reference",
             "connector_notice_source_published_utc",
+            "connector_itl_state",
+            "connector_itl_evidence_tier",
+            "connector_itl_tier_accepted_flag",
+            "connector_itl_capacity_limit_mw",
+            "connector_itl_auction_type",
+            "connector_itl_restriction_reason",
+            "connector_itl_source_provider",
+            "connector_itl_source_key",
+            "connector_itl_source_published_utc",
             "connector_key",
             "connector_label",
             "connector_operator",
@@ -170,6 +179,7 @@ def build_fact_route_score_hourly(
     prices: pd.DataFrame,
     gb_transfer_gate: pd.DataFrame,
     gb_transfer_reviewed_hourly: pd.DataFrame | None = None,
+    interconnector_itl: pd.DataFrame | None = None,
     interconnector_flow: pd.DataFrame | None = None,
     interconnector_capacity: pd.DataFrame | None = None,
     interconnector_capacity_reviewed: pd.DataFrame | None = None,
@@ -329,6 +339,67 @@ def build_fact_route_score_hourly(
         utc=True,
         errors="coerce",
     )
+    connector_itl_lookup = interconnector_itl.copy() if interconnector_itl is not None else pd.DataFrame()
+    if connector_itl_lookup.empty:
+        connector_itl_lookup = pd.DataFrame(
+            columns=[
+                "interval_start_utc",
+                "connector_key",
+                "connector_label",
+                "direction_key",
+                "itl_state",
+                "itl_mw",
+                "auction_type",
+                "restriction_reason",
+                "source_provider",
+                "source_key",
+                "source_published_utc",
+            ]
+        )
+    connector_itl_lookup["interval_start_utc"] = pd.to_datetime(
+        connector_itl_lookup["interval_start_utc"],
+        utc=True,
+        errors="coerce",
+    )
+    connector_itl_lookup["source_published_utc"] = pd.to_datetime(
+        connector_itl_lookup.get("source_published_utc"),
+        utc=True,
+        errors="coerce",
+    )
+    connector_itl_lookup = connector_itl_lookup[
+        connector_itl_lookup["direction_key"].eq("gb_to_neighbor")
+    ].copy()
+    connector_itl_lookup = connector_itl_lookup.rename(
+        columns={
+            "connector_key": "itl_connector_key",
+            "connector_label": "itl_connector_label",
+            "itl_state": "connector_itl_state",
+            "itl_mw": "connector_itl_capacity_limit_mw",
+            "auction_type": "connector_itl_auction_type",
+            "restriction_reason": "connector_itl_restriction_reason",
+            "source_provider": "connector_itl_source_provider",
+            "source_key": "connector_itl_source_key",
+            "source_published_utc": "connector_itl_source_published_utc",
+        }
+    )
+    connector_itl_lookup["connector_itl_evidence_tier"] = "neso_interconnector_itl"
+    connector_itl_lookup["connector_itl_tier_accepted_flag"] = True
+    connector_itl_lookup = connector_itl_lookup[
+        [
+            "interval_start_utc",
+            "itl_connector_key",
+            "itl_connector_label",
+            "connector_itl_state",
+            "connector_itl_evidence_tier",
+            "connector_itl_tier_accepted_flag",
+            "connector_itl_capacity_limit_mw",
+            "connector_itl_auction_type",
+            "connector_itl_restriction_reason",
+            "connector_itl_source_provider",
+            "connector_itl_source_key",
+            "connector_itl_source_published_utc",
+        ]
+    ].drop_duplicates(subset=["interval_start_utc", "itl_connector_key"], keep="last")
 
     route_preferences = _route_hub_preferences()
     transfer_gate = gb_transfer_gate.copy()
@@ -478,6 +549,12 @@ def build_fact_route_score_hourly(
             how="left",
         )
         route_transfer = route_transfer.drop(columns=["border_key"], errors="ignore")
+        route_transfer = route_transfer.merge(
+            connector_itl_lookup,
+            left_on=["interval_start_utc", "hub_key"],
+            right_on=["interval_start_utc", "itl_connector_key"],
+            how="left",
+        )
         if border_key == "GB-FR" and not connector_lookup.empty:
             route_transfer = route_transfer.merge(
                 connector_lookup[
@@ -553,6 +630,17 @@ def build_fact_route_score_hourly(
                 suffixes=("", "_notice"),
             )
         for column, default in (
+            ("itl_connector_key", pd.NA),
+            ("itl_connector_label", pd.NA),
+            ("connector_itl_state", pd.NA),
+            ("connector_itl_evidence_tier", pd.NA),
+            ("connector_itl_tier_accepted_flag", False),
+            ("connector_itl_capacity_limit_mw", np.nan),
+            ("connector_itl_auction_type", pd.NA),
+            ("connector_itl_restriction_reason", pd.NA),
+            ("connector_itl_source_provider", pd.NA),
+            ("connector_itl_source_key", pd.NA),
+            ("connector_itl_source_published_utc", pd.NaT),
             ("connector_key", pd.NA),
             ("connector_label", pd.NA),
             ("operator_name", pd.NA),
@@ -614,6 +702,37 @@ def build_fact_route_score_hourly(
         ):
             if column not in route_transfer.columns:
                 route_transfer[column] = default
+        route_transfer["connector_itl_tier_accepted_flag"] = route_transfer[
+            "connector_itl_tier_accepted_flag"
+        ].where(route_transfer["connector_itl_tier_accepted_flag"].notna(), False).astype(bool)
+        route_transfer["connector_key"] = route_transfer["connector_key"].where(
+            route_transfer["connector_key"].notna(),
+            route_transfer["itl_connector_key"],
+        )
+        route_transfer["connector_label"] = route_transfer["connector_label"].where(
+            route_transfer["connector_label"].notna(),
+            route_transfer["itl_connector_label"],
+        )
+        existing_connector_limit = pd.to_numeric(route_transfer["connector_headroom_proxy_mw"], errors="coerce")
+        connector_itl_limit = pd.to_numeric(route_transfer["connector_itl_capacity_limit_mw"], errors="coerce")
+        connector_itl_blocked = route_transfer["connector_itl_tier_accepted_flag"] & connector_itl_limit.fillna(np.inf).le(0)
+        connector_itl_binding = (
+            route_transfer["connector_itl_tier_accepted_flag"]
+            & connector_itl_limit.notna()
+            & (~existing_connector_limit.notna() | connector_itl_limit.lt(existing_connector_limit))
+        )
+        route_transfer.loc[connector_itl_binding, "connector_headroom_proxy_mw"] = connector_itl_limit.loc[
+            connector_itl_binding
+        ]
+        route_transfer.loc[connector_itl_binding, "connector_capacity_evidence_tier"] = "neso_interconnector_itl"
+        route_transfer.loc[connector_itl_binding & ~connector_itl_blocked, "connector_gate_state"] = "itl_capacity_cap"
+        route_transfer.loc[connector_itl_binding & ~connector_itl_blocked, "connector_gate_reason"] = (
+            "NESO interconnector ITL caps exportable connector headroom for this hour."
+        )
+        route_transfer.loc[connector_itl_blocked, "connector_gate_state"] = "itl_blocked"
+        route_transfer.loc[connector_itl_blocked, "connector_gate_reason"] = (
+            "NESO interconnector ITL reports zero or negative export headroom for this hour."
+        )
 
         internal_review_accepted = route_transfer["internal_transfer_tier_accepted_flag"].where(
             route_transfer["internal_transfer_tier_accepted_flag"].notna(),
@@ -678,6 +797,10 @@ def build_fact_route_score_hourly(
             route_transfer["capacity_policy_action"].eq("allow_reviewed_explicit_daily")
             & route_transfer["reviewed_border_gate_state"].isin(["pass", "flow_unknown_capacity_published"])
         )
+        connector_itl_reviewed_available = (
+            route_transfer["connector_itl_tier_accepted_flag"]
+            & pd.to_numeric(route_transfer["connector_itl_capacity_limit_mw"], errors="coerce").fillna(0).gt(0)
+        )
         connector_reviewed_available = (
             route_transfer["route_border_key"].eq("GB-FR")
             & route_transfer["connector_capacity_evidence_tier"].eq("reviewed_public_doc_period")
@@ -713,6 +836,10 @@ def build_fact_route_score_hourly(
         route_transfer.loc[connector_blocked, "route_delivery_reason"] = (
             "The selected connector has no deliverable headroom after cable limits and operator availability are applied."
         )
+        route_transfer.loc[
+            connector_blocked & route_transfer["connector_gate_state"].eq("itl_blocked"),
+            "route_delivery_reason",
+        ] = "NESO interconnector ITL blocks exportable connector headroom for this hour."
 
         confirmed_mask = price_positive & ~transfer_blocked & ~connector_blocked & confirmed_available
         route_transfer.loc[confirmed_mask, "route_delivery_tier"] = "confirmed"
@@ -737,7 +864,7 @@ def build_fact_route_score_hourly(
             & ~transfer_blocked
             & ~connector_blocked
             & ~confirmed_available
-            & (reviewed_available | connector_reviewed_available)
+            & (reviewed_available | connector_reviewed_available | connector_itl_reviewed_available)
         )
         route_transfer.loc[reviewed_mask, "route_delivery_tier"] = "reviewed"
         route_transfer.loc[reviewed_mask, "route_delivery_signal"] = "EXPORT_REVIEWED"
@@ -763,6 +890,10 @@ def build_fact_route_score_hourly(
         route_transfer.loc[reviewed_publication_only, "route_delivery_reason"] = (
             "The route is price-positive and internally reachable, and a reviewed France connector publication period provides an auditable cable-level reviewed tier even though border capacity is still unpublished."
         )
+        reviewed_itl_only = reviewed_mask & ~reviewed_available & ~connector_reviewed_available & connector_itl_reviewed_available
+        route_transfer.loc[reviewed_itl_only, "route_delivery_reason"] = (
+            "The route is price-positive and internally reachable, and NESO interconnector ITL provides an auditable connector-level reviewed tier even though the border-capacity gate is still unpublished or unaccepted."
+        )
 
         unknown_mask = (
             price_positive
@@ -771,6 +902,7 @@ def build_fact_route_score_hourly(
             & ~confirmed_available
             & ~reviewed_available
             & ~connector_reviewed_available
+            & ~connector_itl_reviewed_available
         )
         route_transfer.loc[unknown_mask, "route_delivery_tier"] = "capacity_unknown"
         route_transfer.loc[unknown_mask, "route_delivery_signal"] = "EXPORT_CAPACITY_UNKNOWN"
@@ -887,6 +1019,15 @@ def build_fact_route_score_hourly(
         ("connector_notice_source_document_url", pd.NA),
         ("connector_notice_source_reference", pd.NA),
         ("connector_notice_source_published_utc", pd.NaT),
+        ("connector_itl_state", pd.NA),
+        ("connector_itl_evidence_tier", pd.NA),
+        ("connector_itl_tier_accepted_flag", False),
+        ("connector_itl_capacity_limit_mw", np.nan),
+        ("connector_itl_auction_type", pd.NA),
+        ("connector_itl_restriction_reason", pd.NA),
+        ("connector_itl_source_provider", pd.NA),
+        ("connector_itl_source_key", pd.NA),
+        ("connector_itl_source_published_utc", pd.NaT),
     ):
         if column not in fact.columns:
             fact[column] = default
@@ -901,6 +1042,7 @@ def materialize_route_score_history(
     prices: pd.DataFrame,
     gb_transfer_gate: pd.DataFrame,
     gb_transfer_reviewed_hourly: pd.DataFrame | None = None,
+    interconnector_itl: pd.DataFrame | None = None,
     interconnector_flow: pd.DataFrame | None = None,
     interconnector_capacity: pd.DataFrame | None = None,
     interconnector_capacity_reviewed: pd.DataFrame | None = None,
@@ -912,6 +1054,7 @@ def materialize_route_score_history(
         prices=prices,
         gb_transfer_gate=gb_transfer_gate,
         gb_transfer_reviewed_hourly=gb_transfer_reviewed_hourly,
+        interconnector_itl=interconnector_itl,
         interconnector_flow=interconnector_flow,
         interconnector_capacity=interconnector_capacity,
         interconnector_capacity_reviewed=interconnector_capacity_reviewed,

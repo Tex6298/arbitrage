@@ -12,6 +12,7 @@ import pandas as pd
 TRUTH_STORE_PRIMARY_KEYS: Dict[str, list[str]] = {
     "dim_interconnector_cable": ["connector_key"],
     "fact_interconnector_flow_hourly": ["interval_start_utc", "border_key", "direction_key"],
+    "fact_interconnector_itl_hourly": ["interval_start_utc", "connector_key", "direction_key"],
     "fact_interconnector_capacity_hourly": [
         "interval_start_utc",
         "border_key",
@@ -19,6 +20,7 @@ TRUTH_STORE_PRIMARY_KEYS: Dict[str, list[str]] = {
         "auction_type",
         "contract_market_agreement_type",
     ],
+    "fact_day_ahead_constraint_boundary_half_hourly": ["interval_start_utc", "boundary_key"],
     "fact_interconnector_capacity_reviewed_hourly": [
         "interval_start_utc",
         "border_key",

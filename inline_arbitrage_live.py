@@ -48,6 +48,12 @@ from curtailment_opportunity import (
     fetch_cluster_curtailment_proxy_hourly,
     materialize_curtailment_opportunity_history,
 )
+from day_ahead_constraint_boundary import (
+    DAY_AHEAD_CONSTRAINT_BOUNDARY_TABLE,
+    build_fact_day_ahead_constraint_boundary_half_hourly,
+    materialize_day_ahead_constraint_boundary_history,
+    parse_iso_date as parse_boundary_iso_date,
+)
 from opportunity_backtest import (
     BACKTEST_PREDICTION_TABLE,
     BACKTEST_SUMMARY_SLICE_TABLE,
@@ -124,6 +130,12 @@ from interconnector_flow import (
     build_fact_interconnector_flow_hourly,
     materialize_interconnector_flow_history,
     parse_iso_date as parse_flow_iso_date,
+)
+from interconnector_itl import (
+    INTERCONNECTOR_ITL_TABLE,
+    build_fact_interconnector_itl_hourly,
+    materialize_interconnector_itl_history,
+    parse_iso_date as parse_itl_iso_date,
 )
 from physical_constraints import assumption_frame, compute_netbacks
 from route_score_history import ROUTE_SCORE_TABLE, materialize_route_score_history
@@ -901,9 +913,19 @@ def main() -> int:
         help="Fetch and save border-level ENTSO-E physical interconnector flow history, then exit",
     )
     parser.add_argument(
+        "--materialize-interconnector-itl",
+        action="store_true",
+        help="Fetch and save NESO interconnector ITL history for connector-specific export and import limits, then exit",
+    )
+    parser.add_argument(
         "--materialize-interconnector-capacity",
         action="store_true",
         help="Fetch and save border-level ENTSO-E offered interconnector capacity history, then exit",
+    )
+    parser.add_argument(
+        "--materialize-day-ahead-constraint-boundary",
+        action="store_true",
+        help="Fetch and save NESO day-ahead constraint boundary flow and limit history, then exit",
     )
     parser.add_argument(
         "--materialize-interconnector-capacity-audit",
@@ -947,6 +969,13 @@ def main() -> int:
         default="interconnector_flow_history",
         help="Output directory for interconnector flow history",
     )
+    parser.add_argument("--itl-start", help="Interconnector ITL materialization start date, inclusive (YYYY-MM-DD)")
+    parser.add_argument("--itl-end", help="Interconnector ITL materialization end date, inclusive (YYYY-MM-DD)")
+    parser.add_argument(
+        "--itl-output-dir",
+        default="interconnector_itl_history",
+        help="Output directory for interconnector ITL history",
+    )
     parser.add_argument(
         "--capacity-start",
         help="Interconnector capacity materialization start date, inclusive (YYYY-MM-DD)",
@@ -959,6 +988,19 @@ def main() -> int:
         "--capacity-output-dir",
         default="interconnector_capacity_history",
         help="Output directory for interconnector capacity history",
+    )
+    parser.add_argument(
+        "--boundary-start",
+        help="Day-ahead constraint boundary materialization start date, inclusive (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--boundary-end",
+        help="Day-ahead constraint boundary materialization end date, inclusive (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--boundary-output-dir",
+        default="day_ahead_constraint_boundary_history",
+        help="Output directory for day-ahead constraint boundary history",
     )
     parser.add_argument(
         "--opportunity-start",
@@ -1930,6 +1972,40 @@ def main() -> int:
             print(f"ERROR: {exc}", file=sys.stderr)
             return 1
 
+    if args.materialize_interconnector_itl:
+        if not args.itl_start or not args.itl_end:
+            raise SystemExit("--materialize-interconnector-itl requires --itl-start and --itl-end")
+
+        itl_start = parse_itl_iso_date(args.itl_start)
+        itl_end = parse_itl_iso_date(args.itl_end)
+        if itl_end < itl_start:
+            raise SystemExit("--itl-end must be on or after --itl-start")
+
+        try:
+            frames = materialize_interconnector_itl_history(
+                start_date=itl_start,
+                end_date=itl_end,
+                output_dir=args.itl_output_dir,
+            )
+            print(
+                f"[source=neso] Materialized {len(frames)} tables for {itl_start} to {itl_end} (inclusive)"
+            )
+            for table_name, frame in frames.items():
+                output_path = os.path.join(args.itl_output_dir, f"{table_name}.csv")
+                print(f"{table_name}: rows={len(frame)} path={output_path}")
+            if args.truth_store_db_path:
+                summary = upsert_truth_frames_to_sqlite(frames, args.truth_store_db_path)
+                print(f"[store=sqlite] Upserted interconnector ITL tables into {args.truth_store_db_path}")
+                for _, row in summary.iterrows():
+                    print(
+                        f"{row['table_name']}: rows_loaded={int(row['rows_loaded'])} "
+                        f"table_rows={int(row['table_row_count'])}"
+                    )
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
     if args.materialize_interconnector_capacity:
         if not args.capacity_start or not args.capacity_end:
             raise SystemExit("--materialize-interconnector-capacity requires --capacity-start and --capacity-end")
@@ -1959,6 +2035,42 @@ def main() -> int:
             if args.truth_store_db_path:
                 summary = upsert_truth_frames_to_sqlite(frames, args.truth_store_db_path)
                 print(f"[store=sqlite] Upserted interconnector capacity tables into {args.truth_store_db_path}")
+                for _, row in summary.iterrows():
+                    print(
+                        f"{row['table_name']}: rows_loaded={int(row['rows_loaded'])} "
+                        f"table_rows={int(row['table_row_count'])}"
+                    )
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
+    if args.materialize_day_ahead_constraint_boundary:
+        if not args.boundary_start or not args.boundary_end:
+            raise SystemExit(
+                "--materialize-day-ahead-constraint-boundary requires --boundary-start and --boundary-end"
+            )
+
+        boundary_start = parse_boundary_iso_date(args.boundary_start)
+        boundary_end = parse_boundary_iso_date(args.boundary_end)
+        if boundary_end < boundary_start:
+            raise SystemExit("--boundary-end must be on or after --boundary-start")
+
+        try:
+            frames = materialize_day_ahead_constraint_boundary_history(
+                start_date=boundary_start,
+                end_date=boundary_end,
+                output_dir=args.boundary_output_dir,
+            )
+            print(
+                f"[source=neso] Materialized {len(frames)} tables for {boundary_start} to {boundary_end} (inclusive)"
+            )
+            for table_name, frame in frames.items():
+                output_path = os.path.join(args.boundary_output_dir, f"{table_name}.csv")
+                print(f"{table_name}: rows={len(frame)} path={output_path}")
+            if args.truth_store_db_path:
+                summary = upsert_truth_frames_to_sqlite(frames, args.truth_store_db_path)
+                print(f"[store=sqlite] Upserted day-ahead constraint boundary tables into {args.truth_store_db_path}")
                 for _, row in summary.iterrows():
                     print(
                         f"{row['table_name']}: rows_loaded={int(row['rows_loaded'])} "
@@ -2247,6 +2359,10 @@ def main() -> int:
                 end_date=network_end,
                 token=entsoe_token,
             )
+            interconnector_itl = build_fact_interconnector_itl_hourly(
+                start_date=network_start,
+                end_date=network_end,
+            )
             interconnector_capacity = build_fact_interconnector_capacity_hourly(
                 start_date=network_start,
                 end_date=network_end,
@@ -2331,6 +2447,7 @@ def main() -> int:
                 output_dir=args.opportunity_output_dir,
                 prices=prices,
                 gb_transfer_gate=gb_transfer_gate,
+                interconnector_itl=interconnector_itl,
                 interconnector_flow=interconnector_flow,
                 interconnector_capacity=interconnector_capacity,
                 interconnector_capacity_reviewed=reviewed_capacity,
@@ -2377,12 +2494,17 @@ def main() -> int:
                 os.path.join(args.opportunity_output_dir, f"{GB_TRANSFER_REVIEWED_HOURLY_TABLE}.csv"),
                 index=False,
             )
+            interconnector_itl.to_csv(
+                os.path.join(args.opportunity_output_dir, f"{INTERCONNECTOR_ITL_TABLE}.csv"),
+                index=False,
+            )
             frames = {
                 ROUTE_SCORE_TABLE: route_score,
                 "fact_regional_curtailment_hourly_proxy": cluster_curtailment_proxy,
                 GB_TRANSFER_REVIEWED_PERIOD_TABLE: gb_transfer_reviewed_period,
                 GB_TRANSFER_REVIEW_POLICY_TABLE: gb_transfer_review_policy,
                 GB_TRANSFER_REVIEWED_HOURLY_TABLE: gb_transfer_reviewed_hourly,
+                INTERCONNECTOR_ITL_TABLE: interconnector_itl,
                 **opportunity_frames,
             }
             print(
@@ -2395,6 +2517,7 @@ def main() -> int:
             if args.truth_store_db_path:
                 store_frames = dict(frames)
                 store_frames[GB_TRANSFER_GATE_TABLE] = gb_transfer_gate
+                store_frames[INTERCONNECTOR_ITL_TABLE] = interconnector_itl
                 store_frames[GB_TRANSFER_REVIEWED_PERIOD_TABLE] = gb_transfer_reviewed_period
                 store_frames[GB_TRANSFER_REVIEW_POLICY_TABLE] = gb_transfer_review_policy
                 store_frames[GB_TRANSFER_REVIEWED_HOURLY_TABLE] = gb_transfer_reviewed_hourly
@@ -2492,6 +2615,10 @@ def main() -> int:
                 end_date=network_end,
                 token=entsoe_token,
             )
+            interconnector_itl = build_fact_interconnector_itl_hourly(
+                start_date=network_start,
+                end_date=network_end,
+            )
             interconnector_capacity = build_fact_interconnector_capacity_hourly(
                 start_date=network_start,
                 end_date=network_end,
@@ -2576,6 +2703,7 @@ def main() -> int:
                 output_dir=args.route_score_output_dir,
                 prices=prices,
                 gb_transfer_gate=gb_transfer_gate,
+                interconnector_itl=interconnector_itl,
                 interconnector_flow=interconnector_flow,
                 interconnector_capacity=interconnector_capacity,
                 interconnector_capacity_reviewed=reviewed_capacity,
@@ -2587,6 +2715,7 @@ def main() -> int:
             frames[GB_TRANSFER_REVIEWED_PERIOD_TABLE] = gb_transfer_reviewed_period
             frames[GB_TRANSFER_REVIEW_POLICY_TABLE] = gb_transfer_review_policy
             frames[GB_TRANSFER_REVIEWED_HOURLY_TABLE] = gb_transfer_reviewed_hourly
+            frames[INTERCONNECTOR_ITL_TABLE] = interconnector_itl
             gb_transfer_reviewed_period.to_csv(
                 os.path.join(args.route_score_output_dir, f"{GB_TRANSFER_REVIEWED_PERIOD_TABLE}.csv"),
                 index=False,
@@ -2599,6 +2728,10 @@ def main() -> int:
                 os.path.join(args.route_score_output_dir, f"{GB_TRANSFER_REVIEWED_HOURLY_TABLE}.csv"),
                 index=False,
             )
+            interconnector_itl.to_csv(
+                os.path.join(args.route_score_output_dir, f"{INTERCONNECTOR_ITL_TABLE}.csv"),
+                index=False,
+            )
             print(
                 f"[source=elexon_mid:{provider_used}+entsoe+entsoe_network] Materialized {len(frames)} tables for "
                 f"{route_score_start} to {route_score_end} (inclusive)"
@@ -2609,6 +2742,7 @@ def main() -> int:
             if args.truth_store_db_path:
                 store_frames = dict(frames)
                 store_frames[GB_TRANSFER_GATE_TABLE] = gb_transfer_gate
+                store_frames[INTERCONNECTOR_ITL_TABLE] = interconnector_itl
                 store_frames[DIM_INTERCONNECTOR_CABLE_TABLE] = interconnector_cable_frame()
                 store_frames[INTERCONNECTOR_CAPACITY_REVIEW_POLICY_TABLE] = review_policy
                 store_frames[INTERCONNECTOR_CAPACITY_REVIEWED_TABLE] = reviewed_capacity

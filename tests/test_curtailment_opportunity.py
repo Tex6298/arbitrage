@@ -46,6 +46,9 @@ def _route_rows() -> pd.DataFrame:
                 "connector_notice_lead_time_hours": 15.0,
                 "connector_notice_revision_count": 2,
                 "connector_notice_source_key": "eleclink_ntc_restriction",
+                "connector_itl_state": "published_restriction",
+                "connector_itl_capacity_limit_mw": 80.0,
+                "connector_itl_source_key": "neso_interconnector_itl",
                 "connector_gate_state": "reviewed_publication_cap",
                 "connector_capacity_evidence_tier": "reviewed_public_doc_period",
                 "reviewed_publication_state": "partial_capacity",
@@ -92,6 +95,9 @@ class CurtailmentOpportunityTests(unittest.TestCase):
         self.assertAlmostEqual(float(row["internal_transfer_capacity_limit_mw"]), 85.0)
         self.assertEqual(row["internal_transfer_source_provider"], "public_reviewed_doc")
         self.assertEqual(row["internal_transfer_source_key"], "internal_boundary_restriction")
+        self.assertEqual(row["connector_itl_state"], "published_restriction")
+        self.assertAlmostEqual(float(row["connector_itl_capacity_limit_mw"]), 80.0)
+        self.assertEqual(row["connector_itl_source_key"], "neso_interconnector_itl")
 
     def test_build_fact_curtailment_opportunity_hourly_truth_overrides_proxy_when_available(self) -> None:
         route_score = _route_rows()

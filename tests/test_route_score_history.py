@@ -186,6 +186,68 @@ class RouteScoreHistoryTests(unittest.TestCase):
         self.assertAlmostEqual(float(row["deliverable_mw_proxy"]), 500.0)
         self.assertEqual(row["reviewed_border_gate_state"], "pass")
 
+    def test_build_fact_route_score_hourly_uses_connector_itl_reviewed_tier(self) -> None:
+        prices = _sample_prices()
+        gb_transfer_gate = pd.DataFrame(
+            [
+                {
+                    "date": "2024-10-01",
+                    "interval_start_local": pd.Timestamp("2024-10-01T00:00:00+01:00"),
+                    "interval_end_local": pd.Timestamp("2024-10-01T01:00:00+01:00"),
+                    "interval_start_utc": pd.Timestamp("2024-09-30T23:00:00Z"),
+                    "interval_end_utc": pd.Timestamp("2024-10-01T00:00:00Z"),
+                    "cluster_key": "east_anglia_offshore",
+                    "cluster_label": "East Anglia Offshore",
+                    "parent_region": "England/Wales",
+                    "hub_key": "britned",
+                    "hub_label": "BritNed",
+                    "hub_target_zone": "NL",
+                    "hub_neighbor_domain_key": "NL",
+                    "hub_current_route_fit": "current",
+                    "transfer_gate_mw_proxy": 300.0,
+                    "transfer_gate_utilization_proxy": 0.40,
+                    "gate_state": "capacity_unknown_reachable",
+                    "gate_reason": "Transfer remains reachable, but border capacity is unpublished.",
+                }
+            ]
+        )
+        interconnector_itl = pd.DataFrame(
+            [
+                {
+                    "interval_start_utc": "2024-09-30T23:00:00Z",
+                    "connector_key": "britned",
+                    "connector_label": "BritNed",
+                    "direction_key": "gb_to_neighbor",
+                    "itl_state": "published_restriction",
+                    "itl_mw": 120.0,
+                    "auction_type": "Intraday 1",
+                    "restriction_reason": "System Security",
+                    "source_provider": "neso",
+                    "source_key": "neso_interconnector_itl",
+                    "source_published_utc": "2024-09-30T22:00:00Z",
+                }
+            ]
+        )
+
+        fact = build_fact_route_score_hourly(
+            prices=prices,
+            gb_transfer_gate=gb_transfer_gate,
+            interconnector_itl=interconnector_itl,
+            interconnector_flow=None,
+            interconnector_capacity=None,
+            interconnector_capacity_reviewed=None,
+            interconnector_capacity_review_policy=None,
+        )
+
+        row = fact.iloc[0]
+        self.assertEqual(row["route_delivery_tier"], "reviewed")
+        self.assertEqual(row["route_delivery_signal"], "EXPORT_REVIEWED")
+        self.assertEqual(row["connector_key"], "britned")
+        self.assertEqual(row["connector_itl_state"], "published_restriction")
+        self.assertEqual(row["connector_capacity_evidence_tier"], "neso_interconnector_itl")
+        self.assertAlmostEqual(float(row["connector_itl_capacity_limit_mw"]), 120.0)
+        self.assertAlmostEqual(float(row["deliverable_mw_proxy"]), 120.0)
+
     def test_build_fact_route_score_hourly_blocks_internal_transfer_before_capacity(self) -> None:
         prices = _sample_prices()
         gb_transfer_gate = pd.DataFrame(
