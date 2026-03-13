@@ -46,6 +46,34 @@ class DayAheadConstraintBoundaryTests(unittest.TestCase):
         self.assertEqual(available["boundary_state"], "constraint_boundary_available")
         self.assertAlmostEqual(float(available["utilization_ratio"]), 0.48)
 
+    def test_build_fact_day_ahead_constraint_boundary_half_hourly_matches_ckan_machine_name_and_path(self) -> None:
+        resource = {
+            "id": "boundary-resource",
+            "name": "day_ahead_constraint_flows_and_limits",
+            "title": "Day Ahead Constraint Flows and Limits",
+            "path": "https://example.com/boundary.csv",
+        }
+        raw = pd.DataFrame(
+            [
+                {
+                    "Constraint Group": "EC5",
+                    "Date (GMT/BST)": "2024-10-01T10:00:00",
+                    "Limit (MW)": 4000,
+                    "Flow (MW)": 3980,
+                }
+            ]
+        )
+
+        with patch("day_ahead_constraint_boundary._datapackage_show", return_value={"result": {"resources": [resource]}}):
+            with patch("day_ahead_constraint_boundary._fetch_csv", return_value=raw):
+                fact = build_fact_day_ahead_constraint_boundary_half_hourly(
+                    start_date=dt.date(2024, 10, 1),
+                    end_date=dt.date(2024, 10, 1),
+                )
+
+        self.assertEqual(len(fact), 1)
+        self.assertEqual(fact.iloc[0]["source_document_url"], "https://example.com/boundary.csv")
+
 
 if __name__ == "__main__":
     unittest.main()

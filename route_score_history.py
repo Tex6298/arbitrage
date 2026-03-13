@@ -175,6 +175,45 @@ def _overlay_lookup(frame: pd.DataFrame, prefix: str) -> pd.DataFrame:
     )
 
 
+def _aggregate_internal_review_lookup(frame: pd.DataFrame) -> pd.DataFrame:
+    if frame.empty:
+        return frame
+    work = frame.copy()
+    work["internal_transfer_tier_accepted_flag"] = work["internal_transfer_tier_accepted_flag"].where(
+        work["internal_transfer_tier_accepted_flag"].notna(),
+        False,
+    ).astype(bool)
+    work = work[work["internal_transfer_tier_accepted_flag"]].copy()
+    if work.empty:
+        return work
+    work["internal_transfer_reviewed_capacity_limit_mw"] = pd.to_numeric(
+        work["internal_transfer_reviewed_capacity_limit_mw"],
+        errors="coerce",
+    )
+    work["_blocked_rank"] = work["internal_transfer_reviewed_gate_state"].fillna("").astype(str).str.startswith("blocked_").map(
+        {True: 0, False: 1}
+    )
+    work["_limit_sort"] = work["internal_transfer_reviewed_capacity_limit_mw"].fillna(np.inf)
+    work["_tier_sort"] = work["internal_transfer_reviewed_evidence_tier"].map(
+        {
+            "reviewed_internal_constraint_boundary": 0,
+            "reviewed_internal_transfer_period": 1,
+        }
+    ).fillna(9)
+    work = work.sort_values(
+        [
+            "interval_start_utc",
+            "cluster_key",
+            "hub_key",
+            "_blocked_rank",
+            "_limit_sort",
+            "_tier_sort",
+        ],
+        ascending=[True, True, True, True, True, True],
+    )
+    return work.drop_duplicates(["interval_start_utc", "cluster_key", "hub_key"], keep="first").copy()
+
+
 def build_fact_route_score_hourly(
     prices: pd.DataFrame,
     gb_transfer_gate: pd.DataFrame,
@@ -456,6 +495,7 @@ def build_fact_route_score_hourly(
             "source_key": "internal_transfer_source_key",
         }
     )
+    internal_review_lookup = _aggregate_internal_review_lookup(internal_review_lookup)
 
     rows = []
     for route_name, preferred_hubs in route_preferences.items():

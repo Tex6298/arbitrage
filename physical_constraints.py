@@ -76,16 +76,16 @@ ASSUMPTIONS: Tuple[ConstraintAssumption, ...] = (
     ConstraintAssumption(
         key="internal_transfer",
         question="Can power move from the national connection point to the international connector in the same hour?",
-        current_assumption="A first-pass fact_gb_transfer_gate_hourly proxy now exists, and route/opportunity layers can override it with a separate reviewed internal-transfer tier built from public boundary and constraint evidence. The legacy live route CSV path is still simpler than the historical cluster-aware stack.",
-        risk="High. The fallback gate is still a proxy, and the reviewed tier is only as strong as the public evidence provided, so deliverability can still be overstated when internal GB transfer is tighter than the heuristic or the reviewed inputs are incomplete.",
-        next_solution="Keep the reviewed tier explicit, expand the public internal evidence base, and replace the reviewed-input path with stronger operator or API feeds when available before attempting PTDF-style limits.",
+        current_assumption="A first-pass fact_gb_transfer_gate_hourly proxy exists, and route/opportunity layers can now override it with two explicit reviewed internal tiers: normalized reviewed transfer periods and a first-pass NESO day-ahead boundary tightening layer for mapped corridors.",
+        risk="High. The fallback gate is still a proxy, the reviewed tiers only cover mapped corridors, and the new boundary layer is day-ahead public evidence rather than operational transfer truth, so deliverability can still be overstated when internal GB transfer is tighter than the heuristic or the reviewed corridor mapping is incomplete.",
+        next_solution="Keep both reviewed tiers explicit, expand corridor coverage with stronger public boundary evidence, and replace the reviewed-input path with stronger operator or API feeds when available before attempting PTDF-style limits.",
     ),
     ConstraintAssumption(
         key="cross_border_capacity",
         question="Is interconnector capacity actually available on the route?",
-        current_assumption="Route scoring now uses first-pass border flow plus first-pass offered capacity, a separate review-policy surface exists for alternate explicit-daily capacity on GB-NL, GB-BE, and GB-DK1, and GB-FR now has a France-specific cable layer with separate operator truth, reviewed public-document tiers, and an as-of notice/publication-time feature layer.",
-        risk="Medium to high. Auctioned capacity, outages, and counterflows can invalidate the route.",
-        next_solution="Decide whether reviewed explicit-daily tiers should be promoted into route scoring, keep improving the switchable ElecLink operator and public-document source stack, then replace the remaining border proxies with ATC/NTC, auction allocations, physical flow saturation by border and hour, and publication-time-aware capacity expectations.",
+        current_assumption="Route scoring now uses first-pass border flow plus first-pass offered capacity, a separate review-policy surface exists for alternate explicit-daily capacity on GB-NL, GB-BE, and GB-DK1, NESO interconnector ITL now provides a connector-level reviewed cap layer for IFA, IFA2, BritNed, and ElecLink, and GB-FR now has a France-specific cable layer with separate operator truth, reviewed public-document tiers, and an as-of notice/publication-time feature layer.",
+        risk="Medium to high. Auctioned capacity, outages, ITL submission scope, and counterflows can still invalidate the route.",
+        next_solution="Keep the connector-level ITL tier explicit, decide whether reviewed explicit-daily tiers should be promoted further, keep improving the switchable France connector source stack, and then replace the remaining border proxies with ATC/NTC, auction allocations, physical flow saturation by border and hour, and publication-time-aware capacity expectations.",
     ),
     ConstraintAssumption(
         key="route_costs",
@@ -105,8 +105,9 @@ def remaining_workstreams() -> List[str]:
     return [
         "Replace the seed cluster registry in asset_mapping.py with confirmed wind farm, node, and ownership metadata.",
         "Add curtailment or redispatch signals so the model distinguishes generic spreads from forced-export conditions.",
-        "Expand the reviewed internal-transfer evidence tier so more cluster-to-hub corridors are covered by auditable public boundary or constraint evidence instead of proxy fallback.",
+        "Expand the reviewed internal-transfer evidence tier so more cluster-to-hub corridors are covered by auditable public boundary or constraint evidence instead of proxy fallback, building on the new NESO day-ahead boundary tightening layer.",
         "Decide whether reviewed explicit-daily ENTSO-E capacity for GB-NL, GB-BE, and GB-DK1 is safe to promote beyond a reviewed evidence tier.",
+        "Decide how NESO interconnector ITL should interact with broader border-capacity and France connector tiers when the connector-specific reviewed cap is tighter than aggregate border evidence.",
         "Upgrade the switchable France connector source stack so better operator or API feeds can replace manual reviewed-period inputs without changing route-scoring contracts.",
         "Replace the reviewed internal-transfer input path with a stronger operator or API feed if one appears, without changing route or opportunity contracts.",
         "Upgrade fact_interconnector_capacity_hourly from offered-capacity first pass toward ATC/NTC, outages, and post-auction headroom by hour.",

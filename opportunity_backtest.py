@@ -18,6 +18,7 @@ MODEL_GROUP_MEAN_NOTICE_V1 = "opportunity_group_mean_notice_v1"
 MODEL_POTENTIAL_RATIO_V2 = "opportunity_potential_ratio_v2"
 VALID_BACKTEST_MODEL_KEYS = {MODEL_GROUP_MEAN_NOTICE_V1, MODEL_POTENTIAL_RATIO_V2}
 VALID_BACKTEST_MODEL_SELECTIONS = {"all", *VALID_BACKTEST_MODEL_KEYS}
+TARGETED_TRANSITION_ROUTE_NAMES = {"R2_netback_GB_NL_DE_PL"}
 
 DEFAULT_BACKTEST_MODEL_KEY = MODEL_GROUP_MEAN_NOTICE_V1
 DEFAULT_BACKTEST_MODEL_SELECTION = "all"
@@ -32,6 +33,10 @@ ROUTE_STATE_MIN_HISTORY = 6
 GLOBAL_MIN_HISTORY = 24
 
 RATIO_EXACT_MIN_HISTORY = 1
+RATIO_CLUSTER_ROUTE_TRANSITION_REGIME_MIN_HISTORY = 1
+RATIO_ROUTE_TRANSITION_REGIME_MIN_HISTORY = 1
+RATIO_ROUTE_TRANSITION_HOUR_MIN_HISTORY = 1
+RATIO_ROUTE_TRANSITION_PATH_MIN_HISTORY = 1
 RATIO_ROUTE_NOTICE_MIN_HISTORY = 3
 RATIO_ROUTE_TIER_MIN_HISTORY = 6
 RATIO_GLOBAL_MIN_HISTORY = 24
@@ -87,6 +92,13 @@ def _empty_backtest_prediction_frame() -> pd.DataFrame:
             "feature_origin_day_of_week",
             "feature_route_delivery_tier_asof",
             "feature_connector_notice_market_state_asof",
+            "feature_connector_itl_state_asof",
+            "feature_internal_transfer_gate_state_asof",
+            "feature_internal_transfer_gate_bucket_asof",
+            "feature_route_delivery_transition_state_asof",
+            "feature_connector_itl_transition_state_asof",
+            "feature_internal_transfer_gate_transition_state_asof",
+            "feature_route_state_persistence_bucket_asof",
             "feature_curtailment_selected_mwh_asof",
             "feature_deliverable_mw_proxy_asof",
             "feature_route_score_eur_per_mwh_asof",
@@ -304,10 +316,24 @@ def _prepare_backtest_input(fact_curtailment_opportunity_hourly: pd.DataFrame) -
         "internal_transfer_gate_state",
         pd.Series("capacity_unknown_reachable", index=frame.index),
     ).fillna("capacity_unknown_reachable")
+    frame["connector_itl_state"] = frame.get(
+        "connector_itl_state",
+        pd.Series("no_public_itl_restriction", index=frame.index),
+    ).fillna("no_public_itl_restriction")
     frame["connector_notice_market_state"] = frame["connector_notice_market_state"].fillna(
         "no_public_connector_restriction"
     )
     frame["curtailment_source_tier"] = frame["curtailment_source_tier"].fillna("unknown")
+    internal_gate_state = frame["internal_transfer_gate_state"].astype(str)
+    frame["internal_transfer_gate_bucket"] = np.where(
+        internal_gate_state.str.startswith("blocked_reviewed"),
+        "blocked_reviewed",
+        np.where(
+            internal_gate_state.eq("blocked_upstream_dependency"),
+            "blocked_upstream_dependency",
+            "nonblocking_transfer",
+        ),
+    )
     frame["potential_opportunity_mwh"] = np.minimum(
         frame["curtailment_selected_mwh"].clip(lower=0.0),
         frame["deliverable_mw_proxy"].clip(lower=0.0),
@@ -321,6 +347,41 @@ def _prepare_backtest_input(fact_curtailment_opportunity_hourly: pd.DataFrame) -
     frame["realized_potential_ratio"] = pd.to_numeric(
         frame["realized_potential_ratio"], errors="coerce"
     ).fillna(0.0).clip(lower=0.0, upper=1.0)
+
+    frame = frame.sort_values(["cluster_key", "route_name", "hub_key", "interval_start_utc"]).reset_index(drop=True)
+    group_keys = ["cluster_key", "route_name", "hub_key"]
+    grouped = frame.groupby(group_keys, dropna=False)
+    prev_interval_start = grouped["interval_start_utc"].shift(1)
+    prev_route_tier = grouped["route_delivery_tier"].shift(1)
+    prev_connector_itl = grouped["connector_itl_state"].shift(1)
+    prev_internal_gate = grouped["internal_transfer_gate_state"].shift(1)
+
+    contiguous_prev = prev_interval_start.eq(frame["interval_start_utc"] - pd.Timedelta(hours=1))
+    prev_route_tier = prev_route_tier.where(contiguous_prev)
+    prev_connector_itl = prev_connector_itl.where(contiguous_prev)
+    prev_internal_gate = prev_internal_gate.where(contiguous_prev)
+
+    def _transition_state(previous: pd.Series, current: pd.Series) -> pd.Series:
+        prev_label = previous.fillna("START").astype(str)
+        curr_label = current.fillna("unknown").astype(str)
+        return prev_label + "->" + curr_label
+
+    frame["route_delivery_transition_state"] = _transition_state(prev_route_tier, frame["route_delivery_tier"])
+    frame["connector_itl_transition_state"] = _transition_state(prev_connector_itl, frame["connector_itl_state"])
+    frame["internal_transfer_gate_transition_state"] = _transition_state(
+        prev_internal_gate, frame["internal_transfer_gate_state"]
+    )
+
+    route_run_break = (~contiguous_prev) | prev_route_tier.ne(frame["route_delivery_tier"])
+    route_run_id = route_run_break.groupby([frame[key] for key in group_keys], dropna=False).cumsum()
+    frame["route_state_persistence_hours"] = (
+        frame.groupby([*group_keys, route_run_id], dropna=False).cumcount() + 1
+    ).astype(int)
+    frame["route_state_persistence_bucket"] = np.where(
+        frame["route_state_persistence_hours"].le(1),
+        "persist_1h",
+        np.where(frame["route_state_persistence_hours"].eq(2), "persist_2h", "persist_3h_plus"),
+    )
     return frame.sort_values(["interval_start_utc", "cluster_key", "route_name", "hub_key"]).reset_index(drop=True)
 
 
@@ -341,6 +402,13 @@ def _build_horizon_example_frame(frame: pd.DataFrame, forecast_horizon_hours: in
             "feature_day_of_week",
             "route_delivery_tier",
             "connector_notice_market_state",
+            "connector_itl_state",
+            "internal_transfer_gate_state",
+            "internal_transfer_gate_bucket",
+            "route_delivery_transition_state",
+            "connector_itl_transition_state",
+            "internal_transfer_gate_transition_state",
+            "route_state_persistence_bucket",
             "curtailment_selected_mwh",
             "deliverable_mw_proxy",
             "deliverable_route_score_eur_per_mwh",
@@ -355,6 +423,13 @@ def _build_horizon_example_frame(frame: pd.DataFrame, forecast_horizon_hours: in
             "feature_day_of_week": "feature_origin_day_of_week",
             "route_delivery_tier": "feature_route_delivery_tier_asof",
             "connector_notice_market_state": "feature_connector_notice_market_state_asof",
+            "connector_itl_state": "feature_connector_itl_state_asof",
+            "internal_transfer_gate_state": "feature_internal_transfer_gate_state_asof",
+            "internal_transfer_gate_bucket": "feature_internal_transfer_gate_bucket_asof",
+            "route_delivery_transition_state": "feature_route_delivery_transition_state_asof",
+            "connector_itl_transition_state": "feature_connector_itl_transition_state_asof",
+            "internal_transfer_gate_transition_state": "feature_internal_transfer_gate_transition_state_asof",
+            "route_state_persistence_bucket": "feature_route_state_persistence_bucket_asof",
             "curtailment_selected_mwh": "feature_curtailment_selected_mwh_asof",
             "deliverable_mw_proxy": "feature_deliverable_mw_proxy_asof",
             "deliverable_route_score_eur_per_mwh": "feature_route_score_eur_per_mwh_asof",
@@ -494,6 +569,56 @@ def _build_potential_ratio_backtest(frame: pd.DataFrame) -> pd.DataFrame:
     frame["realized_origin_potential_ratio"] = pd.to_numeric(
         frame["realized_origin_potential_ratio"], errors="coerce"
     ).fillna(0.0).clip(lower=0.0, upper=10.0)
+    cluster_transition_regime = _prior_mean_by_group(
+        frame,
+        [
+            "cluster_key",
+            "route_name",
+            "feature_hour_of_day",
+            "feature_route_delivery_tier_asof",
+            "feature_connector_itl_state_asof",
+            "feature_internal_transfer_gate_bucket_asof",
+        ],
+        "realized_origin_potential_ratio",
+        "ratio_cluster_transition_regime",
+    )
+    transition_regime = _prior_mean_by_group(
+        frame,
+        [
+            "route_name",
+            "feature_hour_of_day",
+            "feature_route_delivery_tier_asof",
+            "feature_connector_itl_state_asof",
+            "feature_internal_transfer_gate_bucket_asof",
+        ],
+        "realized_origin_potential_ratio",
+        "ratio_transition_regime",
+    )
+    transition_hour = _prior_mean_by_group(
+        frame,
+        [
+            "route_name",
+            "feature_hour_of_day",
+            "feature_route_delivery_tier_asof",
+            "feature_connector_itl_state_asof",
+            "feature_internal_transfer_gate_state_asof",
+            "feature_route_state_persistence_bucket_asof",
+        ],
+        "realized_origin_potential_ratio",
+        "ratio_transition_hour",
+    )
+    transition_path = _prior_mean_by_group(
+        frame,
+        [
+            "route_name",
+            "feature_hour_of_day",
+            "feature_route_delivery_transition_state_asof",
+            "feature_connector_itl_transition_state_asof",
+            "feature_internal_transfer_gate_transition_state_asof",
+        ],
+        "realized_origin_potential_ratio",
+        "ratio_transition_path",
+    )
     exact = _prior_mean_by_group(
         frame,
         ["route_name", "feature_route_delivery_tier_asof", "feature_connector_notice_market_state_asof", "feature_origin_hour_of_day"],
@@ -516,22 +641,95 @@ def _build_potential_ratio_backtest(frame: pd.DataFrame) -> pd.DataFrame:
     global_sum = frame["realized_origin_potential_ratio"].cumsum() - frame["realized_origin_potential_ratio"]
     global_mean = np.where(global_count > 0, global_sum / global_count, np.nan)
 
-    result = pd.concat([frame.copy(), exact, route_notice, route_tier], axis=1)
+    result = pd.concat(
+        [
+            frame.copy(),
+            cluster_transition_regime,
+            transition_regime,
+            transition_hour,
+            transition_path,
+            exact,
+            route_notice,
+            route_tier,
+        ],
+        axis=1,
+    )
     result["prediction_basis"] = pd.NA
     result["training_sample_count"] = 0
     result["predicted_ratio"] = np.nan
 
     origin_available = result["feature_origin_hour_of_day"].notna()
-    exact_mask = origin_available & (result["ratio_exact_prior_count"] >= RATIO_EXACT_MIN_HISTORY)
-    route_notice_mask = origin_available & ~exact_mask & (
+    targeted_transition_route = result["route_name"].isin(TARGETED_TRANSITION_ROUTE_NAMES)
+    cluster_transition_regime_mask = (
+        origin_available
+        & targeted_transition_route
+        & (result["ratio_cluster_transition_regime_prior_count"] >= RATIO_CLUSTER_ROUTE_TRANSITION_REGIME_MIN_HISTORY)
+    )
+    transition_regime_mask = (
+        origin_available
+        & targeted_transition_route
+        & ~cluster_transition_regime_mask
+        & (result["ratio_transition_regime_prior_count"] >= RATIO_ROUTE_TRANSITION_REGIME_MIN_HISTORY)
+    )
+    transition_hour_mask = (
+        origin_available
+        & targeted_transition_route
+        & ~cluster_transition_regime_mask
+        & ~transition_regime_mask
+        & (result["ratio_transition_hour_prior_count"] >= RATIO_ROUTE_TRANSITION_HOUR_MIN_HISTORY)
+    )
+    transition_path_mask = (
+        origin_available
+        & targeted_transition_route
+        & ~cluster_transition_regime_mask
+        & ~transition_regime_mask
+        & ~transition_hour_mask
+        & (result["ratio_transition_path_prior_count"] >= RATIO_ROUTE_TRANSITION_PATH_MIN_HISTORY)
+    )
+    exact_mask = origin_available & ~cluster_transition_regime_mask & ~transition_regime_mask & ~transition_hour_mask & ~transition_path_mask & (
+        result["ratio_exact_prior_count"] >= RATIO_EXACT_MIN_HISTORY
+    )
+    route_notice_mask = origin_available & ~cluster_transition_regime_mask & ~transition_regime_mask & ~transition_hour_mask & ~transition_path_mask & ~exact_mask & (
         result["ratio_route_notice_prior_count"] >= RATIO_ROUTE_NOTICE_MIN_HISTORY
     )
-    route_tier_mask = origin_available & ~exact_mask & ~route_notice_mask & (
+    route_tier_mask = origin_available & ~cluster_transition_regime_mask & ~transition_regime_mask & ~transition_hour_mask & ~transition_path_mask & ~exact_mask & ~route_notice_mask & (
         result["ratio_route_tier_prior_count"] >= RATIO_ROUTE_TIER_MIN_HISTORY
     )
-    global_mask = origin_available & ~exact_mask & ~route_notice_mask & ~route_tier_mask & (
+    global_mask = origin_available & ~cluster_transition_regime_mask & ~transition_regime_mask & ~transition_hour_mask & ~transition_path_mask & ~exact_mask & ~route_notice_mask & ~route_tier_mask & (
         global_count >= RATIO_GLOBAL_MIN_HISTORY
     )
+
+    result.loc[cluster_transition_regime_mask, "prediction_basis"] = "ratio_cluster_route_transition_regime"
+    result.loc[cluster_transition_regime_mask, "training_sample_count"] = result.loc[
+        cluster_transition_regime_mask, "ratio_cluster_transition_regime_prior_count"
+    ]
+    result.loc[cluster_transition_regime_mask, "predicted_ratio"] = result.loc[
+        cluster_transition_regime_mask, "ratio_cluster_transition_regime_prior_mean"
+    ]
+
+    result.loc[transition_regime_mask, "prediction_basis"] = "ratio_route_transition_regime"
+    result.loc[transition_regime_mask, "training_sample_count"] = result.loc[
+        transition_regime_mask, "ratio_transition_regime_prior_count"
+    ]
+    result.loc[transition_regime_mask, "predicted_ratio"] = result.loc[
+        transition_regime_mask, "ratio_transition_regime_prior_mean"
+    ]
+
+    result.loc[transition_hour_mask, "prediction_basis"] = "ratio_route_transition_hour"
+    result.loc[transition_hour_mask, "training_sample_count"] = result.loc[
+        transition_hour_mask, "ratio_transition_hour_prior_count"
+    ]
+    result.loc[transition_hour_mask, "predicted_ratio"] = result.loc[
+        transition_hour_mask, "ratio_transition_hour_prior_mean"
+    ]
+
+    result.loc[transition_path_mask, "prediction_basis"] = "ratio_route_transition_path"
+    result.loc[transition_path_mask, "training_sample_count"] = result.loc[
+        transition_path_mask, "ratio_transition_path_prior_count"
+    ]
+    result.loc[transition_path_mask, "predicted_ratio"] = result.loc[
+        transition_path_mask, "ratio_transition_path_prior_mean"
+    ]
 
     result.loc[exact_mask, "prediction_basis"] = "ratio_exact_notice_hour"
     result.loc[exact_mask, "training_sample_count"] = result.loc[exact_mask, "ratio_exact_prior_count"]

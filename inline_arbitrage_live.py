@@ -100,6 +100,10 @@ from gb_transfer_gate import (
     materialize_gb_transfer_gate_history,
     parse_iso_date as parse_transfer_iso_date,
 )
+from gb_transfer_boundary_reviewed import (
+    GB_TRANSFER_BOUNDARY_REVIEWED_TABLE,
+    build_fact_gb_transfer_boundary_reviewed_hourly,
+)
 from gb_transfer_reviewed import (
     GB_TRANSFER_REVIEW_POLICY_TABLE,
     GB_TRANSFER_REVIEWED_HOURLY_TABLE,
@@ -2431,6 +2435,10 @@ def main() -> int:
                 interconnector_flow=interconnector_flow,
                 interconnector_capacity=interconnector_capacity,
             )
+            day_ahead_constraint_boundary = build_fact_day_ahead_constraint_boundary_half_hourly(
+                start_date=network_start,
+                end_date=network_end,
+            )
             gb_transfer_reviewed_period = build_fact_gb_transfer_reviewed_period(
                 start_date=network_start,
                 end_date=network_end,
@@ -2443,6 +2451,16 @@ def main() -> int:
                 reviewed_period=gb_transfer_reviewed_period,
                 review_policy=gb_transfer_review_policy,
             )
+            gb_transfer_boundary_reviewed_hourly = build_fact_gb_transfer_boundary_reviewed_hourly(
+                start_date=network_start,
+                end_date=network_end,
+                day_ahead_constraint_boundary=day_ahead_constraint_boundary,
+            )
+            combined_gb_transfer_reviewed_hourly = pd.concat(
+                [gb_transfer_reviewed_hourly, gb_transfer_boundary_reviewed_hourly],
+                ignore_index=True,
+                sort=False,
+            )
             route_frames = materialize_route_score_history(
                 output_dir=args.opportunity_output_dir,
                 prices=prices,
@@ -2454,7 +2472,7 @@ def main() -> int:
                 interconnector_capacity_review_policy=review_policy,
                 france_connector=france_connector,
                 france_connector_notice=france_reviewed_notice,
-                gb_transfer_reviewed_hourly=gb_transfer_reviewed_hourly,
+                gb_transfer_reviewed_hourly=combined_gb_transfer_reviewed_hourly,
             )
             route_score = route_frames[ROUTE_SCORE_TABLE]
             cluster_curtailment_proxy = fetch_cluster_curtailment_proxy_hourly(
@@ -2494,6 +2512,14 @@ def main() -> int:
                 os.path.join(args.opportunity_output_dir, f"{GB_TRANSFER_REVIEWED_HOURLY_TABLE}.csv"),
                 index=False,
             )
+            gb_transfer_boundary_reviewed_hourly.to_csv(
+                os.path.join(args.opportunity_output_dir, f"{GB_TRANSFER_BOUNDARY_REVIEWED_TABLE}.csv"),
+                index=False,
+            )
+            day_ahead_constraint_boundary.to_csv(
+                os.path.join(args.opportunity_output_dir, f"{DAY_AHEAD_CONSTRAINT_BOUNDARY_TABLE}.csv"),
+                index=False,
+            )
             interconnector_itl.to_csv(
                 os.path.join(args.opportunity_output_dir, f"{INTERCONNECTOR_ITL_TABLE}.csv"),
                 index=False,
@@ -2501,6 +2527,8 @@ def main() -> int:
             frames = {
                 ROUTE_SCORE_TABLE: route_score,
                 "fact_regional_curtailment_hourly_proxy": cluster_curtailment_proxy,
+                DAY_AHEAD_CONSTRAINT_BOUNDARY_TABLE: day_ahead_constraint_boundary,
+                GB_TRANSFER_BOUNDARY_REVIEWED_TABLE: gb_transfer_boundary_reviewed_hourly,
                 GB_TRANSFER_REVIEWED_PERIOD_TABLE: gb_transfer_reviewed_period,
                 GB_TRANSFER_REVIEW_POLICY_TABLE: gb_transfer_review_policy,
                 GB_TRANSFER_REVIEWED_HOURLY_TABLE: gb_transfer_reviewed_hourly,
@@ -2517,6 +2545,8 @@ def main() -> int:
             if args.truth_store_db_path:
                 store_frames = dict(frames)
                 store_frames[GB_TRANSFER_GATE_TABLE] = gb_transfer_gate
+                store_frames[DAY_AHEAD_CONSTRAINT_BOUNDARY_TABLE] = day_ahead_constraint_boundary
+                store_frames[GB_TRANSFER_BOUNDARY_REVIEWED_TABLE] = gb_transfer_boundary_reviewed_hourly
                 store_frames[INTERCONNECTOR_ITL_TABLE] = interconnector_itl
                 store_frames[GB_TRANSFER_REVIEWED_PERIOD_TABLE] = gb_transfer_reviewed_period
                 store_frames[GB_TRANSFER_REVIEW_POLICY_TABLE] = gb_transfer_review_policy
@@ -2687,6 +2717,10 @@ def main() -> int:
                 interconnector_flow=interconnector_flow,
                 interconnector_capacity=interconnector_capacity,
             )
+            day_ahead_constraint_boundary = build_fact_day_ahead_constraint_boundary_half_hourly(
+                start_date=network_start,
+                end_date=network_end,
+            )
             gb_transfer_reviewed_period = build_fact_gb_transfer_reviewed_period(
                 start_date=network_start,
                 end_date=network_end,
@@ -2699,6 +2733,16 @@ def main() -> int:
                 reviewed_period=gb_transfer_reviewed_period,
                 review_policy=gb_transfer_review_policy,
             )
+            gb_transfer_boundary_reviewed_hourly = build_fact_gb_transfer_boundary_reviewed_hourly(
+                start_date=network_start,
+                end_date=network_end,
+                day_ahead_constraint_boundary=day_ahead_constraint_boundary,
+            )
+            combined_gb_transfer_reviewed_hourly = pd.concat(
+                [gb_transfer_reviewed_hourly, gb_transfer_boundary_reviewed_hourly],
+                ignore_index=True,
+                sort=False,
+            )
             frames = materialize_route_score_history(
                 output_dir=args.route_score_output_dir,
                 prices=prices,
@@ -2710,12 +2754,22 @@ def main() -> int:
                 interconnector_capacity_review_policy=review_policy,
                 france_connector=france_connector,
                 france_connector_notice=france_reviewed_notice,
-                gb_transfer_reviewed_hourly=gb_transfer_reviewed_hourly,
+                gb_transfer_reviewed_hourly=combined_gb_transfer_reviewed_hourly,
             )
+            frames[DAY_AHEAD_CONSTRAINT_BOUNDARY_TABLE] = day_ahead_constraint_boundary
+            frames[GB_TRANSFER_BOUNDARY_REVIEWED_TABLE] = gb_transfer_boundary_reviewed_hourly
             frames[GB_TRANSFER_REVIEWED_PERIOD_TABLE] = gb_transfer_reviewed_period
             frames[GB_TRANSFER_REVIEW_POLICY_TABLE] = gb_transfer_review_policy
             frames[GB_TRANSFER_REVIEWED_HOURLY_TABLE] = gb_transfer_reviewed_hourly
             frames[INTERCONNECTOR_ITL_TABLE] = interconnector_itl
+            day_ahead_constraint_boundary.to_csv(
+                os.path.join(args.route_score_output_dir, f"{DAY_AHEAD_CONSTRAINT_BOUNDARY_TABLE}.csv"),
+                index=False,
+            )
+            gb_transfer_boundary_reviewed_hourly.to_csv(
+                os.path.join(args.route_score_output_dir, f"{GB_TRANSFER_BOUNDARY_REVIEWED_TABLE}.csv"),
+                index=False,
+            )
             gb_transfer_reviewed_period.to_csv(
                 os.path.join(args.route_score_output_dir, f"{GB_TRANSFER_REVIEWED_PERIOD_TABLE}.csv"),
                 index=False,
@@ -2742,6 +2796,8 @@ def main() -> int:
             if args.truth_store_db_path:
                 store_frames = dict(frames)
                 store_frames[GB_TRANSFER_GATE_TABLE] = gb_transfer_gate
+                store_frames[DAY_AHEAD_CONSTRAINT_BOUNDARY_TABLE] = day_ahead_constraint_boundary
+                store_frames[GB_TRANSFER_BOUNDARY_REVIEWED_TABLE] = gb_transfer_boundary_reviewed_hourly
                 store_frames[INTERCONNECTOR_ITL_TABLE] = interconnector_itl
                 store_frames[DIM_INTERCONNECTOR_CABLE_TABLE] = interconnector_cable_frame()
                 store_frames[INTERCONNECTOR_CAPACITY_REVIEW_POLICY_TABLE] = review_policy

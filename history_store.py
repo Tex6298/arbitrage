@@ -21,6 +21,7 @@ TRUTH_STORE_PRIMARY_KEYS: Dict[str, list[str]] = {
         "contract_market_agreement_type",
     ],
     "fact_day_ahead_constraint_boundary_half_hourly": ["interval_start_utc", "boundary_key"],
+    "fact_gb_transfer_boundary_reviewed_hourly": ["interval_start_utc", "cluster_key", "hub_key"],
     "fact_interconnector_capacity_reviewed_hourly": [
         "interval_start_utc",
         "border_key",

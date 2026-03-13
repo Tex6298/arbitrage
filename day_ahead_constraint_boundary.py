@@ -57,10 +57,34 @@ def _empty_boundary_frame() -> pd.DataFrame:
 def _resource_metadata() -> dict:
     metadata = _datapackage_show(DAY_AHEAD_CONSTRAINT_BOUNDARY_DATASET_ID)
     resources = metadata.get("result", {}).get("resources", [])
+    normalized_target = DAY_AHEAD_CONSTRAINT_BOUNDARY_RESOURCE_NAME.strip().lower().replace("_", " ")
     for resource in resources:
-        if str(resource.get("name") or "").strip().lower() == DAY_AHEAD_CONSTRAINT_BOUNDARY_RESOURCE_NAME.lower():
+        name = str(resource.get("name") or "").strip().lower().replace("_", " ")
+        title = str(resource.get("title") or "").strip().lower().replace("_", " ")
+        if normalized_target in {name, title}:
             return resource
     raise RuntimeError("NESO day-ahead constraint boundary CSV resource not found")
+
+
+def _localize_boundary_window(
+    boundary_key: pd.Series,
+    naive_timestamp: pd.Series,
+) -> pd.Series:
+    localized = pd.Series(pd.NaT, index=naive_timestamp.index, dtype="datetime64[ns, Europe/London]")
+    for _, group in naive_timestamp.groupby(boundary_key):
+        try:
+            localized.loc[group.index] = group.dt.tz_localize(
+                LONDON_TZ,
+                ambiguous="infer",
+                nonexistent="shift_forward",
+            )
+        except (ValueError, TypeError):
+            localized.loc[group.index] = group.dt.tz_localize(
+                LONDON_TZ,
+                ambiguous=False,
+                nonexistent="shift_forward",
+            )
+    return localized
 
 
 def build_fact_day_ahead_constraint_boundary_half_hourly(start_date: dt.date, end_date: dt.date) -> pd.DataFrame:
@@ -68,7 +92,7 @@ def build_fact_day_ahead_constraint_boundary_half_hourly(start_date: dt.date, en
         raise ValueError("end_date must be on or after start_date")
 
     resource = _resource_metadata()
-    raw = _fetch_csv(str(resource.get("url") or ""))
+    raw = _fetch_csv(str(resource.get("url") or resource.get("path") or ""))
     if raw.empty:
         return _empty_boundary_frame()
 
@@ -80,18 +104,22 @@ def build_fact_day_ahead_constraint_boundary_half_hourly(start_date: dt.date, en
     limit_column = raw.columns[2]
     flow_column = raw.columns[3]
 
-    interval_start_local = pd.to_datetime(raw[timestamp_column], errors="coerce").dt.tz_localize(
-        LONDON_TZ,
-        ambiguous="infer",
-        nonexistent="shift_forward",
-    )
+    naive_timestamp = pd.to_datetime(raw[timestamp_column], errors="coerce")
+    raw = raw.assign(_naive_timestamp=naive_timestamp)
+    raw = raw[raw["_naive_timestamp"].notna()].copy()
+    raw["_date"] = raw["_naive_timestamp"].dt.date
+    raw = raw[raw["_date"].between(start_date, end_date)].copy()
+    if raw.empty:
+        return _empty_boundary_frame()
+
+    interval_start_local = _localize_boundary_window(raw[boundary_column], raw["_naive_timestamp"])
     interval_end_local = interval_start_local + pd.Timedelta(minutes=30)
     interval_start_utc = interval_start_local.dt.tz_convert(UTC)
     interval_end_utc = interval_end_local.dt.tz_convert(UTC)
 
     frame = pd.DataFrame(
         {
-            "date": interval_start_local.dt.date,
+            "date": raw["_date"],
             "interval_start_local": interval_start_local,
             "interval_end_local": interval_end_local,
             "interval_start_utc": interval_start_utc,
@@ -104,7 +132,7 @@ def build_fact_day_ahead_constraint_boundary_half_hourly(start_date: dt.date, en
             "source_dataset_id": DAY_AHEAD_CONSTRAINT_BOUNDARY_DATASET_ID,
             "source_resource_id": resource.get("id"),
             "source_resource_name": resource.get("name"),
-            "source_document_url": resource.get("url"),
+            "source_document_url": resource.get("url") or resource.get("path"),
             "target_is_proxy": False,
             "limit_mw": pd.to_numeric(raw[limit_column], errors="coerce"),
             "flow_mw": pd.to_numeric(raw[flow_column], errors="coerce"),

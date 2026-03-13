@@ -325,7 +325,29 @@ Key behavior:
      --capacity-review-output-dir interconnector_capacity_review
    ```
 
-17. Materialize the first-pass hourly GB transfer-gate proxy from cluster to interconnector hub:
+17. Materialize NESO interconnector ITL history for connector-specific reviewed caps on `IFA`, `IFA2`, `BritNed`, and `ElecLink`:
+
+   ```bash
+   python inline_arbitrage_live.py ^
+     --materialize-interconnector-itl ^
+     --itl-start 2024-10-01 ^
+     --itl-end 2024-10-03 ^
+     --itl-output-dir interconnector_itl_history ^
+     --truth-store-db-path bmu_truth_store.sqlite
+   ```
+
+18. Materialize NESO day-ahead boundary flows and limits as a first-class internal-capacity evidence table:
+
+   ```bash
+   python inline_arbitrage_live.py ^
+     --materialize-day-ahead-constraint-boundary ^
+     --boundary-start 2024-10-01 ^
+     --boundary-end 2024-10-03 ^
+     --boundary-output-dir day_ahead_constraint_boundary_history ^
+     --truth-store-db-path bmu_truth_store.sqlite
+   ```
+
+19. Materialize the first-pass hourly GB transfer-gate proxy from cluster to interconnector hub:
 
    ```bash
    python inline_arbitrage_live.py ^
@@ -357,7 +379,7 @@ Key behavior:
      --gb-transfer-reviewed-normalized-output gb_transfer_reviewed_input.csv
    ```
 
-18. Materialize the first-pass cluster-aware route-score history:
+20. Materialize the first-pass cluster-aware route-score history:
 
    ```bash
    python inline_arbitrage_live.py ^
@@ -368,7 +390,7 @@ Key behavior:
      --truth-store-db-path bmu_truth_store.sqlite
    ```
 
-19. Materialize the first curtailment-opportunity history surface:
+21. Materialize the first curtailment-opportunity history surface:
 
    ```bash
    python inline_arbitrage_live.py ^
@@ -383,7 +405,7 @@ Key behavior:
    This writes `fact_curtailment_opportunity_hourly.csv` plus the supporting `fact_route_score_hourly.csv` and
    `fact_regional_curtailment_hourly_proxy.csv` inputs in the same output directory.
 
-20. Materialize the France-specific connector layer for `IFA`, `IFA2`, and `ElecLink`:
+22. Materialize the France-specific connector layer for `IFA`, `IFA2`, and `ElecLink`:
 
    ```bash
    python inline_arbitrage_live.py ^
@@ -510,6 +532,16 @@ Key behavior:
   - `fact_interconnector_flow_hourly`
 - The repo now also materializes the first commercial-capacity surface:
   - `fact_interconnector_capacity_hourly`
+- The repo now also materializes a connector-specific reviewed-cap surface from NESO:
+  - `fact_interconnector_itl_hourly`
+- `fact_interconnector_itl_hourly` is a connector-level reviewed evidence tier for `IFA`, `IFA2`, `BritNed`, and
+  `ElecLink`. It comes from NESO ITL submissions, not from final auction allocation or realized post-auction headroom,
+  so it is useful for auditable route caps and blocks but should not be mistaken for full commercial-capacity truth.
+- The repo now also materializes a public internal-boundary evidence surface from NESO:
+  - `fact_day_ahead_constraint_boundary_half_hourly`
+- `fact_day_ahead_constraint_boundary_half_hourly` is the public day-ahead boundary flow-and-limit table normalized to
+  half-hour rows with headroom and utilization diagnostics. It now feeds a separate reviewed internal-transfer tightening
+  layer for mapped corridors, while staying explicit and auditable rather than silently rewriting `fact_gb_transfer_gate_hourly`.
 - The current first pass is real ENTSO-E `A11` border flow, but it is still border-level rather than cable-specific.
   Shared borders like GB-FR are therefore carried as aggregate border truth plus candidate hub sets, not attributed to `IFA`,
   `IFA2`, or `ElecLink` individually.
@@ -598,11 +630,21 @@ Key behavior:
 - This is the internal-capacity reviewed tier above the proxy. It is fed from normalized public boundary or constraint evidence,
   keeps policy acceptance explicit, expands reviewed periods to hourly cluster-hub rows, and lets a stronger future API replace
   the reviewed-input path without changing route or opportunity contracts.
+- `gb_transfer_boundary_reviewed.py` now materializes:
+  - `fact_gb_transfer_boundary_reviewed_hourly`
+- This is the first-pass NESO boundary-derived internal-transfer tightening layer. It maps selected day-ahead boundary rows
+  onto explicit cluster-to-hub corridors, aggregates them conservatively to hourly rows, and only emits a reviewed override
+  when the public boundary evidence is tighter than the structural proxy or explicitly blocked.
+- Current first-pass mapped boundary families are:
+  - `FLOWSTH` for east-facing England export corridors
+  - `SEIMPPR23` for east-facing England south-east export corridors into `BritNed` and the France-facing hubs
+  - `SCOTEX`, `NKILGRMO`, `HARSPNBLY`, `SSE-SP2`, `SSEN-S`, `SSHARN3`, and `GM+SNOW5A` for Scotland-to-south export corridors
 - `route_score_history.py` now materializes:
   - `fact_route_score_hourly`
 - `fact_route_score_hourly` is the first cluster-aware route-screening surface. It joins route netbacks to
-  `fact_gb_transfer_gate_hourly`, `fact_gb_transfer_reviewed_hourly`, first-pass border capacity, the reviewed-capacity tier,
-  and the France connector layer, then labels each row as
+  `fact_gb_transfer_gate_hourly`, `fact_gb_transfer_reviewed_hourly`, `fact_gb_transfer_boundary_reviewed_hourly`,
+  first-pass border capacity, the reviewed-capacity tier, `fact_interconnector_itl_hourly`, and the France connector layer,
+  then labels each row as
   `confirmed`, `reviewed`, `capacity_unknown`, `blocked_internal_transfer`, `blocked_connector_capacity`, or `no_price_signal`.
 - Route rows now keep explicit internal-transfer lineage:
   - `internal_transfer_evidence_tier`
@@ -611,7 +653,8 @@ Key behavior:
   - `internal_transfer_source_provider`
   - `internal_transfer_source_key`
 - Accepted reviewed internal evidence overrides the proxy gate for that cluster-hub-hour. If no accepted reviewed evidence
-  exists, the scorer falls back explicitly to the proxy tier instead of silently relabeling it.
+  exists, the scorer falls back explicitly to the proxy tier instead of silently relabeling it. When both manual reviewed
+  internal evidence and the NESO boundary-derived reviewed layer exist, the scorer takes the tighter accepted reviewed row.
 - France route rows now carry cable-specific connector metadata and headroom proxies, so `GB-FR` is no longer treated
   as one undifferentiated border inside `fact_route_score_hourly`.
 - France route rows now also carry operator-availability fields, so `IFA` and `IFA2` can be capped or blocked by
@@ -621,6 +664,15 @@ Key behavior:
 - France route rows now also carry connector notice fields from `fact_france_connector_notice_hourly`, including
   whether a reviewed restriction was already known, whether it was upcoming or active in that hour, how long remained
   until start, and how long since the document was published.
+- Route rows now also carry connector-level ITL lineage, including:
+  - `connector_itl_state`
+  - `connector_itl_capacity_limit_mw`
+  - `connector_itl_auction_type`
+  - `connector_itl_restriction_reason`
+  - `connector_itl_source_key`
+- ITL can now act as an auditable reviewed connector cap or block when it is tighter than the border-level capacity
+  evidence, which is especially useful on `GB-FR` and `GB-NL` when connector-specific public evidence is stronger than
+  aggregate border coverage.
 - `curtailment_opportunity.py` now materializes:
   - `fact_curtailment_opportunity_hourly`
 - `fact_curtailment_opportunity_hourly` is the first actual curtailment-opportunity surface. It joins
@@ -648,10 +700,16 @@ Key behavior:
   each model only trains on earlier forecast origins for the same horizon.
 - The backtest table keeps:
   - prediction basis (`exact_notice_hour`, `cluster_route_state`, `route_state`, `global`)
-  - and for `v2`, calibrated ratio bases (`ratio_exact_notice_hour`, `ratio_route_notice_state`, `ratio_route_delivery_tier`, `ratio_global`)
+  - and for `v2`, calibrated ratio bases (`ratio_exact_notice_hour`, `ratio_route_notice_state`, `ratio_route_delivery_tier`, `ratio_global`) plus targeted transition-aware bases for `R2_netback_GB_NL_DE_PL`
   - training sample count
   - actuals, predictions, residuals, and absolute errors for both deliverable MWh and gross value
   - explicit `model_key` and `split_strategy`
+- The horizonized `v2` backtest now preserves explicit as-of transition features for:
+  - `connector_itl_state`
+  - `internal_transfer_gate_state`
+  - route-delivery, connector-ITL, and internal-gate transition states
+  - route-state persistence buckets
+- Those features are there to target one-hour `BritNed / GB-NL` regime flips directly without leaking future route state.
 - `fact_backtest_summary_slice` is the first slice-aware QA surface over the backtest. It aggregates error and bias by
   model, forecast horizon, cluster, connector hub, route, delivery tier, internal-transfer tier, internal-transfer gate state,
   connector-notice market state, curtailment source tier, and hour of day.

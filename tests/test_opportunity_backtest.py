@@ -35,6 +35,7 @@ def _opportunity_row(
     curtailment_source_tier: str = "regional_proxy",
     internal_transfer_evidence_tier: str = "gb_topology_transfer_gate_proxy",
     internal_transfer_gate_state: str = "capacity_unknown_reachable",
+    connector_itl_state: str = "no_public_itl_restriction",
 ) -> dict:
     interval_start = pd.Timestamp(interval_start_utc)
     interval_end = interval_start + pd.Timedelta(hours=1)
@@ -68,6 +69,7 @@ def _opportunity_row(
         "deliverable_route_score_eur_per_mwh": deliverable_route_score_eur_per_mwh,
         "internal_transfer_evidence_tier": internal_transfer_evidence_tier,
         "internal_transfer_gate_state": internal_transfer_gate_state,
+        "connector_itl_state": connector_itl_state,
     }
 
 
@@ -172,6 +174,84 @@ class OpportunityBacktestTests(unittest.TestCase):
         self.assertEqual(int(third["training_sample_count"]), 1)
         self.assertAlmostEqual(float(third["predicted_opportunity_deliverable_mwh"]), 9.0)
         self.assertAlmostEqual(float(third["predicted_opportunity_gross_value_eur"]), 540.0)
+
+    def test_build_fact_backtest_prediction_hourly_uses_route_transition_features_for_britned_flip(self) -> None:
+        fact = pd.DataFrame(
+            [
+                _opportunity_row(
+                    "2024-10-01T04:00:00Z",
+                    "dogger_hornsea_offshore",
+                    "R2_netback_GB_NL_DE_PL",
+                    "britned",
+                    "no_price_signal",
+                    "no_public_connector_restriction",
+                    0.0,
+                    0.0,
+                    curtailment_selected_mwh=150.0,
+                    deliverable_mw_proxy=170.0,
+                    internal_transfer_evidence_tier="reviewed_internal_constraint_boundary",
+                    internal_transfer_gate_state="reviewed_boundary_cap",
+                    connector_itl_state="published_restriction",
+                ),
+                _opportunity_row(
+                    "2024-10-01T05:00:00Z",
+                    "dogger_hornsea_offshore",
+                    "R2_netback_GB_NL_DE_PL",
+                    "britned",
+                    "reviewed",
+                    "no_public_connector_restriction",
+                    100.0,
+                    60.0,
+                    curtailment_selected_mwh=150.0,
+                    deliverable_mw_proxy=170.0,
+                    internal_transfer_evidence_tier="reviewed_internal_constraint_boundary",
+                    internal_transfer_gate_state="reviewed_boundary_cap",
+                    connector_itl_state="published_restriction",
+                ),
+                _opportunity_row(
+                    "2024-10-02T04:00:00Z",
+                    "dogger_hornsea_offshore",
+                    "R2_netback_GB_NL_DE_PL",
+                    "britned",
+                    "no_price_signal",
+                    "no_public_connector_restriction",
+                    0.0,
+                    0.0,
+                    curtailment_selected_mwh=180.0,
+                    deliverable_mw_proxy=170.0,
+                    internal_transfer_evidence_tier="reviewed_internal_constraint_boundary",
+                    internal_transfer_gate_state="reviewed_boundary_cap",
+                    connector_itl_state="published_restriction",
+                ),
+                _opportunity_row(
+                    "2024-10-02T05:00:00Z",
+                    "dogger_hornsea_offshore",
+                    "R2_netback_GB_NL_DE_PL",
+                    "britned",
+                    "reviewed",
+                    "no_public_connector_restriction",
+                    120.0,
+                    65.0,
+                    curtailment_selected_mwh=180.0,
+                    deliverable_mw_proxy=170.0,
+                    internal_transfer_evidence_tier="reviewed_internal_constraint_boundary",
+                    internal_transfer_gate_state="reviewed_boundary_cap",
+                    connector_itl_state="published_restriction",
+                ),
+            ]
+        )
+
+        backtest = build_fact_backtest_prediction_hourly(
+            fact, model_key=MODEL_POTENTIAL_RATIO_V2, forecast_horizons=(1,)
+        )
+        target = backtest[backtest["interval_start_utc"] == pd.Timestamp("2024-10-02T05:00:00+00:00")].iloc[0]
+        self.assertTrue(bool(target["prediction_eligible_flag"]))
+        self.assertEqual(target["prediction_basis"], "ratio_cluster_route_transition_regime")
+        self.assertEqual(target["feature_connector_itl_state_asof"], "published_restriction")
+        self.assertEqual(target["feature_internal_transfer_gate_state_asof"], "reviewed_boundary_cap")
+        self.assertEqual(target["feature_internal_transfer_gate_bucket_asof"], "nonblocking_transfer")
+        self.assertEqual(target["feature_route_state_persistence_bucket_asof"], "persist_1h")
+        self.assertAlmostEqual(float(target["predicted_opportunity_deliverable_mwh"]), 113.33333333333333)
 
     def test_build_fact_backtest_summary_slice_includes_multiple_dimensions(self) -> None:
         backtest = pd.concat(

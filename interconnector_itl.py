@@ -181,15 +181,21 @@ def _resource_rows(spec: ITLDatasetSpec) -> list[dict]:
 
 
 def _resource_url(resource: dict) -> str:
-    url = resource.get("url")
-    if isinstance(url, str) and url:
-        return url
+    for key in ("url", "path"):
+        url = resource.get(key)
+        if isinstance(url, str) and url:
+            return url
     raise RuntimeError(f"resource {resource.get('id')} has no download URL")
 
 
 def _pick_current_resource(resources: list[dict], resource_name: str) -> dict | None:
+    normalized_target = _normalize_column_name(resource_name)
     for resource in resources:
-        if str(resource.get("name") or "").strip().lower() == resource_name.strip().lower():
+        resource_names = (
+            _normalize_column_name(str(resource.get("name") or "")),
+            _normalize_column_name(str(resource.get("title") or "")),
+        )
+        if normalized_target in resource_names:
             return resource
     return None
 
@@ -197,10 +203,18 @@ def _pick_current_resource(resources: list[dict], resource_name: str) -> dict | 
 def _pick_archived_resources(resources: list[dict], spec: ITLDatasetSpec, start_date: dt.date, end_date: dt.date) -> list[dict]:
     lower_bound = start_date - dt.timedelta(days=7)
     upper_bound = end_date + dt.timedelta(days=7)
+    normalized_archive_name = _normalize_column_name(spec.archived_resource_name)
     selected = []
     for resource in resources:
-        name = str(resource.get("name") or "")
-        if spec.archived_resource_name.lower() not in name.lower():
+        normalized_name = " ".join(
+            part
+            for part in (
+                _normalize_column_name(str(resource.get("name") or "")),
+                _normalize_column_name(str(resource.get("title") or "")),
+            )
+            if part
+        )
+        if normalized_archive_name not in normalized_name:
             continue
         resource_date = _extract_resource_date(resource)
         if resource_date is None:
@@ -228,6 +242,26 @@ def _parse_britned_operational_period(value: object) -> tuple[pd.Timestamp, pd.T
     if end_local <= start_local:
         end_local = end_local + pd.Timedelta(days=1)
     return start_local.tz_convert(UTC), end_local.tz_convert(UTC)
+
+
+def _parse_eleclink_archived_period(
+    operational_date: object,
+    period_value: object,
+) -> tuple[pd.Timestamp, pd.Timestamp]:
+    if pd.isna(operational_date) or pd.isna(period_value):
+        return pd.NaT, pd.NaT
+    try:
+        start_day = dt.datetime.strptime(str(operational_date).strip(), "%Y%m%d").date()
+    except ValueError:
+        return pd.NaT, pd.NaT
+    match = re.fullmatch(r"(\d{2}:\d{2})\s*to\s*(\d{2}:\d{2})", str(period_value).strip(), flags=re.IGNORECASE)
+    if not match:
+        return pd.NaT, pd.NaT
+    start_utc = pd.Timestamp(f"{start_day.isoformat()} {match.group(1)}", tz=UTC)
+    end_utc = pd.Timestamp(f"{start_day.isoformat()} {match.group(2)}", tz=UTC)
+    if end_utc <= start_utc:
+        end_utc = end_utc + pd.Timedelta(days=1)
+    return start_utc, end_utc
 
 
 def _auction_rank(value: object) -> int:
@@ -416,8 +450,178 @@ def _parse_britned_weekly_itl(resource_frame: pd.DataFrame, spec: ITLDatasetSpec
     return pd.concat([to_gb, from_gb], ignore_index=True)
 
 
-def _parse_resource_frame(resource_frame: pd.DataFrame, spec: ITLDatasetSpec, resource: dict, source_table_variant: str) -> pd.DataFrame:
+def _parse_generic_archived_weekly_itl(
+    resource_frame: pd.DataFrame,
+    spec: ITLDatasetSpec,
+    resource: dict,
+    source_table_variant: str,
+    start_date: dt.date,
+    end_date: dt.date,
+) -> pd.DataFrame:
+    columns = tuple(resource_frame.columns)
+    period_column = _match_column(columns, "operational", "date", "time")
+    from_gb_column = _match_column(columns, "flow", "from", "gb")
+    to_gb_column = _match_column(columns, "flow", "to", "gb")
+    reason_column = _match_column(columns, "reason", "restriction")
+    if not all([period_column, from_gb_column, to_gb_column]):
+        raise RuntimeError(f"{spec.dataset_key} ITL archived weekly resource has an unsupported schema")
+    if reason_column is None:
+        reason_column = _match_column(columns, "reason")
+    if reason_column is None:
+        resource_frame = resource_frame.copy()
+        reason_column = "__missing_reason__"
+        resource_frame[reason_column] = pd.NA
+
+    resource_frame = resource_frame.copy()
+    resource_frame["_raw_period_date"] = resource_frame[period_column].astype(str).str.extract(r"(\d{8})", expand=False)
+    resource_frame["_parsed_period_date"] = pd.to_datetime(
+        resource_frame["_raw_period_date"],
+        format="%Y%m%d",
+        errors="coerce",
+    ).dt.date
+    resource_frame = resource_frame[
+        resource_frame["_parsed_period_date"].between(start_date, end_date)
+    ].copy()
+    if resource_frame.empty:
+        return _empty_itl_frame()
+
+    parsed_periods = resource_frame[period_column].map(_parse_britned_operational_period)
+    start_utc = parsed_periods.map(lambda item: item[0])
+    end_utc = parsed_periods.map(lambda item: item[1])
+    published_utc = pd.Series(
+        [_resource_publication_timestamp(resource, _extract_resource_date(resource))] * len(resource_frame),
+        index=resource_frame.index,
+        dtype="datetime64[ns, UTC]",
+    )
+    base = pd.DataFrame({"interval_start_utc": start_utc, "interval_end_utc": end_utc})
+    base["interval_start_local"] = pd.to_datetime(base["interval_start_utc"], utc=True, errors="coerce").dt.tz_convert(LONDON_TZ)
+    base["interval_end_local"] = pd.to_datetime(base["interval_end_utc"], utc=True, errors="coerce").dt.tz_convert(LONDON_TZ)
+    base[from_gb_column] = resource_frame[from_gb_column]
+    base[to_gb_column] = resource_frame[to_gb_column]
+    base[reason_column] = resource_frame[reason_column]
+    auction_type = pd.Series(["weekly_archive"] * len(resource_frame), index=resource_frame.index)
+
+    to_gb = _build_direction_frame(
+        base=base,
+        spec=spec,
+        resource=resource,
+        source_table_variant=source_table_variant,
+        direction_key="neighbor_to_gb",
+        itl_column=to_gb_column,
+        reason_column=reason_column,
+        source_published_utc=published_utc,
+        auction_type=auction_type,
+    )
+    from_gb = _build_direction_frame(
+        base=base,
+        spec=spec,
+        resource=resource,
+        source_table_variant=source_table_variant,
+        direction_key="gb_to_neighbor",
+        itl_column=from_gb_column,
+        reason_column=reason_column,
+        source_published_utc=published_utc,
+        auction_type=auction_type,
+    )
+    return pd.concat([to_gb, from_gb], ignore_index=True)
+
+
+def _parse_eleclink_archived_ntc(
+    resource_frame: pd.DataFrame,
+    spec: ITLDatasetSpec,
+    resource: dict,
+    source_table_variant: str,
+    start_date: dt.date,
+    end_date: dt.date,
+) -> pd.DataFrame:
+    columns = tuple(resource_frame.columns)
+    date_column = _match_column(columns, "operational", "date")
+    period_column = _match_column(columns, "hourly", "time", "period")
+    auction_column = _match_column(columns, "auction", "type")
+    to_gb_column = _match_column(columns, "flow", "to", "gb")
+    from_gb_column = _match_column(columns, "flow", "from", "gb")
+    reason_column = _match_column(columns, "reason", "reduction") or _match_column(columns, "reason")
+    if not all([date_column, period_column, to_gb_column, from_gb_column]):
+        raise RuntimeError(f"{spec.dataset_key} archived ElecLink resource has an unsupported schema")
+    if reason_column is None:
+        resource_frame = resource_frame.copy()
+        reason_column = "__missing_reason__"
+        resource_frame[reason_column] = pd.NA
+
+    resource_frame = resource_frame.copy()
+    resource_frame["_parsed_operational_date"] = pd.to_datetime(
+        resource_frame[date_column].astype(str).str.strip(),
+        format="%Y%m%d",
+        errors="coerce",
+    ).dt.date
+    resource_frame = resource_frame[
+        resource_frame["_parsed_operational_date"].between(start_date, end_date)
+    ].copy()
+    if resource_frame.empty:
+        return _empty_itl_frame()
+
+    parsed_periods = [
+        _parse_eleclink_archived_period(operational_date, period_value)
+        for operational_date, period_value in zip(resource_frame[date_column], resource_frame[period_column])
+    ]
+    start_utc = pd.Series([item[0] for item in parsed_periods], index=resource_frame.index, dtype="datetime64[ns, UTC]")
+    end_utc = pd.Series([item[1] for item in parsed_periods], index=resource_frame.index, dtype="datetime64[ns, UTC]")
+    published_utc = pd.Series(
+        [_resource_publication_timestamp(resource, _extract_resource_date(resource))] * len(resource_frame),
+        index=resource_frame.index,
+        dtype="datetime64[ns, UTC]",
+    )
+    auction_type = (
+        resource_frame[auction_column].astype("object")
+        if auction_column is not None
+        else pd.Series(["unknown"] * len(resource_frame), index=resource_frame.index)
+    )
+    base = pd.DataFrame({"interval_start_utc": start_utc, "interval_end_utc": end_utc})
+    base["interval_start_local"] = pd.to_datetime(base["interval_start_utc"], utc=True, errors="coerce").dt.tz_convert(LONDON_TZ)
+    base["interval_end_local"] = pd.to_datetime(base["interval_end_utc"], utc=True, errors="coerce").dt.tz_convert(LONDON_TZ)
+    base[to_gb_column] = resource_frame[to_gb_column]
+    base[from_gb_column] = resource_frame[from_gb_column]
+    base[reason_column] = resource_frame[reason_column]
+
+    to_gb = _build_direction_frame(
+        base=base,
+        spec=spec,
+        resource=resource,
+        source_table_variant=source_table_variant,
+        direction_key="neighbor_to_gb",
+        itl_column=to_gb_column,
+        reason_column=reason_column,
+        source_published_utc=published_utc,
+        auction_type=auction_type,
+    )
+    from_gb = _build_direction_frame(
+        base=base,
+        spec=spec,
+        resource=resource,
+        source_table_variant=source_table_variant,
+        direction_key="gb_to_neighbor",
+        itl_column=from_gb_column,
+        reason_column=reason_column,
+        source_published_utc=published_utc,
+        auction_type=auction_type,
+    )
+    return pd.concat([to_gb, from_gb], ignore_index=True)
+
+
+def _parse_resource_frame(
+    resource_frame: pd.DataFrame,
+    spec: ITLDatasetSpec,
+    resource: dict,
+    source_table_variant: str,
+    start_date: dt.date,
+    end_date: dt.date,
+) -> pd.DataFrame:
     if spec.parse_mode == "neso_current_itl":
+        if source_table_variant == "archived_upload":
+            columns = tuple(resource_frame.columns)
+            if _match_column(columns, "hourly", "time", "period"):
+                return _parse_eleclink_archived_ntc(resource_frame, spec, resource, source_table_variant, start_date, end_date)
+            return _parse_generic_archived_weekly_itl(resource_frame, spec, resource, source_table_variant, start_date, end_date)
         return _parse_neso_current_itl(resource_frame, spec, resource, source_table_variant)
     if spec.parse_mode == "britned_weekly_itl":
         return _parse_britned_weekly_itl(resource_frame, spec, resource, source_table_variant)
@@ -468,7 +672,14 @@ def _fetch_spec_itl(spec: ITLDatasetSpec, start_date: dt.date, end_date: dt.date
         current_resource = _pick_current_resource(resources, spec.current_resource_name)
         if current_resource is not None:
             current_frame = _fetch_csv(_resource_url(current_resource))
-            parsed_current = _parse_resource_frame(current_frame, spec, current_resource, "current_datastore")
+            parsed_current = _parse_resource_frame(
+                current_frame,
+                spec,
+                current_resource,
+                "current_datastore",
+                start_date,
+                end_date,
+            )
             filtered_current = _filter_requested_window(parsed_current, start_date, end_date)
             if not filtered_current.empty:
                 frames.append(filtered_current)
@@ -476,7 +687,14 @@ def _fetch_spec_itl(spec: ITLDatasetSpec, start_date: dt.date, end_date: dt.date
     archived_resources = _pick_archived_resources(resources, spec, start_date, end_date)
     for resource in archived_resources:
         archived_frame = _fetch_csv(_resource_url(resource))
-        parsed_archived = _parse_resource_frame(archived_frame, spec, resource, "archived_upload")
+        parsed_archived = _parse_resource_frame(
+            archived_frame,
+            spec,
+            resource,
+            "archived_upload",
+            start_date,
+            end_date,
+        )
         filtered_archived = _filter_requested_window(parsed_archived, start_date, end_date)
         if not filtered_archived.empty:
             frames.append(filtered_archived)

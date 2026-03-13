@@ -105,6 +105,53 @@ class InterconnectorITLTests(unittest.TestCase):
         self.assertAlmostEqual(float(export_row["itl_mw"]), 1000.0)
         self.assertEqual(export_row["interval_end_local"], pd.Timestamp("2024-10-03T00:00:00+01:00"))
 
+    def test_build_fact_interconnector_itl_hourly_matches_ckan_machine_names_and_path_urls(self) -> None:
+        spec = ITLDatasetSpec(
+            connector_key="ifa",
+            connector_label="IFA",
+            border_key="GB-FR",
+            target_zone="FR",
+            neighbor_domain_key="FR",
+            dataset_key="ifa",
+            dataset_id="ifa-dataset",
+            current_resource_name="IFA ITL Data",
+            archived_resource_name="Archived IFA DA & ID Weekly ITLs",
+            parse_mode="neso_current_itl",
+        )
+        resources = [
+            {
+                "id": "current-resource",
+                "name": "ifa_itl_data",
+                "title": "IFA ITL Data",
+                "path": "https://example.com/ifa.csv",
+                "metadata_modified": "2024-10-01T09:30:00Z",
+            }
+        ]
+        current = pd.DataFrame(
+            [
+                {
+                    "Data Upload Time (GMT)": "2024-10-01T10:30:00",
+                    "Auction Type": "Day Ahead",
+                    "Operational Period Start Date & Time (GMT)": "2024-10-01T10:00:00",
+                    "Flow (MW) To GB": 1800,
+                    "Reason For Restriction To GB": "No Restriction",
+                    "Flow (MW) From GB": 1700,
+                    "Reason For Restriction From GB": "No Restriction",
+                }
+            ]
+        )
+
+        with patch.object(interconnector_itl, "ITL_DATASET_SPECS", (spec,)):
+            with patch("interconnector_itl._resource_rows", return_value=resources):
+                with patch("interconnector_itl._fetch_csv", return_value=current):
+                    fact = build_fact_interconnector_itl_hourly(
+                        start_date=dt.date(2024, 10, 1),
+                        end_date=dt.date(2024, 10, 1),
+                    )
+
+        self.assertEqual(len(fact), 2)
+        self.assertTrue((fact["source_document_url"] == "https://example.com/ifa.csv").all())
+
 
 if __name__ == "__main__":
     unittest.main()
