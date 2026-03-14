@@ -443,10 +443,28 @@ Key behavior:
      --truth-store-db-path bmu_truth_store.sqlite
    ```
 
-   With no `--market-state-input-path`, this uses the same free live feed from Elexon MID plus ENTSO-E day-ahead.
-   If you do supply `--market-state-input-path`, it writes the reviewed/manual/API version instead. Either way it keeps
-   explicit source lineage so a reviewed manual feed can be swapped later for a stronger API feed without changing the
-   opportunity or backtest contracts.
+    With no `--market-state-input-path`, this uses the same free live feed from Elexon MID plus ENTSO-E day-ahead.
+    If you do supply `--market-state-input-path`, it writes the reviewed/manual/API version instead. Either way it keeps
+    explicit source lineage so a reviewed manual feed can be swapped later for a stronger API feed without changing the
+    opportunity or backtest contracts.
+
+    The opportunity materializer now also auto-builds a complementary public GB system-stress feed when it can, using
+    public Elexon system-balance datasets for:
+    - indicative imbalance
+    - indicated demand
+    - indicated generation
+    - indicated margin
+
+    To materialize that hourly system-balance layer directly:
+
+    ```bash
+    python inline_arbitrage_live.py ^
+      --materialize-system-balance-market-state ^
+      --system-balance-start 2024-10-01 ^
+      --system-balance-end 2024-10-02 ^
+      --system-balance-output-dir system_balance_market_state_history ^
+      --truth-store-db-path bmu_truth_store.sqlite
+    ```
 
 23. Materialize the France-specific connector layer for `IFA`, `IFA2`, and `ElecLink`:
 
@@ -534,6 +552,14 @@ Key behavior:
 - The BMU dimension is a first pass. It maps known wind BMUs into the current cluster registry
   using explicit name rules, allows `mapping_status=region_only` when the parent region is clear
   but no current cluster should be forced, and leaves everything else as `mapping_status=unmapped`.
+- The cluster registry itself is no longer just a seed list. The highest-value clusters now carry
+  curated first-pass metadata for:
+  - `mapping_confidence`
+  - `connection_context`
+  - `preferred_hub_candidates`
+  - `curation_version`
+  That spatial lineage now flows through the opportunity and backtest surfaces instead of pretending
+  every cluster is equally trusted.
 - `fact_bmu_generation_half_hourly` is actual generation truth from Elexon B1610, not curtailment truth.
 - `bmu_dispatch.py` now materializes:
   - `fact_bmu_acceptance_event`
@@ -760,10 +786,18 @@ Key behavior:
   - forward, day-ahead, intraday, and optional imbalance prices
   - forward-to-day-ahead and day-ahead-to-intraday spread buckets
   - route-level upstream market-state labels plus source lineage
+- If `fact_system_balance_market_state_hourly` is present, `v2` also preserves explicit as-of GB system-state fields for:
+  - `system_balance_state`
+  - imbalance-direction and margin-direction buckets
+  - system-balance transition state and persistence bucket
+  - feed-available, known, and active flags
 - The first free live upstream feed now comes from Elexon GB MID plus ENTSO-E day-ahead prices for the first foreign landing zone on each route. When no upstream feed is present, the current market-state layer still falls back to the as-of route score rather than pretending we already have those external curves.
 - `fact_backtest_summary_slice` is the first slice-aware QA surface over the backtest. It aggregates error and bias by
   model, forecast horizon, cluster, connector hub, route, delivery tier, internal-transfer tier, internal-transfer gate state,
   connector-notice market state, upstream market state, curtailment source tier, and hour of day.
+- The same summary surface now also includes:
+  - `system_balance_state`
+  - cluster spatial-confidence lineage
 - The summary slice table now also carries:
   - `error_focus_area`
   - `error_reduction_priority_rank`
@@ -785,6 +819,9 @@ Key behavior:
   states so the warnings can be tied back to a specific route or cluster instead of only the whole system.
 - Drift rows now also expose reviewed-internal-share, proxy-internal-share, and blocked-reviewed-internal share, so internal
   transfer regime shifts show up directly in the same route and cluster drift surface.
+- Drift rows now also expose public system-stress mix:
+  - `system_balance_stress_share`
+  - `system_balance_known_share`
 - The opportunity layer now distinguishes:
   - capacity is tight now
   - the market already knew a connector restriction was coming
@@ -793,6 +830,8 @@ Key behavior:
   can optionally pull BMU truth and override the proxy where valid cluster truth exists.
 - To backtest an existing opportunity export:
   - `python inline_arbitrage_live.py --materialize-opportunity-backtest --opportunity-input-path curtailment_opportunity_history --backtest-output-dir opportunity_backtest_history`
+- To turn an opportunity export plus its backtest into a hard product-readiness gate:
+  - `python inline_arbitrage_live.py --materialize-model-readiness --opportunity-input-path curtailment_opportunity_history --readiness-start 2024-10-01 --readiness-end 2024-10-07 --readiness-output-dir model_readiness_history`
 - The backtest CLI now accepts:
   - `--backtest-model-key all`
   - `--backtest-model-key opportunity_group_mean_notice_v1`
@@ -800,6 +839,27 @@ Key behavior:
 - It also accepts:
   - `--backtest-horizons 1,6,24,168`
 - `all` is now the default so both baselines can be compared on the same CLI path and stored in the same backtest tables.
+- `fact_model_readiness_daily` is the formal gate for any future map or operational UI. It summarizes:
+  - overall `t+1h` and `t+6h` deliverable MAE
+  - `GB-NL` `t+1h` deliverable MAE
+  - proxy versus reviewed internal-transfer share
+  - `capacity_unknown` route share
+  - route and cluster drift warnings
+  - whether severe fallback-heavy route slices still remain unresolved
+- `fact_model_blocker_priority` is the ranked work queue that sits directly under that readiness gate. It turns
+  each daily blocker into prioritized slices using:
+  - `fact_model_readiness_daily`
+  - `fact_backtest_summary_slice`
+  - `fact_backtest_top_error_hourly`
+  - `fact_drift_window`
+- Each blocker row is keyed by:
+  - `window_date`
+  - `blocker_type`
+  - a deterministic `blocker_slice_key`
+  and carries the slice, top-error concentration, persistent slice MAE, matching drift signal, a heuristic
+  `blocker_priority_score`, and a concrete `recommended_next_step`.
+- The readiness surface intentionally emits `ready_for_map` only when those thresholds are passed. Until then, the repo stays
+  in model-hardening mode rather than pretending the map is product-ready.
 - For `ElecLink`, the current policy is explicit:
   - near-current windows prefer authenticated Nord Pool UMM if credentials are available
   - historical replay windows prefer a manual UMM export when supplied

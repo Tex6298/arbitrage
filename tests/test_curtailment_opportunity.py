@@ -160,7 +160,7 @@ class CurtailmentOpportunityTests(unittest.TestCase):
         self.assertEqual(row["system_balance_margin_direction_bucket"], "margin_very_tight")
         self.assertEqual(row["system_balance_source_provider"], "elexon")
         self.assertEqual(row["cluster_mapping_confidence"], "medium")
-        self.assertIn("BritNed", str(row["cluster_preferred_hub_candidates"]))
+        self.assertIn("britned", str(row["cluster_preferred_hub_candidates"]).lower())
         self.assertTrue(str(row["cluster_curation_version"]).startswith("phase2_spatial_truth_v1"))
         self.assertFalse(bool(row["connector_capacity_tight_now_flag"]))
         self.assertTrue(bool(row["market_knew_connector_restriction_flag"]))

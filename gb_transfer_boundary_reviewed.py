@@ -33,6 +33,7 @@ class BoundaryScopeRule:
     cluster_keys: tuple[str, ...] = ()
     hub_keys: tuple[str, ...] = ()
     transfer_requirements: tuple[str, ...] = ()
+    include_non_tightening_pass: bool = False
     note: str = ""
 
 
@@ -51,12 +52,30 @@ BOUNDARY_SCOPE_RULES: tuple[BoundaryScopeRule, ...] = (
         note="NESO FLOWSTH day-ahead boundary used as a first-pass east and south export corridor cap for east-facing England clusters.",
     ),
     BoundaryScopeRule(
+        boundary_key="FLOWSTH",
+        rule_key="england_east_to_britned_reviewed_pass",
+        cluster_keys=("east_anglia_offshore", "humber_offshore", "dogger_hornsea_offshore"),
+        hub_keys=("britned",),
+        transfer_requirements=("east_coast_bias", "east_coast_transfer", "south_east_bias"),
+        include_non_tightening_pass=True,
+        note="NESO FLOWSTH day-ahead boundary used as reviewed internal pass-through evidence for east-facing England into BritNed when the corridor is publicly available.",
+    ),
+    BoundaryScopeRule(
         boundary_key="SCOTEX",
         rule_key="scotland_to_south_export_corridor",
         parent_regions=("Scotland",),
         hub_keys=("britned", "ifa", "ifa2", "eleclink"),
         transfer_requirements=("north_to_south_transfer",),
         note="NESO SCOTEX day-ahead boundary used as a first-pass Scotland-to-south export corridor cap.",
+    ),
+    BoundaryScopeRule(
+        boundary_key="SCOTEX",
+        rule_key="scotland_to_britned_reviewed_pass",
+        parent_regions=("Scotland",),
+        hub_keys=("britned",),
+        transfer_requirements=("north_to_south_transfer",),
+        include_non_tightening_pass=True,
+        note="NESO SCOTEX day-ahead boundary used as reviewed internal pass-through evidence for Scotland-to-BritNed export when the corridor is publicly available.",
     ),
     BoundaryScopeRule(
         boundary_key="NKILGRMO",
@@ -67,12 +86,30 @@ BOUNDARY_SCOPE_RULES: tuple[BoundaryScopeRule, ...] = (
         note="NESO NKILGRMO (B5 family) day-ahead boundary used as a first-pass Scotland-to-south export corridor cap.",
     ),
     BoundaryScopeRule(
+        boundary_key="NKILGRMO",
+        rule_key="scotland_to_britned_reviewed_pass",
+        parent_regions=("Scotland",),
+        hub_keys=("britned",),
+        transfer_requirements=("north_to_south_transfer",),
+        include_non_tightening_pass=True,
+        note="NESO NKILGRMO day-ahead boundary used as reviewed internal pass-through evidence for Scotland-to-BritNed export when the corridor is publicly available.",
+    ),
+    BoundaryScopeRule(
         boundary_key="HARSPNBLY",
         rule_key="scotland_to_south_export_corridor",
         parent_regions=("Scotland",),
         hub_keys=("britned", "ifa", "ifa2", "eleclink"),
         transfer_requirements=("north_to_south_transfer",),
         note="NESO HARSPNBLY (B6a family) day-ahead boundary used as a first-pass Scotland-to-south export corridor cap.",
+    ),
+    BoundaryScopeRule(
+        boundary_key="HARSPNBLY",
+        rule_key="scotland_to_britned_reviewed_pass",
+        parent_regions=("Scotland",),
+        hub_keys=("britned",),
+        transfer_requirements=("north_to_south_transfer",),
+        include_non_tightening_pass=True,
+        note="NESO HARSPNBLY day-ahead boundary used as reviewed internal pass-through evidence for Scotland-to-BritNed export when the corridor is publicly available.",
     ),
     BoundaryScopeRule(
         boundary_key="SSE-SP2",
@@ -83,6 +120,15 @@ BOUNDARY_SCOPE_RULES: tuple[BoundaryScopeRule, ...] = (
         note="NESO SSE-SP2 day-ahead boundary used as a first-pass Scotland-to-south export corridor cap.",
     ),
     BoundaryScopeRule(
+        boundary_key="SSE-SP2",
+        rule_key="scotland_to_britned_reviewed_pass",
+        parent_regions=("Scotland",),
+        hub_keys=("britned",),
+        transfer_requirements=("north_to_south_transfer",),
+        include_non_tightening_pass=True,
+        note="NESO SSE-SP2 day-ahead boundary used as reviewed internal pass-through evidence for Scotland-to-BritNed export when the corridor is publicly available.",
+    ),
+    BoundaryScopeRule(
         boundary_key="SSEN-S",
         rule_key="scotland_to_south_export_corridor",
         parent_regions=("Scotland",),
@@ -91,12 +137,30 @@ BOUNDARY_SCOPE_RULES: tuple[BoundaryScopeRule, ...] = (
         note="NESO SSEN-S day-ahead boundary used as a first-pass Scotland-to-south export corridor cap.",
     ),
     BoundaryScopeRule(
+        boundary_key="SSEN-S",
+        rule_key="scotland_to_britned_reviewed_pass",
+        parent_regions=("Scotland",),
+        hub_keys=("britned",),
+        transfer_requirements=("north_to_south_transfer",),
+        include_non_tightening_pass=True,
+        note="NESO SSEN-S day-ahead boundary used as reviewed internal pass-through evidence for Scotland-to-BritNed export when the corridor is publicly available.",
+    ),
+    BoundaryScopeRule(
         boundary_key="SSHARN3",
         rule_key="scotland_to_south_export_corridor",
         parent_regions=("Scotland",),
         hub_keys=("britned", "ifa", "ifa2", "eleclink"),
         transfer_requirements=("north_to_south_transfer",),
         note="NESO SSHARN3 day-ahead boundary used as a first-pass Scotland-to-south export corridor cap.",
+    ),
+    BoundaryScopeRule(
+        boundary_key="SSHARN3",
+        rule_key="scotland_to_britned_reviewed_pass",
+        parent_regions=("Scotland",),
+        hub_keys=("britned",),
+        transfer_requirements=("north_to_south_transfer",),
+        include_non_tightening_pass=True,
+        note="NESO SSHARN3 day-ahead boundary used as reviewed internal pass-through evidence for Scotland-to-BritNed export when the corridor is publicly available.",
     ),
     BoundaryScopeRule(
         boundary_key="SEIMPPR23",
@@ -113,12 +177,30 @@ BOUNDARY_SCOPE_RULES: tuple[BoundaryScopeRule, ...] = (
         note="NESO SEIMPPR23 (LE1 South East England family) day-ahead boundary used as a first-pass south-east export corridor cap for east-facing England routes into BritNed and the France-facing hubs.",
     ),
     BoundaryScopeRule(
+        boundary_key="SEIMPPR23",
+        rule_key="south_east_england_britned_reviewed_pass",
+        cluster_keys=("east_anglia_offshore", "humber_offshore", "dogger_hornsea_offshore"),
+        hub_keys=("britned",),
+        transfer_requirements=("east_coast_bias", "east_coast_transfer", "south_east_bias"),
+        include_non_tightening_pass=True,
+        note="NESO SEIMPPR23 day-ahead boundary used as reviewed internal pass-through evidence for east-facing England into BritNed when south-east export headroom is publicly available.",
+    ),
+    BoundaryScopeRule(
         boundary_key="GM+SNOW5A",
         rule_key="northern_transfer_complementary_corridor",
         parent_regions=("Scotland",),
         hub_keys=("britned", "ifa", "ifa2", "eleclink"),
         transfer_requirements=("north_to_south_transfer",),
         note="NESO GM+SNOW5A acts as a complementary northern transfer boundary to B7 and is influenced by Western Link loading, so it is used as a first-pass additional Scotland-to-south export corridor cap.",
+    ),
+    BoundaryScopeRule(
+        boundary_key="GM+SNOW5A",
+        rule_key="scotland_to_britned_reviewed_pass",
+        parent_regions=("Scotland",),
+        hub_keys=("britned",),
+        transfer_requirements=("north_to_south_transfer",),
+        include_non_tightening_pass=True,
+        note="NESO GM+SNOW5A acts as complementary reviewed internal pass-through evidence for Scotland-to-BritNed export when the corridor is publicly available.",
     ),
 )
 
@@ -349,7 +431,7 @@ def build_fact_gb_transfer_boundary_reviewed_hourly(
                 pd.to_numeric(expanded["structural_gate_mw_proxy"], errors="coerce")
             )
         )
-        expanded = expanded[tightening_mask].copy()
+        expanded = expanded[tightening_mask | rule.include_non_tightening_pass].copy()
         if expanded.empty:
             continue
         expanded["source_provider"] = GB_TRANSFER_BOUNDARY_SOURCE_PROVIDER

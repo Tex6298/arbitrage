@@ -61,6 +61,7 @@ from opportunity_backtest import (
     DEFAULT_BACKTEST_MODEL_SELECTION,
     DEFAULT_FORECAST_HORIZON_HOURS,
     DRIFT_WINDOW_TABLE,
+    MODEL_POTENTIAL_RATIO_V2,
     VALID_BACKTEST_MODEL_SELECTIONS,
     coerce_forecast_horizons,
     load_curtailment_opportunity_input,
@@ -149,9 +150,11 @@ from market_state_feed import (
     write_normalized_upstream_market_state_input,
 )
 from model_readiness import (
+    MODEL_BLOCKER_PRIORITY_TABLE,
     MODEL_READINESS_TABLE,
     build_fact_model_readiness_daily,
     materialize_model_readiness_daily,
+    materialize_model_readiness_review,
 )
 from physical_constraints import assumption_frame, compute_netbacks
 from route_score_history import ROUTE_SCORE_TABLE, materialize_route_score_history
@@ -2899,9 +2902,11 @@ def main() -> int:
                 forecast_horizons=forecast_horizons,
             )
             readiness_model_key = MODEL_POTENTIAL_RATIO_V2 if args.backtest_model_key == "all" else args.backtest_model_key
-            readiness_frames = materialize_model_readiness_daily(
+            readiness_frames = materialize_model_readiness_review(
                 output_dir=args.readiness_output_dir,
                 fact_backtest_prediction_hourly=backtest_frames[BACKTEST_PREDICTION_TABLE],
+                fact_backtest_summary_slice=backtest_frames[BACKTEST_SUMMARY_SLICE_TABLE],
+                fact_backtest_top_error_hourly=backtest_frames[BACKTEST_TOP_ERROR_TABLE],
                 fact_drift_window=backtest_frames[DRIFT_WINDOW_TABLE],
                 model_key=readiness_model_key,
             )
@@ -2919,6 +2924,27 @@ def main() -> int:
                 print()
                 print("Model Readiness Daily")
                 print(readiness.to_string(index=False))
+            blocker_priority = frames[MODEL_BLOCKER_PRIORITY_TABLE]
+            if not blocker_priority.empty:
+                print()
+                print("Top Model Blockers")
+                print(
+                    blocker_priority[
+                        [
+                            "window_date",
+                            "blocker_priority_rank",
+                            "blocker_type",
+                            "route_name",
+                            "cluster_key",
+                            "hub_key",
+                            "error_focus_area",
+                            "blocker_priority_score",
+                            "recommended_next_step",
+                        ]
+                    ]
+                    .head(20)
+                    .to_string(index=False)
+                )
             if args.truth_store_db_path:
                 store_summary = upsert_truth_frames_to_sqlite(frames, args.truth_store_db_path)
                 print(f"[store=sqlite] Upserted model readiness tables into {args.truth_store_db_path}")

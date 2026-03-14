@@ -76,7 +76,7 @@ class GbTransferBoundaryReviewedTests(unittest.TestCase):
         self.assertEqual(row["source_key"], "fact_day_ahead_constraint_boundary_half_hourly:FLOWSTH")
         self.assertEqual(row["source_provider"], "neso")
 
-    def test_build_fact_gb_transfer_boundary_reviewed_hourly_skips_non_tightening_rows(self) -> None:
+    def test_build_fact_gb_transfer_boundary_reviewed_hourly_keeps_non_tightening_britned_rows_for_east_england(self) -> None:
         boundary = pd.DataFrame(
             [
                 _boundary_row(
@@ -97,12 +97,13 @@ class GbTransferBoundaryReviewedTests(unittest.TestCase):
             day_ahead_constraint_boundary=boundary,
         )
 
-        self.assertTrue(fact.empty)
-        self.assertEqual(list(fact.columns), list(build_fact_gb_transfer_boundary_reviewed_hourly(
-            start_date=dt.date(2024, 10, 1),
-            end_date=dt.date(2024, 10, 1),
-            day_ahead_constraint_boundary=pd.DataFrame(),
-        ).columns))
+        self.assertFalse(fact.empty)
+        self.assertEqual(set(fact["hub_key"]), {"britned"})
+        self.assertEqual(
+            set(fact["cluster_key"]),
+            {"east_anglia_offshore", "humber_offshore", "dogger_hornsea_offshore"},
+        )
+        self.assertTrue((fact["reviewed_gate_state"] == "reviewed_boundary_cap").all())
 
     def test_build_fact_gb_transfer_boundary_reviewed_hourly_scotland_rules_stay_scotland_only(self) -> None:
         boundary = pd.DataFrame(
@@ -128,6 +129,35 @@ class GbTransferBoundaryReviewedTests(unittest.TestCase):
         self.assertFalse(fact.empty)
         self.assertEqual(set(fact["parent_region"]), {"Scotland"})
         self.assertTrue((fact["boundary_key"] == "NKILGRMO").all())
+        self.assertTrue({"britned", "ifa", "ifa2", "eleclink"}.issuperset(set(fact["hub_key"])))
+
+    def test_build_fact_gb_transfer_boundary_reviewed_hourly_keeps_non_tightening_britned_rows_for_scotland(self) -> None:
+        boundary = pd.DataFrame(
+            [
+                _boundary_row(
+                    "SCOTEX",
+                    "2024-10-01T00:00:00Z",
+                    limit_mw=100000.0,
+                    flow_mw=1000.0,
+                    remaining_headroom_mw=99000.0,
+                    utilization_ratio=0.01,
+                    boundary_state="constraint_boundary_available",
+                )
+            ]
+        )
+
+        fact = build_fact_gb_transfer_boundary_reviewed_hourly(
+            start_date=dt.date(2024, 10, 1),
+            end_date=dt.date(2024, 10, 1),
+            day_ahead_constraint_boundary=boundary,
+        )
+
+        self.assertFalse(fact.empty)
+        self.assertEqual(set(fact["hub_key"]), {"britned"})
+        self.assertEqual(set(fact["parent_region"]), {"Scotland"})
+        self.assertIn("moray_firth_offshore", set(fact["cluster_key"]))
+        self.assertIn("east_coast_scotland_offshore", set(fact["cluster_key"]))
+        self.assertTrue((fact["reviewed_gate_state"] == "reviewed_boundary_cap").all())
 
     def test_build_fact_gb_transfer_boundary_reviewed_hourly_maps_seimp_to_east_anglia_corridors(self) -> None:
         boundary = pd.DataFrame(

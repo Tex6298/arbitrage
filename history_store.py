@@ -62,6 +62,7 @@ TRUTH_STORE_PRIMARY_KEYS: Dict[str, list[str]] = {
     "fact_backtest_top_error_hourly": ["model_key", "forecast_horizon_hours", "top_error_rank"],
     "fact_drift_window": ["model_key", "forecast_horizon_hours", "window_start_utc", "drift_scope", "route_name", "cluster_key"],
     "fact_model_readiness_daily": ["window_date", "model_key"],
+    "fact_model_blocker_priority": ["window_date", "model_key", "forecast_horizon_hours", "blocker_type", "blocker_slice_key"],
     "fact_bmu_bid_offer_half_hourly": ["settlement_date", "settlement_period", "elexon_bm_unit"],
     "fact_bmu_physical_position_half_hourly": ["settlement_date", "settlement_period", "elexon_bm_unit"],
     "fact_bmu_availability_half_hourly": ["settlement_date", "settlement_period", "elexon_bm_unit"],

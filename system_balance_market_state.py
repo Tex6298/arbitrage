@@ -338,24 +338,32 @@ def _load_dataset_frame(
     api_key: str | None,
 ) -> pd.DataFrame:
     window_start, window_end = _requested_window_utc(start_date, end_date)
-    params = {
-        "publishDateTimeFrom": window_start.strftime("%Y-%m-%dT%H:%MZ"),
-        "publishDateTimeTo": window_end.strftime("%Y-%m-%dT%H:%MZ"),
-        "format": "json",
-    }
-    url = f"{ELEXON_DATASET_BASE}/{spec.dataset_key}?{urllib.parse.urlencode(params)}"
-    payload = _fetch_elexon_payload(url, f"Elexon {spec.dataset_key}", api_key)
-    try:
-        body = json.loads(payload.decode("utf-8"))
-    except Exception as exc:
-        raise RuntimeError(f"Elexon {spec.dataset_key} returned invalid JSON") from exc
+    frames = []
+    chunk_start = window_start
+    while chunk_start < window_end:
+        chunk_end = min(chunk_start + pd.Timedelta(days=1), window_end)
+        params = {
+            "publishDateTimeFrom": chunk_start.strftime("%Y-%m-%dT%H:%MZ"),
+            "publishDateTimeTo": chunk_end.strftime("%Y-%m-%dT%H:%MZ"),
+            "format": "json",
+        }
+        url = f"{ELEXON_DATASET_BASE}/{spec.dataset_key}?{urllib.parse.urlencode(params)}"
+        payload = _fetch_elexon_payload(url, f"Elexon {spec.dataset_key}", api_key)
+        try:
+            body = json.loads(payload.decode("utf-8"))
+        except Exception as exc:
+            raise RuntimeError(f"Elexon {spec.dataset_key} returned invalid JSON") from exc
 
-    rows = body.get("data") if isinstance(body, dict) else body
-    if rows is None:
-        rows = []
-    if not isinstance(rows, list):
-        rows = [rows]
-    return pd.DataFrame(rows)
+        rows = body.get("data") if isinstance(body, dict) else body
+        if rows is None:
+            rows = []
+        if not isinstance(rows, list):
+            rows = [rows]
+        frames.append(pd.DataFrame(rows))
+        chunk_start = chunk_end
+    if not frames:
+        return pd.DataFrame()
+    return pd.concat(frames, ignore_index=True, sort=False)
 
 
 def _imbalance_bucket(values: pd.Series) -> pd.Series:
@@ -509,7 +517,12 @@ def build_fact_system_balance_market_state_hourly(
         if f"{spec.metric_column}_source_published_utc" in combined.columns
     ]
     if published_columns:
-        combined["system_balance_source_published_utc"] = combined[published_columns].max(axis=1)
+        for column in published_columns:
+            combined[column] = pd.to_datetime(combined[column], utc=True, errors="coerce")
+        combined["system_balance_source_published_utc"] = combined[published_columns].apply(
+            lambda row: row.dropna().max() if row.notna().any() else pd.NaT,
+            axis=1,
+        )
     else:
         combined["system_balance_source_published_utc"] = pd.NaT
     combined["system_balance_source_dataset_keys"] = combined.apply(

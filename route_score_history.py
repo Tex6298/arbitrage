@@ -6,6 +6,7 @@ from typing import Dict, Tuple
 import numpy as np
 import pandas as pd
 
+from asset_mapping import cluster_frame
 from gb_topology import INTERCONNECTOR_HUBS, ROUTE_HUB_OPTIONS
 from network_overlay import build_border_network_overlay
 from physical_constraints import ROUTE_BORDER_KEYS, ROUTES, compute_netbacks
@@ -135,6 +136,25 @@ def _empty_route_score_frame() -> pd.DataFrame:
 
 def _route_hub_preferences() -> Dict[str, Tuple[str, ...]]:
     return {option.route_name: option.preferred_hubs for option in ROUTE_HUB_OPTIONS}
+
+
+def _cluster_preferred_hub_lookup() -> Dict[str, Tuple[str, ...]]:
+    clusters = cluster_frame()[["cluster_key", "preferred_hub_candidates"]].copy()
+    lookup: Dict[str, Tuple[str, ...]] = {}
+    for row in clusters.itertuples(index=False):
+        preferred_hubs = tuple(
+            value.strip()
+            for value in str(row.preferred_hub_candidates).split(",")
+            if value and value.strip()
+        )
+        lookup[str(row.cluster_key)] = preferred_hubs
+    return lookup
+
+
+def _hub_allowed_for_cluster(hub_key: str, allowed_hubs: object) -> bool:
+    if not isinstance(allowed_hubs, tuple) or not allowed_hubs:
+        return True
+    return hub_key in allowed_hubs
 
 
 def _overlay_lookup(frame: pd.DataFrame, prefix: str) -> pd.DataFrame:
@@ -441,6 +461,7 @@ def build_fact_route_score_hourly(
     ].drop_duplicates(subset=["interval_start_utc", "itl_connector_key"], keep="last")
 
     route_preferences = _route_hub_preferences()
+    cluster_preferred_hubs = _cluster_preferred_hub_lookup()
     transfer_gate = gb_transfer_gate.copy()
     transfer_gate["interval_start_utc"] = pd.to_datetime(transfer_gate["interval_start_utc"], utc=True, errors="coerce")
     internal_review_lookup = gb_transfer_reviewed_hourly.copy() if gb_transfer_reviewed_hourly is not None else pd.DataFrame()
@@ -500,6 +521,17 @@ def build_fact_route_score_hourly(
     rows = []
     for route_name, preferred_hubs in route_preferences.items():
         route_transfer = transfer_gate[transfer_gate["hub_key"].isin(preferred_hubs)].copy()
+        if not route_transfer.empty:
+            cluster_allowed_hubs = route_transfer["cluster_key"].map(cluster_preferred_hubs)
+            route_transfer = route_transfer[
+                pd.Series(
+                    [
+                        _hub_allowed_for_cluster(row.hub_key, allowed_hubs)
+                        for row, allowed_hubs in zip(route_transfer.itertuples(index=False), cluster_allowed_hubs)
+                    ],
+                    index=route_transfer.index,
+                )
+            ].copy()
         if route_transfer.empty:
             continue
 
@@ -778,43 +810,45 @@ def build_fact_route_score_hourly(
             route_transfer["internal_transfer_tier_accepted_flag"].notna(),
             False,
         ).astype(bool)
+        hard_upstream_dependency_block = route_transfer["gate_state"].fillna("").eq("blocked_upstream_dependency")
+        internal_review_effective = internal_review_accepted & ~hard_upstream_dependency_block
         route_transfer["internal_transfer_evidence_tier"] = np.where(
-            internal_review_accepted,
+            internal_review_effective,
             route_transfer["internal_transfer_reviewed_evidence_tier"],
             "gb_topology_transfer_gate_proxy",
         )
         route_transfer["internal_transfer_review_state"] = np.where(
-            internal_review_accepted,
+            internal_review_effective,
             route_transfer["internal_transfer_review_state"],
             "proxy_fallback",
         )
         route_transfer["internal_transfer_capacity_policy_action"] = np.where(
-            internal_review_accepted,
+            internal_review_effective,
             route_transfer["internal_transfer_capacity_policy_action"],
             "proxy_fallback",
         )
         route_transfer["internal_transfer_gate_state"] = np.where(
-            internal_review_accepted,
+            internal_review_effective,
             route_transfer["internal_transfer_reviewed_gate_state"],
             route_transfer["gate_state"],
         )
         route_transfer["internal_transfer_capacity_limit_mw"] = np.where(
-            internal_review_accepted,
+            internal_review_effective,
             route_transfer["internal_transfer_reviewed_capacity_limit_mw"],
             route_transfer["transfer_gate_mw_proxy"],
         )
         route_transfer["internal_transfer_source_provider"] = np.where(
-            internal_review_accepted,
+            internal_review_effective,
             route_transfer["internal_transfer_source_provider"],
             "proxy",
         )
         route_transfer["internal_transfer_source_family"] = np.where(
-            internal_review_accepted,
+            internal_review_effective,
             route_transfer["internal_transfer_source_family"],
             "gb_topology_transfer_gate_proxy",
         )
         route_transfer["internal_transfer_source_key"] = np.where(
-            internal_review_accepted,
+            internal_review_effective,
             route_transfer["internal_transfer_source_key"],
             "gb_topology_transfer_gate_proxy",
         )
