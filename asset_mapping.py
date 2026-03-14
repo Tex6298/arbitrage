@@ -26,6 +26,9 @@ class AssetCluster:
     curtailment_note: str
     weather_note: str
     confidence: str
+    connection_context: str
+    preferred_hub_candidates: Tuple[str, ...]
+    curation_version: str
 
 
 @dataclass(frozen=True)
@@ -43,6 +46,8 @@ PARENT_REGIONS: Dict[str, str] = {
     "Scotland": "Wind-heavy clusters with the highest north-to-south transfer risk.",
     "England/Wales": "Wind-heavy clusters with better proximity to south-east and east-coast export landings.",
 }
+
+CLUSTER_CURATION_VERSION = "phase2_spatial_truth_v1_2026-03-14"
 
 
 # Seed registry from user-provided notes. Treat coordinates and capacities as approximate
@@ -71,6 +76,9 @@ ASSET_CLUSTERS: Dict[str, AssetCluster] = {
         curtailment_note="High-value cluster for daily curtailment and weather overlay work.",
         weather_note="Use capacity-weighted offshore weather anchors.",
         confidence="medium",
+        connection_context="North-east Scotland offshore output still depends on north-to-south internal transfer before southern export hubs are meaningfully reachable.",
+        preferred_hub_candidates=("britned", "ifa", "ifa2", "eleclink"),
+        curation_version=CLUSTER_CURATION_VERSION,
     ),
     "east_coast_scotland_offshore": AssetCluster(
         key="east_coast_scotland_offshore",
@@ -81,6 +89,9 @@ ASSET_CLUSTERS: Dict[str, AssetCluster] = {
         curtailment_note="Important when Scottish wind is high but southern transfer is tight.",
         weather_note="Single-anchor seed; expand to a fuller east-coast registry later.",
         confidence="medium",
+        connection_context="East-coast Scotland can plausibly reach BritNed first, with France-facing hubs depending on additional southbound transfer.",
+        preferred_hub_candidates=("britned", "ifa", "ifa2", "eleclink"),
+        curation_version=CLUSTER_CURATION_VERSION,
     ),
     "shetland_wind": AssetCluster(
         key="shetland_wind",
@@ -91,6 +102,9 @@ ASSET_CLUSTERS: Dict[str, AssetCluster] = {
         curtailment_note="Useful as a stress-test cluster because upstream transfer matters before interconnector access.",
         weather_note="Single-anchor seed; should later include measured wind and cable status.",
         confidence="low",
+        connection_context="Shetland remains structurally upstream-constrained because island-to-mainland transfer must clear before any interconnector route matters.",
+        preferred_hub_candidates=("britned", "ifa", "ifa2", "eleclink"),
+        curation_version=CLUSTER_CURATION_VERSION,
     ),
     "dogger_hornsea_offshore": AssetCluster(
         key="dogger_hornsea_offshore",
@@ -101,6 +115,9 @@ ASSET_CLUSTERS: Dict[str, AssetCluster] = {
         curtailment_note="Candidate cluster for east-coast battery siting and Dutch/Belgian route screening.",
         weather_note="Use capacity-weighted offshore weather anchors.",
         confidence="medium",
+        connection_context="Dogger and Hornsea are the strongest current fit for east-coast export routes, especially BritNed, with France-facing hubs as a secondary southbound option.",
+        preferred_hub_candidates=("britned", "ifa", "ifa2", "eleclink"),
+        curation_version=CLUSTER_CURATION_VERSION,
     ),
     "east_anglia_offshore": AssetCluster(
         key="east_anglia_offshore",
@@ -111,6 +128,9 @@ ASSET_CLUSTERS: Dict[str, AssetCluster] = {
         curtailment_note="Good proxy cluster for south-east export opportunities.",
         weather_note="Single-anchor seed; expand with additional East Anglia projects later.",
         confidence="medium",
+        connection_context="East Anglia is the cleanest south-east offshore export candidate, with BritNed first and France-facing hubs following similar corridor families.",
+        preferred_hub_candidates=("britned", "ifa", "ifa2", "eleclink"),
+        curation_version=CLUSTER_CURATION_VERSION,
     ),
     "humber_offshore": AssetCluster(
         key="humber_offshore",
@@ -121,6 +141,9 @@ ASSET_CLUSTERS: Dict[str, AssetCluster] = {
         curtailment_note="Useful bridge cluster between Dogger/Hornsea and south-east landings.",
         weather_note="Single-anchor seed; suitable for a first-pass regional weather feature.",
         confidence="low",
+        connection_context="Humber sits between the direct east-coast export candidates and the broader North Sea transfer family; it is useful but still less curated than East Anglia or Hornsea.",
+        preferred_hub_candidates=("britned", "ifa", "ifa2", "eleclink"),
+        curation_version=CLUSTER_CURATION_VERSION,
     ),
     "north_wales_offshore": AssetCluster(
         key="north_wales_offshore",
@@ -131,6 +154,9 @@ ASSET_CLUSTERS: Dict[str, AssetCluster] = {
         curtailment_note="Useful counterexample cluster when checking whether a route is even geographically plausible.",
         weather_note="Single-anchor seed; should later include Irish Sea-specific assets.",
         confidence="low",
+        connection_context="North Wales is primarily a western-flow counterexample in the current model and should not be over-read into south-east export routes.",
+        preferred_hub_candidates=("ewic",),
+        curation_version=CLUSTER_CURATION_VERSION,
     ),
 }
 
@@ -220,6 +246,10 @@ def cluster_frame() -> pd.DataFrame:
                 "curtailment_note": cluster.curtailment_note,
                 "weather_note": cluster.weather_note,
                 "confidence": cluster.confidence,
+                "mapping_confidence": cluster.confidence,
+                "connection_context": cluster.connection_context,
+                "preferred_hub_candidates": ", ".join(cluster.preferred_hub_candidates),
+                "curation_version": cluster.curation_version,
             }
         )
     return pd.DataFrame(rows).sort_values(["parent_region", "cluster_key"]).reset_index(drop=True)

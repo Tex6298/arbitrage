@@ -405,6 +405,11 @@ Key behavior:
    This writes `fact_curtailment_opportunity_hourly.csv` plus the supporting `fact_route_score_hourly.csv` and
    `fact_regional_curtailment_hourly_proxy.csv` inputs in the same output directory.
 
+   If you do not pass `--market-state-input-path`, the materializer now builds a first free upstream market-state feed
+   automatically from:
+   - Elexon GB market index (`APXMIDP` by default)
+   - ENTSO-E day-ahead prices for the first foreign landing zone on each route (`FR` for `R1`, `NL` for `R2`)
+
    If you have a reviewed or API-fed upstream market-state input with route-level forward, day-ahead, intraday,
    or imbalance price-state fields, add:
 
@@ -434,13 +439,14 @@ Key behavior:
      --materialize-upstream-market-state-feed ^
      --market-state-start 2024-10-01 ^
      --market-state-end 2024-10-02 ^
-     --market-state-input-path upstream_market_state_input.csv ^
      --market-state-output-dir upstream_market_state_history ^
      --truth-store-db-path bmu_truth_store.sqlite
    ```
 
-   This writes `fact_upstream_market_state_hourly.csv` and keeps explicit source lineage so a reviewed manual feed can
-   be swapped later for a stronger API feed without changing the opportunity or backtest contracts.
+   With no `--market-state-input-path`, this uses the same free live feed from Elexon MID plus ENTSO-E day-ahead.
+   If you do supply `--market-state-input-path`, it writes the reviewed/manual/API version instead. Either way it keeps
+   explicit source lineage so a reviewed manual feed can be swapped later for a stronger API feed without changing the
+   opportunity or backtest contracts.
 
 23. Materialize the France-specific connector layer for `IFA`, `IFA2`, and `ElecLink`:
 
@@ -754,7 +760,7 @@ Key behavior:
   - forward, day-ahead, intraday, and optional imbalance prices
   - forward-to-day-ahead and day-ahead-to-intraday spread buckets
   - route-level upstream market-state labels plus source lineage
-- Those features are there to target one-hour `BritNed / GB-NL` regime flips directly without leaking future route state. When no upstream feed is present, the current market-state layer still falls back to the as-of route score rather than pretending we already have those external curves.
+- The first free live upstream feed now comes from Elexon GB MID plus ENTSO-E day-ahead prices for the first foreign landing zone on each route. When no upstream feed is present, the current market-state layer still falls back to the as-of route score rather than pretending we already have those external curves.
 - `fact_backtest_summary_slice` is the first slice-aware QA surface over the backtest. It aggregates error and bias by
   model, forecast horizon, cluster, connector hub, route, delivery tier, internal-transfer tier, internal-transfer gate state,
   connector-notice market state, upstream market state, curtailment source tier, and hour of day.

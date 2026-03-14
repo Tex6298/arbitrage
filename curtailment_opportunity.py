@@ -9,6 +9,7 @@ import pandas as pd
 
 from asset_mapping import cluster_frame
 from curtailment_signals import fetch_constraint_daily, fetch_wind_split_half_hourly, build_regional_curtailment_hourly_proxy
+from system_balance_market_state import SYSTEM_BALANCE_MARKET_STATE_TABLE
 
 
 CURTAILMENT_OPPORTUNITY_TABLE = "fact_curtailment_opportunity_hourly"
@@ -26,6 +27,10 @@ def _empty_curtailment_opportunity_frame() -> pd.DataFrame:
             "cluster_key",
             "cluster_label",
             "parent_region",
+            "cluster_mapping_confidence",
+            "cluster_connection_context",
+            "cluster_preferred_hub_candidates",
+            "cluster_curation_version",
             "hub_key",
             "hub_label",
             "route_name",
@@ -49,6 +54,23 @@ def _empty_curtailment_opportunity_frame() -> pd.DataFrame:
             "upstream_market_state_source_family",
             "upstream_market_state_source_key",
             "upstream_market_state_source_published_utc",
+            "system_balance_feed_available_flag",
+            "system_balance_known_flag",
+            "system_balance_active_flag",
+            "system_balance_state",
+            "system_balance_imbalance_mw",
+            "system_balance_indicated_demand_mw",
+            "system_balance_indicated_generation_mw",
+            "system_balance_indicated_margin_mw",
+            "system_balance_demand_minus_generation_mw",
+            "system_balance_margin_ratio",
+            "system_balance_imbalance_direction_bucket",
+            "system_balance_margin_direction_bucket",
+            "system_balance_source_provider",
+            "system_balance_source_family",
+            "system_balance_source_key",
+            "system_balance_source_dataset_keys",
+            "system_balance_source_published_utc",
             "route_delivery_tier",
             "route_delivery_signal",
             "route_delivery_reason",
@@ -298,6 +320,7 @@ def build_fact_curtailment_opportunity_hourly(
     fact_regional_curtailment_hourly_proxy: pd.DataFrame | None,
     fact_bmu_curtailment_truth_half_hourly: pd.DataFrame | None = None,
     fact_upstream_market_state_hourly: pd.DataFrame | None = None,
+    fact_system_balance_market_state_hourly: pd.DataFrame | None = None,
     truth_profile: str = "proxy",
 ) -> pd.DataFrame:
     if fact_route_score_hourly is None or fact_route_score_hourly.empty:
@@ -316,6 +339,17 @@ def build_fact_curtailment_opportunity_hourly(
         fact_bmu_curtailment_truth_half_hourly=fact_bmu_curtailment_truth_half_hourly,
         truth_profile=truth_profile,
     )
+    cluster_lookup = cluster_frame()[
+        [
+            "cluster_key",
+            "cluster_label",
+            "parent_region",
+            "mapping_confidence",
+            "connection_context",
+            "preferred_hub_candidates",
+            "curation_version",
+        ]
+    ].drop_duplicates("cluster_key")
 
     fact = route.merge(
         signal,
@@ -323,6 +357,7 @@ def build_fact_curtailment_opportunity_hourly(
         how="left",
         suffixes=("", "_signal"),
     )
+    fact = fact.merge(cluster_lookup, on=["cluster_key"], how="left", suffixes=("", "_lookup"))
     market_state = (
         fact_upstream_market_state_hourly.copy()
         if fact_upstream_market_state_hourly is not None and not fact_upstream_market_state_hourly.empty
@@ -350,9 +385,38 @@ def build_fact_curtailment_opportunity_hourly(
         )
         market_state = market_state.drop_duplicates(["interval_start_utc", "route_name"], keep="last")
         fact = fact.merge(market_state, on=["interval_start_utc", "route_name"], how="left")
+    system_balance = (
+        fact_system_balance_market_state_hourly.copy()
+        if fact_system_balance_market_state_hourly is not None and not fact_system_balance_market_state_hourly.empty
+        else pd.DataFrame()
+    )
+    if not system_balance.empty:
+        system_balance["interval_start_utc"] = pd.to_datetime(
+            system_balance["interval_start_utc"], utc=True, errors="coerce"
+        )
+        system_balance = system_balance.drop_duplicates(["interval_start_utc"], keep="last")
+        fact = fact.merge(system_balance, on=["interval_start_utc"], how="left", suffixes=("", "_system"))
     fact["cluster_label"] = fact["cluster_label"].where(fact["cluster_label"].notna(), fact.get("cluster_label_signal"))
     fact["parent_region"] = fact["parent_region"].where(fact["parent_region"].notna(), fact.get("parent_region_signal"))
-    fact = fact.drop(columns=["cluster_label_signal", "parent_region_signal"], errors="ignore")
+    fact["cluster_label"] = fact["cluster_label"].where(fact["cluster_label"].notna(), fact.get("cluster_label_lookup"))
+    fact["parent_region"] = fact["parent_region"].where(fact["parent_region"].notna(), fact.get("parent_region_lookup"))
+    fact["cluster_mapping_confidence"] = fact.get("mapping_confidence")
+    fact["cluster_connection_context"] = fact.get("connection_context")
+    fact["cluster_preferred_hub_candidates"] = fact.get("preferred_hub_candidates")
+    fact["cluster_curation_version"] = fact.get("curation_version")
+    fact = fact.drop(
+        columns=[
+            "cluster_label_signal",
+            "parent_region_signal",
+            "cluster_label_lookup",
+            "parent_region_lookup",
+            "mapping_confidence",
+            "connection_context",
+            "preferred_hub_candidates",
+            "curation_version",
+        ],
+        errors="ignore",
+    )
 
     default_values: dict[str, object] = {
         "curtailment_source_tier": "regional_proxy",
@@ -388,6 +452,23 @@ def build_fact_curtailment_opportunity_hourly(
         "upstream_market_state_source_family": pd.NA,
         "upstream_market_state_source_key": pd.NA,
         "upstream_market_state_source_published_utc": pd.NaT,
+        "system_balance_feed_available_flag": False,
+        "system_balance_known_flag": False,
+        "system_balance_active_flag": False,
+        "system_balance_state": "no_public_system_balance",
+        "system_balance_imbalance_mw": np.nan,
+        "system_balance_indicated_demand_mw": np.nan,
+        "system_balance_indicated_generation_mw": np.nan,
+        "system_balance_indicated_margin_mw": np.nan,
+        "system_balance_demand_minus_generation_mw": np.nan,
+        "system_balance_margin_ratio": np.nan,
+        "system_balance_imbalance_direction_bucket": "imbalance_unknown",
+        "system_balance_margin_direction_bucket": "margin_unknown",
+        "system_balance_source_provider": pd.NA,
+        "system_balance_source_family": pd.NA,
+        "system_balance_source_key": pd.NA,
+        "system_balance_source_dataset_keys": pd.NA,
+        "system_balance_source_published_utc": pd.NaT,
         "connector_notice_state": pd.NA,
         "connector_notice_known_flag": False,
         "connector_notice_active_flag": False,
@@ -419,6 +500,9 @@ def build_fact_curtailment_opportunity_hourly(
     fact["upstream_market_state_feed_available_flag"] = _coerce_bool_series(
         fact["upstream_market_state_feed_available_flag"]
     )
+    fact["system_balance_feed_available_flag"] = _coerce_bool_series(fact["system_balance_feed_available_flag"])
+    fact["system_balance_known_flag"] = _coerce_bool_series(fact["system_balance_known_flag"])
+    fact["system_balance_active_flag"] = _coerce_bool_series(fact["system_balance_active_flag"])
 
     fact["route_price_score_eur_per_mwh"] = pd.to_numeric(
         fact["route_price_score_eur_per_mwh"], errors="coerce"
@@ -430,6 +514,12 @@ def build_fact_curtailment_opportunity_hourly(
         "upstream_imbalance_price_eur_per_mwh",
         "upstream_forward_to_day_ahead_spread_eur_per_mwh",
         "upstream_day_ahead_to_intraday_spread_eur_per_mwh",
+        "system_balance_imbalance_mw",
+        "system_balance_indicated_demand_mw",
+        "system_balance_indicated_generation_mw",
+        "system_balance_indicated_margin_mw",
+        "system_balance_demand_minus_generation_mw",
+        "system_balance_margin_ratio",
     ):
         fact[column] = pd.to_numeric(fact[column], errors="coerce")
     fact["deliverable_mw_proxy"] = pd.to_numeric(fact["deliverable_mw_proxy"], errors="coerce")
@@ -541,6 +631,10 @@ def build_fact_curtailment_opportunity_hourly(
         fact.loc[fact["upstream_market_state_feed_available_flag"], "source_lineage"]
         + "|fact_upstream_market_state_hourly"
     )
+    fact.loc[fact["system_balance_feed_available_flag"], "source_lineage"] = (
+        fact.loc[fact["system_balance_feed_available_flag"], "source_lineage"]
+        + f"|{SYSTEM_BALANCE_MARKET_STATE_TABLE}"
+    )
 
     keep_columns = list(_empty_curtailment_opportunity_frame().columns)
     for column in keep_columns:
@@ -557,6 +651,7 @@ def materialize_curtailment_opportunity_history(
     fact_regional_curtailment_hourly_proxy: pd.DataFrame | None,
     fact_bmu_curtailment_truth_half_hourly: pd.DataFrame | None = None,
     fact_upstream_market_state_hourly: pd.DataFrame | None = None,
+    fact_system_balance_market_state_hourly: pd.DataFrame | None = None,
     truth_profile: str = "proxy",
 ) -> Dict[str, pd.DataFrame]:
     fact = build_fact_curtailment_opportunity_hourly(
@@ -564,6 +659,7 @@ def materialize_curtailment_opportunity_history(
         fact_regional_curtailment_hourly_proxy=fact_regional_curtailment_hourly_proxy,
         fact_bmu_curtailment_truth_half_hourly=fact_bmu_curtailment_truth_half_hourly,
         fact_upstream_market_state_hourly=fact_upstream_market_state_hourly,
+        fact_system_balance_market_state_hourly=fact_system_balance_market_state_hourly,
         truth_profile=truth_profile,
     )
     output_path = Path(output_dir)
@@ -573,4 +669,10 @@ def materialize_curtailment_opportunity_history(
     if fact_upstream_market_state_hourly is not None and not fact_upstream_market_state_hourly.empty:
         frames["fact_upstream_market_state_hourly"] = fact_upstream_market_state_hourly.copy()
         fact_upstream_market_state_hourly.to_csv(output_path / "fact_upstream_market_state_hourly.csv", index=False)
+    if fact_system_balance_market_state_hourly is not None and not fact_system_balance_market_state_hourly.empty:
+        frames[SYSTEM_BALANCE_MARKET_STATE_TABLE] = fact_system_balance_market_state_hourly.copy()
+        fact_system_balance_market_state_hourly.to_csv(
+            output_path / f"{SYSTEM_BALANCE_MARKET_STATE_TABLE}.csv",
+            index=False,
+        )
     return frames

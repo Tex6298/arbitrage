@@ -148,8 +148,19 @@ from market_state_feed import (
     materialize_upstream_market_state_history,
     write_normalized_upstream_market_state_input,
 )
+from model_readiness import (
+    MODEL_READINESS_TABLE,
+    build_fact_model_readiness_daily,
+    materialize_model_readiness_daily,
+)
 from physical_constraints import assumption_frame, compute_netbacks
 from route_score_history import ROUTE_SCORE_TABLE, materialize_route_score_history
+from system_balance_market_state import (
+    SYSTEM_BALANCE_MARKET_STATE_TABLE,
+    build_fact_system_balance_market_state_hourly,
+    materialize_system_balance_market_state_history,
+    parse_iso_date as parse_system_balance_iso_date,
+)
 from support_resolution import (
     SUPPORT_CASE_RESOLUTION_TABLE,
     SUPPORT_OPEN_CASE_PRIORITY_FAMILY_TABLE,
@@ -996,9 +1007,19 @@ def main() -> int:
         help="Normalize and save an upstream market-state feed for route-level forward, day-ahead, and intraday features, then exit",
     )
     parser.add_argument(
+        "--materialize-system-balance-market-state",
+        action="store_true",
+        help="Fetch and save the public GB system-balance market-state layer, then exit",
+    )
+    parser.add_argument(
         "--materialize-opportunity-backtest",
         action="store_true",
         help="Build and save the first-pass walk-forward opportunity backtest from an existing opportunity history, then exit",
+    )
+    parser.add_argument(
+        "--materialize-model-readiness",
+        action="store_true",
+        help="Build and save the daily model-readiness gate from an opportunity history and derived backtest surfaces, then exit",
     )
     parser.add_argument("--flow-start", help="Interconnector flow materialization start date, inclusive (YYYY-MM-DD)")
     parser.add_argument("--flow-end", help="Interconnector flow materialization end date, inclusive (YYYY-MM-DD)")
@@ -1052,6 +1073,19 @@ def main() -> int:
         "--market-state-output-dir",
         default="upstream_market_state_history",
         help="Output directory for upstream market-state history",
+    )
+    parser.add_argument(
+        "--system-balance-start",
+        help="System-balance market-state materialization start date, inclusive (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--system-balance-end",
+        help="System-balance market-state materialization end date, inclusive (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--system-balance-output-dir",
+        default="system_balance_market_state_history",
+        help="Output directory for the public GB system-balance market-state history",
     )
     parser.add_argument(
         "--normalize-upstream-market-state-input",
@@ -1110,6 +1144,19 @@ def main() -> int:
         "--backtest-horizons",
         default=",".join(str(value) for value in DEFAULT_FORECAST_HORIZON_HOURS),
         help="Comma-separated forecast horizons in hours for the opportunity backtest, e.g. 1,6,24,168",
+    )
+    parser.add_argument(
+        "--readiness-start",
+        help="Model-readiness evaluation start date, inclusive (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--readiness-end",
+        help="Model-readiness evaluation end date, inclusive (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--readiness-output-dir",
+        default="model_readiness_history",
+        help="Output directory for fact_model_readiness_daily",
     )
     parser.add_argument(
         "--capacity-audit-start",
@@ -2081,6 +2128,43 @@ def main() -> int:
             print(f"ERROR: {exc}", file=sys.stderr)
             return 1
 
+    if args.materialize_system_balance_market_state:
+        if not args.system_balance_start or not args.system_balance_end:
+            raise SystemExit(
+                "--materialize-system-balance-market-state requires --system-balance-start and --system-balance-end"
+            )
+        system_balance_start = parse_system_balance_iso_date(args.system_balance_start)
+        system_balance_end = parse_system_balance_iso_date(args.system_balance_end)
+        if system_balance_end < system_balance_start:
+            raise SystemExit("--system-balance-end must be on or after --system-balance-start")
+        bmrs_api_key = next((os.environ.get(name) for name in BMRS_KEY_ENV_NAMES if os.environ.get(name)), None)
+        try:
+            frames = materialize_system_balance_market_state_history(
+                output_dir=args.system_balance_output_dir,
+                start_date=system_balance_start,
+                end_date=system_balance_end,
+                api_key=bmrs_api_key,
+            )
+            print(
+                f"[source=elexon_public_system_balance] Materialized {len(frames)} tables for "
+                f"{system_balance_start} to {system_balance_end} (inclusive)"
+            )
+            for table_name, frame in frames.items():
+                output_path = os.path.join(args.system_balance_output_dir, f"{table_name}.csv")
+                print(f"{table_name}: rows={len(frame)} path={output_path}")
+            if args.truth_store_db_path:
+                summary = upsert_truth_frames_to_sqlite(frames, args.truth_store_db_path)
+                print(f"[store=sqlite] Upserted system-balance tables into {args.truth_store_db_path}")
+                for _, row in summary.iterrows():
+                    print(
+                        f"{row['table_name']}: rows_loaded={int(row['rows_loaded'])} "
+                        f"table_rows={int(row['table_row_count'])}"
+                    )
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
     if args.materialize_interconnector_flow:
         if not args.flow_start or not args.flow_end:
             raise SystemExit("--materialize-interconnector-flow requires --flow-start and --flow-end")
@@ -2630,6 +2714,11 @@ def main() -> int:
                     prices=prices,
                     gb_source_provider=provider_used,
                 )
+            system_balance_market_state = build_fact_system_balance_market_state_hourly(
+                start_date=network_start,
+                end_date=network_end,
+                api_key=bmrs_api_key,
+            )
             cluster_curtailment_proxy = fetch_cluster_curtailment_proxy_hourly(
                 start_date=network_start,
                 end_date=network_end,
@@ -2650,6 +2739,7 @@ def main() -> int:
                 fact_regional_curtailment_hourly_proxy=cluster_curtailment_proxy,
                 fact_bmu_curtailment_truth_half_hourly=truth_frame,
                 fact_upstream_market_state_hourly=upstream_market_state,
+                fact_system_balance_market_state_hourly=system_balance_market_state,
                 truth_profile=args.opportunity_truth_profile,
             )
             cluster_curtailment_proxy.to_csv(
@@ -2684,6 +2774,10 @@ def main() -> int:
                 os.path.join(args.opportunity_output_dir, f"{UPSTREAM_MARKET_STATE_TABLE}.csv"),
                 index=False,
             )
+            system_balance_market_state.to_csv(
+                os.path.join(args.opportunity_output_dir, f"{SYSTEM_BALANCE_MARKET_STATE_TABLE}.csv"),
+                index=False,
+            )
             frames = {
                 ROUTE_SCORE_TABLE: route_score,
                 "fact_regional_curtailment_hourly_proxy": cluster_curtailment_proxy,
@@ -2693,6 +2787,7 @@ def main() -> int:
                 GB_TRANSFER_REVIEW_POLICY_TABLE: gb_transfer_review_policy,
                 GB_TRANSFER_REVIEWED_HOURLY_TABLE: gb_transfer_reviewed_hourly,
                 INTERCONNECTOR_ITL_TABLE: interconnector_itl,
+                SYSTEM_BALANCE_MARKET_STATE_TABLE: system_balance_market_state,
                 **opportunity_frames,
             }
             upstream_source_label = (
@@ -2725,6 +2820,7 @@ def main() -> int:
                 store_frames[FRANCE_CONNECTOR_AVAILABILITY_TABLE] = france_availability
                 store_frames[FRANCE_CONNECTOR_OPERATOR_SOURCE_COMPARE_TABLE] = eleclink_source_compare
                 store_frames[FRANCE_CONNECTOR_TABLE] = france_connector
+                store_frames[SYSTEM_BALANCE_MARKET_STATE_TABLE] = system_balance_market_state
                 if truth_frame is not None:
                     store_frames["fact_bmu_curtailment_truth_half_hourly"] = truth_frame
                 summary = upsert_truth_frames_to_sqlite(store_frames, args.truth_store_db_path)
@@ -2765,6 +2861,67 @@ def main() -> int:
             if args.truth_store_db_path:
                 store_summary = upsert_truth_frames_to_sqlite(frames, args.truth_store_db_path)
                 print(f"[store=sqlite] Upserted opportunity backtest tables into {args.truth_store_db_path}")
+                for _, row in store_summary.iterrows():
+                    print(
+                        f"{row['table_name']}: rows_loaded={int(row['rows_loaded'])} "
+                        f"table_rows={int(row['table_row_count'])}"
+                    )
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
+    if args.materialize_model_readiness:
+        if not args.readiness_start or not args.readiness_end:
+            raise SystemExit("--materialize-model-readiness requires --readiness-start and --readiness-end")
+        try:
+            readiness_start = parse_market_day(args.readiness_start)
+            readiness_end = parse_market_day(args.readiness_end)
+            if readiness_end < readiness_start:
+                raise SystemExit("--readiness-end must be on or after --readiness-start")
+            opportunity_input = load_curtailment_opportunity_input(args.opportunity_input_path)
+            opportunity_input["interval_start_utc"] = pd.to_datetime(
+                opportunity_input["interval_start_utc"], utc=True, errors="coerce"
+            )
+            readiness_window_start = pd.Timestamp(readiness_start, tz="Europe/London").tz_convert("UTC")
+            readiness_window_end = pd.Timestamp(
+                readiness_end + dt.timedelta(days=1), tz="Europe/London"
+            ).tz_convert("UTC")
+            opportunity_input = opportunity_input[
+                opportunity_input["interval_start_utc"].ge(readiness_window_start)
+                & opportunity_input["interval_start_utc"].lt(readiness_window_end)
+            ].copy()
+            forecast_horizons = coerce_forecast_horizons(args.backtest_horizons)
+            backtest_frames = materialize_opportunity_backtest(
+                output_dir=args.readiness_output_dir,
+                fact_curtailment_opportunity_hourly=opportunity_input,
+                model_key=args.backtest_model_key,
+                forecast_horizons=forecast_horizons,
+            )
+            readiness_model_key = MODEL_POTENTIAL_RATIO_V2 if args.backtest_model_key == "all" else args.backtest_model_key
+            readiness_frames = materialize_model_readiness_daily(
+                output_dir=args.readiness_output_dir,
+                fact_backtest_prediction_hourly=backtest_frames[BACKTEST_PREDICTION_TABLE],
+                fact_drift_window=backtest_frames[DRIFT_WINDOW_TABLE],
+                model_key=readiness_model_key,
+            )
+            frames = {**backtest_frames, **readiness_frames}
+            print(
+                f"[source={CURTAILMENT_OPPORTUNITY_TABLE}+model_readiness] Materialized {len(frames)} tables from "
+                f"{args.opportunity_input_path} for {readiness_start} to {readiness_end} "
+                f"using model={readiness_model_key} horizons={','.join(str(value) for value in forecast_horizons)}"
+            )
+            for table_name, frame in frames.items():
+                output_path = os.path.join(args.readiness_output_dir, f"{table_name}.csv")
+                print(f"{table_name}: rows={len(frame)} path={output_path}")
+            readiness = frames[MODEL_READINESS_TABLE]
+            if not readiness.empty:
+                print()
+                print("Model Readiness Daily")
+                print(readiness.to_string(index=False))
+            if args.truth_store_db_path:
+                store_summary = upsert_truth_frames_to_sqlite(frames, args.truth_store_db_path)
+                print(f"[store=sqlite] Upserted model readiness tables into {args.truth_store_db_path}")
                 for _, row in store_summary.iterrows():
                     print(
                         f"{row['table_name']}: rows_loaded={int(row['rows_loaded'])} "

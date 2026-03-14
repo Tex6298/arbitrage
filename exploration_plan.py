@@ -658,9 +658,9 @@ DATASET_SPECS: Tuple[DatasetSpec, ...] = (
         grain="hourly",
         spatial_scope="Route-level market state",
         role="Optional upstream market-state feed for route-level forward, day-ahead, intraday, and spread-regime features.",
-        source_plan="Normalize manual or API-fed route-level market-state inputs into a canonical hourly feed, then join them into fact_curtailment_opportunity_hourly and preserve them as as-of features in fact_backtest_prediction_hourly.",
+        source_plan="Build a first free live feed from Elexon GB market index plus ENTSO-E day-ahead prices for the first foreign landing zone on each route, or normalize manual/API-fed route-level market-state inputs into the same canonical hourly feed, then join them into fact_curtailment_opportunity_hourly and preserve them as as-of features in fact_backtest_prediction_hourly.",
         status="implemented_switchable",
-        note="This is the switch point for better market-state data. The repo can consume a reviewed manual feed now, keep explicit source lineage, and later swap in a stronger API feed without changing opportunity or backtest contracts.",
+        note="This is the switch point for better market-state data. The repo now has a real free live first pass, can consume a reviewed manual feed when needed, keeps explicit source lineage, and can later swap in a stronger API feed without changing opportunity or backtest contracts.",
     ),
     DatasetSpec(
         key="fact_backtest_prediction_hourly",

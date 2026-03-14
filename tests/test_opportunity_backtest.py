@@ -46,6 +46,12 @@ def _opportunity_row(
     upstream_forward_price_eur_per_mwh: float | None = None,
     upstream_day_ahead_to_intraday_spread_bucket: str = "spread_unknown",
     upstream_forward_to_day_ahead_spread_bucket: str = "spread_unknown",
+    system_balance_feed_available_flag: bool = False,
+    system_balance_known_flag: bool = False,
+    system_balance_active_flag: bool = False,
+    system_balance_state: str = "no_public_system_balance",
+    system_balance_imbalance_direction_bucket: str = "imbalance_unknown",
+    system_balance_margin_direction_bucket: str = "margin_unknown",
 ) -> dict:
     interval_start = pd.Timestamp(interval_start_utc)
     interval_end = interval_start + pd.Timedelta(hours=1)
@@ -88,6 +94,12 @@ def _opportunity_row(
         "upstream_forward_price_eur_per_mwh": upstream_forward_price_eur_per_mwh,
         "upstream_day_ahead_to_intraday_spread_bucket": upstream_day_ahead_to_intraday_spread_bucket,
         "upstream_forward_to_day_ahead_spread_bucket": upstream_forward_to_day_ahead_spread_bucket,
+        "system_balance_feed_available_flag": system_balance_feed_available_flag,
+        "system_balance_known_flag": system_balance_known_flag,
+        "system_balance_active_flag": system_balance_active_flag,
+        "system_balance_state": system_balance_state,
+        "system_balance_imbalance_direction_bucket": system_balance_imbalance_direction_bucket,
+        "system_balance_margin_direction_bucket": system_balance_margin_direction_bucket,
         "curtailment_selected_mwh": curtailment_selected_mwh,
         "deliverable_mw_proxy": deliverable_mw_proxy,
         "opportunity_deliverable_mwh": opportunity_deliverable_mwh,
@@ -401,6 +413,97 @@ class OpportunityBacktestTests(unittest.TestCase):
         self.assertEqual(target["feature_upstream_forward_to_day_ahead_spread_bucket_asof"], "spread_flat")
         self.assertAlmostEqual(float(target["predicted_opportunity_deliverable_mwh"]), 113.33333333333333)
 
+    def test_build_fact_backtest_prediction_hourly_uses_system_balance_when_known(self) -> None:
+        fact = pd.DataFrame(
+            [
+                _opportunity_row(
+                    "2024-10-01T04:00:00Z",
+                    "dogger_hornsea_offshore",
+                    "R2_netback_GB_NL_DE_PL",
+                    "britned",
+                    "reviewed",
+                    "no_public_connector_restriction",
+                    90.0,
+                    50.0,
+                    curtailment_selected_mwh=140.0,
+                    deliverable_mw_proxy=150.0,
+                    system_balance_feed_available_flag=True,
+                    system_balance_known_flag=True,
+                    system_balance_active_flag=True,
+                    system_balance_state="tight_margin",
+                    system_balance_imbalance_direction_bucket="imbalance_neutral",
+                    system_balance_margin_direction_bucket="margin_tight",
+                ),
+                _opportunity_row(
+                    "2024-10-01T05:00:00Z",
+                    "dogger_hornsea_offshore",
+                    "R2_netback_GB_NL_DE_PL",
+                    "britned",
+                    "reviewed",
+                    "no_public_connector_restriction",
+                    95.0,
+                    55.0,
+                    curtailment_selected_mwh=140.0,
+                    deliverable_mw_proxy=150.0,
+                    system_balance_feed_available_flag=True,
+                    system_balance_known_flag=True,
+                    system_balance_active_flag=True,
+                    system_balance_state="tight_margin",
+                    system_balance_imbalance_direction_bucket="imbalance_neutral",
+                    system_balance_margin_direction_bucket="margin_tight",
+                ),
+                _opportunity_row(
+                    "2024-10-02T04:00:00Z",
+                    "dogger_hornsea_offshore",
+                    "R2_netback_GB_NL_DE_PL",
+                    "britned",
+                    "reviewed",
+                    "no_public_connector_restriction",
+                    100.0,
+                    52.0,
+                    curtailment_selected_mwh=160.0,
+                    deliverable_mw_proxy=150.0,
+                    system_balance_feed_available_flag=True,
+                    system_balance_known_flag=True,
+                    system_balance_active_flag=True,
+                    system_balance_state="tight_margin",
+                    system_balance_imbalance_direction_bucket="imbalance_neutral",
+                    system_balance_margin_direction_bucket="margin_tight",
+                ),
+                _opportunity_row(
+                    "2024-10-02T05:00:00Z",
+                    "dogger_hornsea_offshore",
+                    "R2_netback_GB_NL_DE_PL",
+                    "britned",
+                    "reviewed",
+                    "no_public_connector_restriction",
+                    105.0,
+                    56.0,
+                    curtailment_selected_mwh=160.0,
+                    deliverable_mw_proxy=150.0,
+                    system_balance_feed_available_flag=True,
+                    system_balance_known_flag=True,
+                    system_balance_active_flag=True,
+                    system_balance_state="tight_margin",
+                    system_balance_imbalance_direction_bucket="imbalance_neutral",
+                    system_balance_margin_direction_bucket="margin_tight",
+                ),
+            ]
+        )
+
+        backtest = build_fact_backtest_prediction_hourly(
+            fact, model_key=MODEL_POTENTIAL_RATIO_V2, forecast_horizons=(1,)
+        )
+        target = backtest.iloc[3]
+        self.assertTrue(bool(target["prediction_eligible_flag"]))
+        self.assertEqual(target["prediction_basis"], "ratio_cluster_route_system_balance")
+        self.assertTrue(bool(target["feature_system_balance_feed_available_flag_asof"]))
+        self.assertTrue(bool(target["feature_system_balance_known_flag_asof"]))
+        self.assertEqual(target["feature_system_balance_state_asof"], "tight_margin")
+        self.assertEqual(target["feature_system_balance_margin_direction_bucket_asof"], "margin_tight")
+        self.assertEqual(target["feature_system_balance_transition_state_asof"], "START->tight_margin")
+        self.assertEqual(target["feature_system_balance_persistence_bucket_asof"], "system_balance_persist_1h")
+
     def test_build_fact_backtest_summary_slice_includes_multiple_dimensions(self) -> None:
         backtest = pd.concat(
             [
@@ -452,6 +555,7 @@ class OpportunityBacktestTests(unittest.TestCase):
         self.assertIn("hub_key", set(summary["slice_dimension"]))
         self.assertIn("internal_transfer_evidence_tier", set(summary["slice_dimension"]))
         self.assertIn("internal_transfer_gate_state", set(summary["slice_dimension"]))
+        self.assertIn("system_balance_state", set(summary["slice_dimension"]))
         route_row = summary[
             (summary["slice_dimension"] == "route_name")
             & (summary["slice_value"] == "R1_netback_GB_FR_DE_PL")

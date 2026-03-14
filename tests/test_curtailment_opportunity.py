@@ -99,11 +99,41 @@ class CurtailmentOpportunityTests(unittest.TestCase):
                 }
             ]
         )
+        system_balance_market_state = pd.DataFrame(
+            [
+                {
+                    "interval_start_utc": pd.Timestamp("2024-10-01T09:00:00Z"),
+                    "interval_end_utc": pd.Timestamp("2024-10-01T10:00:00Z"),
+                    "date": pd.Timestamp("2024-10-01").date(),
+                    "interval_start_local": pd.Timestamp("2024-10-01T10:00:00+01:00"),
+                    "interval_end_local": pd.Timestamp("2024-10-01T11:00:00+01:00"),
+                    "system_balance_source_provider": "elexon",
+                    "system_balance_source_family": "public_system_balance",
+                    "system_balance_source_key": "IMBALNGC|INDDEM|INDGEN|MELNGC",
+                    "system_balance_source_dataset_keys": "IMBALNGC|INDDEM|INDGEN|MELNGC",
+                    "system_balance_source_published_utc": pd.Timestamp("2024-10-01T08:30:00Z"),
+                    "system_balance_feed_available_flag": True,
+                    "system_balance_known_flag": True,
+                    "system_balance_active_flag": True,
+                    "system_balance_state": "tight_margin_and_active_imbalance",
+                    "system_balance_imbalance_mw": 1200.0,
+                    "system_balance_indicated_demand_mw": 42000.0,
+                    "system_balance_indicated_generation_mw": 40100.0,
+                    "system_balance_indicated_margin_mw": 900.0,
+                    "system_balance_demand_minus_generation_mw": 1900.0,
+                    "system_balance_margin_ratio": 900.0 / 42000.0,
+                    "system_balance_imbalance_direction_bucket": "imbalance_strong_positive",
+                    "system_balance_margin_direction_bucket": "margin_very_tight",
+                    "source_lineage": "elexon:IMBALNGC|INDDEM|INDGEN|MELNGC",
+                }
+            ]
+        )
 
         fact = build_fact_curtailment_opportunity_hourly(
             fact_route_score_hourly=route_score,
             fact_regional_curtailment_hourly_proxy=regional_proxy,
             fact_upstream_market_state_hourly=upstream_market_state,
+            fact_system_balance_market_state_hourly=system_balance_market_state,
             truth_profile="proxy",
         )
 
@@ -123,6 +153,15 @@ class CurtailmentOpportunityTests(unittest.TestCase):
         self.assertAlmostEqual(float(row["upstream_intraday_price_eur_per_mwh"]), 49.0)
         self.assertEqual(row["upstream_day_ahead_to_intraday_spread_bucket"], "spread_positive")
         self.assertEqual(row["upstream_market_state_source_key"], "manual_fr_curve")
+        self.assertTrue(bool(row["system_balance_feed_available_flag"]))
+        self.assertTrue(bool(row["system_balance_known_flag"]))
+        self.assertEqual(row["system_balance_state"], "tight_margin_and_active_imbalance")
+        self.assertEqual(row["system_balance_imbalance_direction_bucket"], "imbalance_strong_positive")
+        self.assertEqual(row["system_balance_margin_direction_bucket"], "margin_very_tight")
+        self.assertEqual(row["system_balance_source_provider"], "elexon")
+        self.assertEqual(row["cluster_mapping_confidence"], "medium")
+        self.assertIn("BritNed", str(row["cluster_preferred_hub_candidates"]))
+        self.assertTrue(str(row["cluster_curation_version"]).startswith("phase2_spatial_truth_v1"))
         self.assertFalse(bool(row["connector_capacity_tight_now_flag"]))
         self.assertTrue(bool(row["market_knew_connector_restriction_flag"]))
         self.assertEqual(row["connector_notice_market_state"], "known_upcoming_restriction")
