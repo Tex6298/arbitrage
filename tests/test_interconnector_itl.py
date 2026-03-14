@@ -152,6 +152,57 @@ class InterconnectorITLTests(unittest.TestCase):
         self.assertEqual(len(fact), 2)
         self.assertTrue((fact["source_document_url"] == "https://example.com/ifa.csv").all())
 
+    def test_build_fact_interconnector_itl_hourly_preserves_britned_dst_suffix_hours(self) -> None:
+        spec = ITLDatasetSpec(
+            connector_key="britned",
+            connector_label="BritNed",
+            border_key="GB-NL",
+            target_zone="NL",
+            neighbor_domain_key="NL",
+            dataset_key="britned",
+            dataset_id="britned-dataset",
+            current_resource_name=None,
+            archived_resource_name="BritNed DA & ID Weekly ITLs",
+            parse_mode="britned_weekly_itl",
+        )
+        resource = {
+            "id": "britned-week",
+            "name": "BritNed DA & ID Weekly ITLs 20241023",
+            "url": "https://example.com/britned-20241023.csv",
+            "metadata_modified": "2024-10-23T09:00:00Z",
+        }
+        weekly = pd.DataFrame(
+            [
+                {
+                    "Operational Date (YYYY-MM-DD) & Time GMT/BST (HH:MM - HH:MM)": "20241027 01:00-02:00 (a)",
+                    "Flow (MW) From GB": 500,
+                    "Flow (MW) To GB": 1060,
+                    "Reason for restriction": "System Security",
+                },
+                {
+                    "Operational Date (YYYY-MM-DD) & Time GMT/BST (HH:MM - HH:MM)": "20241027 01:00-02:00 (b)",
+                    "Flow (MW) From GB": 500,
+                    "Flow (MW) To GB": 1060,
+                    "Reason for restriction": "System Security",
+                },
+            ]
+        )
+
+        with patch.object(interconnector_itl, "ITL_DATASET_SPECS", (spec,)):
+            with patch("interconnector_itl._resource_rows", return_value=[resource]):
+                with patch("interconnector_itl._fetch_csv", return_value=weekly):
+                    fact = build_fact_interconnector_itl_hourly(
+                        start_date=dt.date(2024, 10, 27),
+                        end_date=dt.date(2024, 10, 27),
+                    )
+
+        export_rows = fact[fact["direction_key"] == "gb_to_neighbor"].sort_values("interval_start_utc").reset_index(drop=True)
+        self.assertEqual(len(export_rows), 2)
+        self.assertEqual(export_rows.loc[0, "interval_start_utc"], pd.Timestamp("2024-10-27T00:00:00Z"))
+        self.assertEqual(export_rows.loc[0, "interval_end_utc"], pd.Timestamp("2024-10-27T01:00:00Z"))
+        self.assertEqual(export_rows.loc[1, "interval_start_utc"], pd.Timestamp("2024-10-27T01:00:00Z"))
+        self.assertEqual(export_rows.loc[1, "interval_end_utc"], pd.Timestamp("2024-10-27T02:00:00Z"))
+
 
 if __name__ == "__main__":
     unittest.main()

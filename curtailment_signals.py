@@ -76,7 +76,12 @@ def _fetch_json(url: str) -> dict:
 
 def _fetch_csv(url: str) -> pd.DataFrame:
     payload = _fetch_bytes(url)
-    return pd.read_csv(io.StringIO(payload.decode("utf-8")))
+    for encoding in ("utf-8", "utf-8-sig", "cp1252", "latin-1"):
+        try:
+            return pd.read_csv(io.StringIO(payload.decode(encoding)))
+        except UnicodeDecodeError:
+            continue
+    raise RuntimeError("NESO returned CSV data in an unsupported encoding")
 
 
 def _datapackage_show(dataset_id: str) -> dict:

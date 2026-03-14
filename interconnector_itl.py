@@ -233,15 +233,26 @@ def _parse_britned_operational_period(value: object) -> tuple[pd.Timestamp, pd.T
     if pd.isna(value):
         return pd.NaT, pd.NaT
     raw_value = str(value).strip()
-    match = re.fullmatch(r"(\d{8})\s+(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})", raw_value)
+    match = re.fullmatch(r"(\d{8})\s+(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})(?:\s*\(([ab])\))?", raw_value, flags=re.IGNORECASE)
     if not match:
         return pd.NaT, pd.NaT
     start_day = dt.datetime.strptime(match.group(1), "%Y%m%d").date()
-    start_local = pd.Timestamp(f"{start_day.isoformat()} {match.group(2)}", tz=LONDON_TZ)
-    end_local = pd.Timestamp(f"{start_day.isoformat()} {match.group(3)}", tz=LONDON_TZ)
-    if end_local <= start_local:
-        end_local = end_local + pd.Timedelta(days=1)
-    return start_local.tz_convert(UTC), end_local.tz_convert(UTC)
+    start_local_naive = pd.Timestamp(f"{start_day.isoformat()} {match.group(2)}")
+    ambiguous_marker = (match.group(4) or "").lower()
+    ambiguous_flag: bool | str
+    if ambiguous_marker == "a":
+        ambiguous_flag = True
+    elif ambiguous_marker == "b":
+        ambiguous_flag = False
+    else:
+        ambiguous_flag = True
+    start_local = start_local_naive.tz_localize(
+        LONDON_TZ,
+        ambiguous=ambiguous_flag,
+        nonexistent="shift_forward",
+    )
+    start_utc = start_local.tz_convert(UTC)
+    return start_utc, start_utc + pd.Timedelta(hours=1)
 
 
 def _parse_eleclink_archived_period(

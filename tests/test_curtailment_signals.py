@@ -1,11 +1,20 @@
 import unittest
+from unittest.mock import patch
 
 import pandas as pd
 
-from curtailment_signals import CONSTRAINT_QA_TARGET_DEFINITION, add_constraint_qa_columns
+from curtailment_signals import CONSTRAINT_QA_TARGET_DEFINITION, _fetch_csv, add_constraint_qa_columns
 
 
 class CurtailmentSignalsTests(unittest.TestCase):
+    def test_fetch_csv_falls_back_from_utf8_to_cp1252(self) -> None:
+        payload = "col\nalpha\xa0beta\n".encode("cp1252")
+
+        with patch("curtailment_signals._fetch_bytes", return_value=payload):
+            frame = _fetch_csv("https://example.com/test.csv")
+
+        self.assertEqual(frame.iloc[0]["col"], "alpha\xa0beta")
+
     def test_constraint_qa_columns_clip_negative_thermal_without_touching_raw_total(self) -> None:
         raw = pd.DataFrame(
             [
