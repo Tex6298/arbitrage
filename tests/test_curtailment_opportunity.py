@@ -27,6 +27,9 @@ def _route_rows() -> pd.DataFrame:
                 "route_label": "GB->FR->DE->PL",
                 "route_border_key": "GB-FR",
                 "route_target_zone": "FR",
+                "route_price_score_eur_per_mwh": 47.5,
+                "route_price_feasible_flag": True,
+                "route_price_bottleneck": "GB->FR",
                 "route_delivery_tier": "reviewed",
                 "route_delivery_signal": "EXPORT_REVIEWED",
                 "route_delivery_reason": "Reviewed public cap exists.",
@@ -73,10 +76,34 @@ class CurtailmentOpportunityTests(unittest.TestCase):
                 }
             ]
         )
+        upstream_market_state = pd.DataFrame(
+            [
+                {
+                    "interval_start_utc": pd.Timestamp("2024-10-01T09:00:00Z"),
+                    "interval_end_utc": pd.Timestamp("2024-10-01T10:00:00Z"),
+                    "route_name": "R1_netback_GB_FR_DE_PL",
+                    "source_provider": "manual_market_state",
+                    "source_family": "manual_route_curve",
+                    "source_key": "manual_fr_curve",
+                    "source_published_utc": pd.Timestamp("2024-10-01T06:00:00Z"),
+                    "forward_price_eur_per_mwh": 42.0,
+                    "day_ahead_price_eur_per_mwh": 44.0,
+                    "intraday_price_eur_per_mwh": 49.0,
+                    "imbalance_price_eur_per_mwh": pd.NA,
+                    "forward_to_day_ahead_spread_eur_per_mwh": 2.0,
+                    "day_ahead_to_intraday_spread_eur_per_mwh": 5.0,
+                    "forward_to_day_ahead_spread_bucket": "spread_flat",
+                    "day_ahead_to_intraday_spread_bucket": "spread_positive",
+                    "upstream_market_state": "intraday_stronger_than_day_ahead",
+                    "upstream_market_state_feed_available_flag": True,
+                }
+            ]
+        )
 
         fact = build_fact_curtailment_opportunity_hourly(
             fact_route_score_hourly=route_score,
             fact_regional_curtailment_hourly_proxy=regional_proxy,
+            fact_upstream_market_state_hourly=upstream_market_state,
             truth_profile="proxy",
         )
 
@@ -87,6 +114,15 @@ class CurtailmentOpportunityTests(unittest.TestCase):
         self.assertAlmostEqual(float(row["opportunity_spill_mwh"]), 40.0)
         self.assertAlmostEqual(float(row["opportunity_gross_value_eur"]), 3600.0)
         self.assertEqual(row["opportunity_state"], "curtailment_export_reviewed")
+        self.assertAlmostEqual(float(row["route_price_score_eur_per_mwh"]), 47.5)
+        self.assertTrue(bool(row["route_price_feasible_flag"]))
+        self.assertEqual(row["route_price_bottleneck"], "GB->FR")
+        self.assertTrue(bool(row["upstream_market_state_feed_available_flag"]))
+        self.assertEqual(row["upstream_market_state"], "intraday_stronger_than_day_ahead")
+        self.assertAlmostEqual(float(row["upstream_day_ahead_price_eur_per_mwh"]), 44.0)
+        self.assertAlmostEqual(float(row["upstream_intraday_price_eur_per_mwh"]), 49.0)
+        self.assertEqual(row["upstream_day_ahead_to_intraday_spread_bucket"], "spread_positive")
+        self.assertEqual(row["upstream_market_state_source_key"], "manual_fr_curve")
         self.assertFalse(bool(row["connector_capacity_tight_now_flag"]))
         self.assertTrue(bool(row["market_knew_connector_restriction_flag"]))
         self.assertEqual(row["connector_notice_market_state"], "known_upcoming_restriction")

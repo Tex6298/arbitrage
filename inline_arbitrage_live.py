@@ -141,6 +141,13 @@ from interconnector_itl import (
     materialize_interconnector_itl_history,
     parse_iso_date as parse_itl_iso_date,
 )
+from market_state_feed import (
+    UPSTREAM_MARKET_STATE_TABLE,
+    build_fact_upstream_market_state_hourly,
+    build_fact_upstream_market_state_hourly_from_price_frame,
+    materialize_upstream_market_state_history,
+    write_normalized_upstream_market_state_input,
+)
 from physical_constraints import assumption_frame, compute_netbacks
 from route_score_history import ROUTE_SCORE_TABLE, materialize_route_score_history
 from support_resolution import (
@@ -584,6 +591,28 @@ def fetch_prices(
     return gb_prices.join(continental, how="outer"), provider_used
 
 
+def resolve_live_price_fetch_config(args: argparse.Namespace) -> tuple[str, float, str, str | None]:
+    entsoe_token = os.environ.get("ENTOS_E_TOKEN") or os.environ.get("ENTSOE_TOKEN") or ""
+    if not entsoe_token:
+        raise RuntimeError("ENTOS_E_TOKEN or ENTSOE_TOKEN is required for the free upstream market-state feed")
+
+    gbp_eur = args.gbp_eur
+    if gbp_eur is None:
+        for env_name in FX_ENV_NAMES:
+            if os.environ.get(env_name):
+                gbp_eur = parse_gbp_eur(os.environ[env_name])
+                break
+    if gbp_eur is None:
+        raise RuntimeError("GBP_EUR or GBP_EUR_RATE is required for the free upstream market-state feed")
+
+    bmrs_api_key = next((os.environ.get(name) for name in BMRS_KEY_ENV_NAMES if os.environ.get(name)), None)
+    gb_provider = args.gb_provider or next(
+        (os.environ.get(name) for name in GB_PROVIDER_ENV_NAMES if os.environ.get(name)),
+        DEFAULT_GB_PROVIDER,
+    )
+    return entsoe_token, gbp_eur, gb_provider, bmrs_api_key
+
+
 def synthetic_prices(market_days: List[dt.date]) -> pd.DataFrame:
     start_day = market_days[0]
     periods = 24 * len(market_days)
@@ -962,6 +991,11 @@ def main() -> int:
         help="Fetch route inputs plus cluster curtailment and save the hourly curtailment-opportunity surface, then exit",
     )
     parser.add_argument(
+        "--materialize-upstream-market-state-feed",
+        action="store_true",
+        help="Normalize and save an upstream market-state feed for route-level forward, day-ahead, and intraday features, then exit",
+    )
+    parser.add_argument(
         "--materialize-opportunity-backtest",
         action="store_true",
         help="Build and save the first-pass walk-forward opportunity backtest from an existing opportunity history, then exit",
@@ -1005,6 +1039,37 @@ def main() -> int:
         "--boundary-output-dir",
         default="day_ahead_constraint_boundary_history",
         help="Output directory for day-ahead constraint boundary history",
+    )
+    parser.add_argument(
+        "--market-state-start",
+        help="Upstream market-state materialization start date, inclusive (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--market-state-end",
+        help="Upstream market-state materialization end date, inclusive (YYYY-MM-DD)",
+    )
+    parser.add_argument(
+        "--market-state-output-dir",
+        default="upstream_market_state_history",
+        help="Output directory for upstream market-state history",
+    )
+    parser.add_argument(
+        "--normalize-upstream-market-state-input",
+        action="store_true",
+        help="Normalize a messy upstream market-state CSV, TSV, TXT, or JSON into the canonical hourly feed schema, then exit",
+    )
+    parser.add_argument(
+        "--upstream-market-state-raw-path",
+        help="Raw upstream market-state file to normalize",
+    )
+    parser.add_argument(
+        "--upstream-market-state-normalized-output",
+        default="upstream_market_state_input.normalized.csv",
+        help="Output CSV path for the normalized upstream market-state input",
+    )
+    parser.add_argument(
+        "--market-state-input-path",
+        help="Optional local CSV or JSON input for an upstream market-state feed with forward, day-ahead, or intraday price-state fields",
     )
     parser.add_argument(
         "--opportunity-start",
@@ -1920,6 +1985,23 @@ def main() -> int:
             print(f"ERROR: {exc}", file=sys.stderr)
             return 1
 
+    if args.normalize_upstream_market_state_input:
+        if not args.upstream_market_state_raw_path:
+            raise SystemExit("--normalize-upstream-market-state-input requires --upstream-market-state-raw-path")
+        try:
+            normalized = write_normalized_upstream_market_state_input(
+                raw_path=args.upstream_market_state_raw_path,
+                output_path=args.upstream_market_state_normalized_output,
+            )
+            print(
+                f"[source=manual_market_state_input] Normalized upstream market-state input rows={len(normalized)} "
+                f"path={args.upstream_market_state_normalized_output}"
+            )
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
     if args.normalize_france_reviewed_input:
         if not args.france_reviewed_raw_path:
             raise SystemExit("--normalize-france-reviewed-input requires --france-reviewed-raw-path")
@@ -1932,6 +2014,68 @@ def main() -> int:
                 f"[source=manual_reviewed_input] Normalized France reviewed input rows={len(normalized)} "
                 f"path={args.france_reviewed_normalized_output}"
             )
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
+    if args.materialize_upstream_market_state_feed:
+        if not args.market_state_start or not args.market_state_end:
+            raise SystemExit("--materialize-upstream-market-state-feed requires --market-state-start and --market-state-end")
+        market_state_start = parse_market_day(args.market_state_start)
+        market_state_end = parse_market_day(args.market_state_end)
+        if market_state_end < market_state_start:
+            raise SystemExit("--market-state-end must be on or after --market-state-start")
+        try:
+            if args.market_state_input_path:
+                frames = materialize_upstream_market_state_history(
+                    output_dir=args.market_state_output_dir,
+                    start_date=market_state_start,
+                    end_date=market_state_end,
+                    input_path=args.market_state_input_path,
+                )
+                source_label = "manual_or_api_market_state"
+            else:
+                market_days = list(iter_market_days(market_state_start, market_state_end + dt.timedelta(days=1)))
+                entsoe_token, gbp_eur, gb_provider, bmrs_api_key = resolve_live_price_fetch_config(args)
+                prices, provider_used = fetch_prices(
+                    market_days=market_days,
+                    entsoe_token=entsoe_token,
+                    gbp_eur=gbp_eur,
+                    bmrs_api_key=bmrs_api_key,
+                    gb_provider=gb_provider,
+                )
+                fact = build_fact_upstream_market_state_hourly_from_price_frame(
+                    prices=prices,
+                    gb_source_provider=provider_used,
+                )
+                frames = materialize_upstream_market_state_history(
+                    output_dir=args.market_state_output_dir,
+                    start_date=market_state_start,
+                    end_date=market_state_end,
+                    input_path=None,
+                )
+                frames[UPSTREAM_MARKET_STATE_TABLE] = fact
+                fact.to_csv(
+                    os.path.join(args.market_state_output_dir, f"{UPSTREAM_MARKET_STATE_TABLE}.csv"),
+                    index=False,
+                )
+                source_label = f"free_entsoe_day_ahead_plus_elexon_mid:{provider_used}"
+            print(
+                f"[source={source_label}] Materialized {len(frames)} tables for "
+                f"{market_state_start} to {market_state_end} (inclusive)"
+            )
+            for table_name, frame in frames.items():
+                output_path = os.path.join(args.market_state_output_dir, f"{table_name}.csv")
+                print(f"{table_name}: rows={len(frame)} path={output_path}")
+            if args.truth_store_db_path:
+                summary = upsert_truth_frames_to_sqlite(frames, args.truth_store_db_path)
+                print(f"[store=sqlite] Upserted upstream market-state tables into {args.truth_store_db_path}")
+                for _, row in summary.iterrows():
+                    print(
+                        f"{row['table_name']}: rows_loaded={int(row['rows_loaded'])} "
+                        f"table_rows={int(row['table_row_count'])}"
+                    )
             return 0
         except Exception as exc:
             print(f"ERROR: {exc}", file=sys.stderr)
@@ -2475,6 +2619,17 @@ def main() -> int:
                 gb_transfer_reviewed_hourly=combined_gb_transfer_reviewed_hourly,
             )
             route_score = route_frames[ROUTE_SCORE_TABLE]
+            if args.market_state_input_path:
+                upstream_market_state = build_fact_upstream_market_state_hourly(
+                    start_date=network_start,
+                    end_date=network_end,
+                    input_path=args.market_state_input_path,
+                )
+            else:
+                upstream_market_state = build_fact_upstream_market_state_hourly_from_price_frame(
+                    prices=prices,
+                    gb_source_provider=provider_used,
+                )
             cluster_curtailment_proxy = fetch_cluster_curtailment_proxy_hourly(
                 start_date=network_start,
                 end_date=network_end,
@@ -2494,6 +2649,7 @@ def main() -> int:
                 fact_route_score_hourly=route_score,
                 fact_regional_curtailment_hourly_proxy=cluster_curtailment_proxy,
                 fact_bmu_curtailment_truth_half_hourly=truth_frame,
+                fact_upstream_market_state_hourly=upstream_market_state,
                 truth_profile=args.opportunity_truth_profile,
             )
             cluster_curtailment_proxy.to_csv(
@@ -2524,6 +2680,10 @@ def main() -> int:
                 os.path.join(args.opportunity_output_dir, f"{INTERCONNECTOR_ITL_TABLE}.csv"),
                 index=False,
             )
+            upstream_market_state.to_csv(
+                os.path.join(args.opportunity_output_dir, f"{UPSTREAM_MARKET_STATE_TABLE}.csv"),
+                index=False,
+            )
             frames = {
                 ROUTE_SCORE_TABLE: route_score,
                 "fact_regional_curtailment_hourly_proxy": cluster_curtailment_proxy,
@@ -2535,9 +2695,14 @@ def main() -> int:
                 INTERCONNECTOR_ITL_TABLE: interconnector_itl,
                 **opportunity_frames,
             }
+            upstream_source_label = (
+                "manual_or_api_market_state"
+                if args.market_state_input_path
+                else f"free_entsoe_day_ahead_plus_elexon_mid:{provider_used}"
+            )
             print(
-                f"[source=elexon_mid:{provider_used}+entsoe+neso+route_opportunity] Materialized {len(frames)} tables for "
-                f"{opportunity_start} to {opportunity_end} (inclusive)"
+                f"[source=elexon_mid:{provider_used}+entsoe+neso+route_opportunity+{upstream_source_label}] "
+                f"Materialized {len(frames)} tables for {opportunity_start} to {opportunity_end} (inclusive)"
             )
             for table_name, frame in frames.items():
                 output_path = os.path.join(args.opportunity_output_dir, f"{table_name}.csv")

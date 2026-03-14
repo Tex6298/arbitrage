@@ -405,7 +405,44 @@ Key behavior:
    This writes `fact_curtailment_opportunity_hourly.csv` plus the supporting `fact_route_score_hourly.csv` and
    `fact_regional_curtailment_hourly_proxy.csv` inputs in the same output directory.
 
-22. Materialize the France-specific connector layer for `IFA`, `IFA2`, and `ElecLink`:
+   If you have a reviewed or API-fed upstream market-state input with route-level forward, day-ahead, intraday,
+   or imbalance price-state fields, add:
+
+   ```bash
+     --market-state-input-path upstream_market_state_input.csv
+   ```
+
+   A checked-in template is available at:
+
+   ```text
+   upstream_market_state_input.example.csv
+   ```
+
+   If your source is a messy CSV, TSV, TXT, or JSON file, normalize it first:
+
+   ```bash
+   python inline_arbitrage_live.py ^
+     --normalize-upstream-market-state-input ^
+     --upstream-market-state-raw-path upstream_market_state_raw.txt ^
+     --upstream-market-state-normalized-output upstream_market_state_input.csv
+   ```
+
+22. Materialize the canonical upstream market-state feed by itself:
+
+   ```bash
+   python inline_arbitrage_live.py ^
+     --materialize-upstream-market-state-feed ^
+     --market-state-start 2024-10-01 ^
+     --market-state-end 2024-10-02 ^
+     --market-state-input-path upstream_market_state_input.csv ^
+     --market-state-output-dir upstream_market_state_history ^
+     --truth-store-db-path bmu_truth_store.sqlite
+   ```
+
+   This writes `fact_upstream_market_state_hourly.csv` and keeps explicit source lineage so a reviewed manual feed can
+   be swapped later for a stronger API feed without changing the opportunity or backtest contracts.
+
+23. Materialize the France-specific connector layer for `IFA`, `IFA2`, and `ElecLink`:
 
    ```bash
    python inline_arbitrage_live.py ^
@@ -700,19 +737,27 @@ Key behavior:
   each model only trains on earlier forecast origins for the same horizon.
 - The backtest table keeps:
   - prediction basis (`exact_notice_hour`, `cluster_route_state`, `route_state`, `global`)
-  - and for `v2`, calibrated ratio bases (`ratio_exact_notice_hour`, `ratio_route_notice_state`, `ratio_route_delivery_tier`, `ratio_global`) plus targeted transition-aware bases for `R2_netback_GB_NL_DE_PL`
+  - and for `v2`, calibrated ratio bases (`ratio_exact_notice_hour`, `ratio_route_notice_state`, `ratio_route_delivery_tier`, `ratio_global`) plus targeted market-state and transition-aware bases for `R2_netback_GB_NL_DE_PL`
   - training sample count
   - actuals, predictions, residuals, and absolute errors for both deliverable MWh and gross value
   - explicit `model_key` and `split_strategy`
-- The horizonized `v2` backtest now preserves explicit as-of transition features for:
+- The horizonized `v2` backtest now preserves explicit as-of market and transition features for:
+  - raw `route_price_score_eur_per_mwh`
+  - route-price feasibility and bottleneck lineage
+  - route-price state, hourly delta bucket, transition state, and persistence bucket
   - `connector_itl_state`
   - `internal_transfer_gate_state`
   - route-delivery, connector-ITL, and internal-gate transition states
   - route-state persistence buckets
-- Those features are there to target one-hour `BritNed / GB-NL` regime flips directly without leaking future route state.
+  - multi-hour connector and internal gate state paths
+- If `fact_upstream_market_state_hourly` is present, `v2` also preserves explicit as-of upstream market-state fields for:
+  - forward, day-ahead, intraday, and optional imbalance prices
+  - forward-to-day-ahead and day-ahead-to-intraday spread buckets
+  - route-level upstream market-state labels plus source lineage
+- Those features are there to target one-hour `BritNed / GB-NL` regime flips directly without leaking future route state. When no upstream feed is present, the current market-state layer still falls back to the as-of route score rather than pretending we already have those external curves.
 - `fact_backtest_summary_slice` is the first slice-aware QA surface over the backtest. It aggregates error and bias by
   model, forecast horizon, cluster, connector hub, route, delivery tier, internal-transfer tier, internal-transfer gate state,
-  connector-notice market state, curtailment source tier, and hour of day.
+  connector-notice market state, upstream market state, curtailment source tier, and hour of day.
 - The summary slice table now also carries:
   - `error_focus_area`
   - `error_reduction_priority_rank`

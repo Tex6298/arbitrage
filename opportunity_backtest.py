@@ -33,6 +33,9 @@ ROUTE_STATE_MIN_HISTORY = 6
 GLOBAL_MIN_HISTORY = 24
 
 RATIO_EXACT_MIN_HISTORY = 1
+RATIO_CLUSTER_ROUTE_MARKET_STATE_MIN_HISTORY = 1
+RATIO_ROUTE_MARKET_STATE_MIN_HISTORY = 1
+RATIO_ROUTE_MARKET_PATH_MIN_HISTORY = 1
 RATIO_CLUSTER_ROUTE_TRANSITION_REGIME_MIN_HISTORY = 1
 RATIO_ROUTE_TRANSITION_REGIME_MIN_HISTORY = 1
 RATIO_ROUTE_TRANSITION_HOUR_MIN_HISTORY = 1
@@ -45,6 +48,11 @@ FEATURE_DRIFT_WARN_THRESHOLD = 0.15
 TARGET_DRIFT_WARN_THRESHOLD = 0.50
 RESIDUAL_DRIFT_WARN_THRESHOLD = 0.50
 
+ROUTE_PRICE_LOW_POSITIVE_MAX_EUR_PER_MWH = 25.0
+ROUTE_PRICE_HIGH_POSITIVE_MIN_EUR_PER_MWH = 75.0
+ROUTE_PRICE_SOFT_MOVE_EUR_PER_MWH = 10.0
+ROUTE_PRICE_JUMP_MOVE_EUR_PER_MWH = 40.0
+
 SUMMARY_SLICE_DIMENSIONS = (
     "all",
     "cluster_key",
@@ -53,6 +61,7 @@ SUMMARY_SLICE_DIMENSIONS = (
     "route_delivery_tier",
     "internal_transfer_evidence_tier",
     "internal_transfer_gate_state",
+    "upstream_market_state",
     "connector_notice_market_state",
     "curtailment_source_tier",
     "feature_hour_of_day",
@@ -82,6 +91,7 @@ def _empty_backtest_prediction_frame() -> pd.DataFrame:
             "route_delivery_tier",
             "internal_transfer_evidence_tier",
             "internal_transfer_gate_state",
+            "upstream_market_state",
             "connector_notice_market_state",
             "curtailment_source_tier",
             "model_key",
@@ -90,6 +100,20 @@ def _empty_backtest_prediction_frame() -> pd.DataFrame:
             "feature_day_of_week",
             "feature_origin_hour_of_day",
             "feature_origin_day_of_week",
+            "feature_upstream_market_state_feed_available_flag_asof",
+            "feature_upstream_market_state_asof",
+            "feature_upstream_forward_price_eur_per_mwh_asof",
+            "feature_upstream_day_ahead_price_eur_per_mwh_asof",
+            "feature_upstream_intraday_price_eur_per_mwh_asof",
+            "feature_upstream_day_ahead_to_intraday_spread_bucket_asof",
+            "feature_upstream_forward_to_day_ahead_spread_bucket_asof",
+            "feature_route_price_score_eur_per_mwh_asof",
+            "feature_route_price_feasible_flag_asof",
+            "feature_route_price_bottleneck_asof",
+            "feature_route_price_state_asof",
+            "feature_route_price_delta_bucket_asof",
+            "feature_route_price_transition_state_asof",
+            "feature_route_price_persistence_bucket_asof",
             "feature_route_delivery_tier_asof",
             "feature_connector_notice_market_state_asof",
             "feature_connector_itl_state_asof",
@@ -99,6 +123,8 @@ def _empty_backtest_prediction_frame() -> pd.DataFrame:
             "feature_connector_itl_transition_state_asof",
             "feature_internal_transfer_gate_transition_state_asof",
             "feature_route_state_persistence_bucket_asof",
+            "feature_connector_itl_state_path_asof",
+            "feature_internal_transfer_gate_state_path_asof",
             "feature_curtailment_selected_mwh_asof",
             "feature_deliverable_mw_proxy_asof",
             "feature_route_score_eur_per_mwh_asof",
@@ -173,6 +199,7 @@ def _empty_backtest_top_error_frame() -> pd.DataFrame:
             "route_delivery_tier",
             "internal_transfer_evidence_tier",
             "internal_transfer_gate_state",
+            "upstream_market_state",
             "connector_notice_market_state",
             "curtailment_source_tier",
             "prediction_basis",
@@ -238,6 +265,35 @@ def _prior_mean_by_group(frame: pd.DataFrame, keys: list[str], target_col: str, 
     return result
 
 
+def _coerce_bool_series(values: pd.Series | object, default: bool = False) -> pd.Series:
+    if isinstance(values, pd.Series):
+        series = values.copy()
+    else:
+        series = pd.Series(values)
+    if series.dtype == bool:
+        return series.fillna(default)
+    lowered = series.astype(str).str.strip().str.lower()
+    mapped = lowered.map(
+        {
+            "true": True,
+            "false": False,
+            "1": True,
+            "0": False,
+            "yes": True,
+            "no": False,
+            "nan": np.nan,
+            "<na>": np.nan,
+            "none": np.nan,
+        }
+    )
+    if mapped.notna().any():
+        return mapped.where(mapped.notna(), default).astype(bool)
+    numeric = pd.to_numeric(series, errors="coerce")
+    if numeric.notna().any():
+        return numeric.fillna(int(default)).astype(int).astype(bool)
+    return series.where(series.notna(), default).astype(bool)
+
+
 def load_curtailment_opportunity_input(path: str | Path) -> pd.DataFrame:
     input_path = Path(path)
     if input_path.is_dir():
@@ -278,6 +334,51 @@ def _prepare_backtest_input(fact_curtailment_opportunity_hourly: pd.DataFrame) -
     frame["actual_opportunity_gross_value_eur"] = pd.to_numeric(
         frame["opportunity_gross_value_eur"], errors="coerce"
     ).fillna(0.0)
+    frame["upstream_market_state_feed_available_flag"] = frame.get(
+        "upstream_market_state_feed_available_flag",
+        pd.Series(False, index=frame.index),
+    )
+    frame["upstream_market_state_feed_available_flag"] = _coerce_bool_series(
+        frame["upstream_market_state_feed_available_flag"]
+    )
+    frame["upstream_market_state"] = frame.get(
+        "upstream_market_state",
+        pd.Series("no_upstream_feed", index=frame.index),
+    ).fillna("no_upstream_feed")
+    for column in (
+        "upstream_forward_price_eur_per_mwh",
+        "upstream_day_ahead_price_eur_per_mwh",
+        "upstream_intraday_price_eur_per_mwh",
+    ):
+        frame[column] = pd.to_numeric(
+            frame.get(column, pd.Series(np.nan, index=frame.index)),
+            errors="coerce",
+        )
+    frame["upstream_day_ahead_to_intraday_spread_bucket"] = frame.get(
+        "upstream_day_ahead_to_intraday_spread_bucket",
+        pd.Series("spread_unknown", index=frame.index),
+    ).fillna("spread_unknown")
+    frame["upstream_forward_to_day_ahead_spread_bucket"] = frame.get(
+        "upstream_forward_to_day_ahead_spread_bucket",
+        pd.Series("spread_unknown", index=frame.index),
+    ).fillna("spread_unknown")
+    frame["route_price_score_eur_per_mwh"] = pd.to_numeric(
+        frame.get(
+            "route_price_score_eur_per_mwh",
+            frame.get("deliverable_route_score_eur_per_mwh", pd.Series(0.0, index=frame.index)),
+        ),
+        errors="coerce",
+    ).fillna(0.0)
+    route_price_feasible_default = frame["route_price_score_eur_per_mwh"].gt(0.0)
+    frame["route_price_feasible_flag"] = frame.get(
+        "route_price_feasible_flag",
+        route_price_feasible_default,
+    )
+    frame["route_price_feasible_flag"] = _coerce_bool_series(frame["route_price_feasible_flag"])
+    frame["route_price_bottleneck"] = frame.get(
+        "route_price_bottleneck",
+        pd.Series("unknown_price_bottleneck", index=frame.index),
+    ).fillna("unknown_price_bottleneck")
     frame["deliverable_route_score_eur_per_mwh"] = pd.to_numeric(
         frame["deliverable_route_score_eur_per_mwh"], errors="coerce"
     ).fillna(0.0)
@@ -347,29 +448,88 @@ def _prepare_backtest_input(fact_curtailment_opportunity_hourly: pd.DataFrame) -
     frame["realized_potential_ratio"] = pd.to_numeric(
         frame["realized_potential_ratio"], errors="coerce"
     ).fillna(0.0).clip(lower=0.0, upper=1.0)
+    frame["route_price_state"] = np.where(
+        frame["route_price_score_eur_per_mwh"].le(0.0),
+        "price_non_positive",
+        np.where(
+            frame["route_price_score_eur_per_mwh"].lt(ROUTE_PRICE_LOW_POSITIVE_MAX_EUR_PER_MWH),
+            "price_low_positive",
+            np.where(
+                frame["route_price_score_eur_per_mwh"].lt(ROUTE_PRICE_HIGH_POSITIVE_MIN_EUR_PER_MWH),
+                "price_mid_positive",
+                "price_high_positive",
+            ),
+        ),
+    )
 
     frame = frame.sort_values(["cluster_key", "route_name", "hub_key", "interval_start_utc"]).reset_index(drop=True)
     group_keys = ["cluster_key", "route_name", "hub_key"]
     grouped = frame.groupby(group_keys, dropna=False)
     prev_interval_start = grouped["interval_start_utc"].shift(1)
+    prev2_interval_start = grouped["interval_start_utc"].shift(2)
     prev_route_tier = grouped["route_delivery_tier"].shift(1)
     prev_connector_itl = grouped["connector_itl_state"].shift(1)
     prev_internal_gate = grouped["internal_transfer_gate_state"].shift(1)
+    prev2_connector_itl = grouped["connector_itl_state"].shift(2)
+    prev2_internal_gate = grouped["internal_transfer_gate_state"].shift(2)
+    prev_route_price_state = grouped["route_price_state"].shift(1)
+    prev_route_price_score = grouped["route_price_score_eur_per_mwh"].shift(1)
 
     contiguous_prev = prev_interval_start.eq(frame["interval_start_utc"] - pd.Timedelta(hours=1))
+    contiguous_prev2 = prev2_interval_start.eq(frame["interval_start_utc"] - pd.Timedelta(hours=2))
     prev_route_tier = prev_route_tier.where(contiguous_prev)
     prev_connector_itl = prev_connector_itl.where(contiguous_prev)
     prev_internal_gate = prev_internal_gate.where(contiguous_prev)
+    prev2_connector_itl = prev2_connector_itl.where(contiguous_prev & contiguous_prev2)
+    prev2_internal_gate = prev2_internal_gate.where(contiguous_prev & contiguous_prev2)
+    prev_route_price_state = prev_route_price_state.where(contiguous_prev)
+    prev_route_price_score = prev_route_price_score.where(contiguous_prev)
+
+    route_price_delta = frame["route_price_score_eur_per_mwh"] - prev_route_price_score
+    frame["route_price_delta_bucket"] = np.where(
+        ~contiguous_prev,
+        "price_no_prior",
+        np.where(
+            route_price_delta.le(-ROUTE_PRICE_JUMP_MOVE_EUR_PER_MWH),
+            "price_jump_down",
+            np.where(
+                route_price_delta.le(-ROUTE_PRICE_SOFT_MOVE_EUR_PER_MWH),
+                "price_soft_down",
+                np.where(
+                    route_price_delta.lt(ROUTE_PRICE_SOFT_MOVE_EUR_PER_MWH),
+                    "price_flat",
+                    np.where(
+                        route_price_delta.lt(ROUTE_PRICE_JUMP_MOVE_EUR_PER_MWH),
+                        "price_soft_up",
+                        "price_jump_up",
+                    ),
+                ),
+            ),
+        ),
+    )
 
     def _transition_state(previous: pd.Series, current: pd.Series) -> pd.Series:
         prev_label = previous.fillna("START").astype(str)
         curr_label = current.fillna("unknown").astype(str)
         return prev_label + "->" + curr_label
 
+    def _state_path(prev2: pd.Series, prev1: pd.Series, current: pd.Series) -> pd.Series:
+        prev2_label = prev2.fillna("START").astype(str)
+        prev1_label = prev1.fillna("START").astype(str)
+        curr_label = current.fillna("unknown").astype(str)
+        return prev2_label + "|" + prev1_label + "|" + curr_label
+
     frame["route_delivery_transition_state"] = _transition_state(prev_route_tier, frame["route_delivery_tier"])
     frame["connector_itl_transition_state"] = _transition_state(prev_connector_itl, frame["connector_itl_state"])
     frame["internal_transfer_gate_transition_state"] = _transition_state(
         prev_internal_gate, frame["internal_transfer_gate_state"]
+    )
+    frame["route_price_transition_state"] = _transition_state(prev_route_price_state, frame["route_price_state"])
+    frame["connector_itl_state_path"] = _state_path(prev2_connector_itl, prev_connector_itl, frame["connector_itl_state"])
+    frame["internal_transfer_gate_state_path"] = _state_path(
+        prev2_internal_gate,
+        prev_internal_gate,
+        frame["internal_transfer_gate_state"],
     )
 
     route_run_break = (~contiguous_prev) | prev_route_tier.ne(frame["route_delivery_tier"])
@@ -381,6 +541,16 @@ def _prepare_backtest_input(fact_curtailment_opportunity_hourly: pd.DataFrame) -
         frame["route_state_persistence_hours"].le(1),
         "persist_1h",
         np.where(frame["route_state_persistence_hours"].eq(2), "persist_2h", "persist_3h_plus"),
+    )
+    route_price_run_break = (~contiguous_prev) | prev_route_price_state.ne(frame["route_price_state"])
+    route_price_run_id = route_price_run_break.groupby([frame[key] for key in group_keys], dropna=False).cumsum()
+    frame["route_price_persistence_hours"] = (
+        frame.groupby([*group_keys, route_price_run_id], dropna=False).cumcount() + 1
+    ).astype(int)
+    frame["route_price_persistence_bucket"] = np.where(
+        frame["route_price_persistence_hours"].le(1),
+        "price_persist_1h",
+        np.where(frame["route_price_persistence_hours"].eq(2), "price_persist_2h", "price_persist_3h_plus"),
     )
     return frame.sort_values(["interval_start_utc", "cluster_key", "route_name", "hub_key"]).reset_index(drop=True)
 
@@ -400,6 +570,20 @@ def _build_horizon_example_frame(frame: pd.DataFrame, forecast_horizon_hours: in
             "interval_start_utc",
             "feature_hour_of_day",
             "feature_day_of_week",
+            "upstream_market_state_feed_available_flag",
+            "upstream_market_state",
+            "upstream_forward_price_eur_per_mwh",
+            "upstream_day_ahead_price_eur_per_mwh",
+            "upstream_intraday_price_eur_per_mwh",
+            "upstream_day_ahead_to_intraday_spread_bucket",
+            "upstream_forward_to_day_ahead_spread_bucket",
+            "route_price_score_eur_per_mwh",
+            "route_price_feasible_flag",
+            "route_price_bottleneck",
+            "route_price_state",
+            "route_price_delta_bucket",
+            "route_price_transition_state",
+            "route_price_persistence_bucket",
             "route_delivery_tier",
             "connector_notice_market_state",
             "connector_itl_state",
@@ -409,6 +593,8 @@ def _build_horizon_example_frame(frame: pd.DataFrame, forecast_horizon_hours: in
             "connector_itl_transition_state",
             "internal_transfer_gate_transition_state",
             "route_state_persistence_bucket",
+            "connector_itl_state_path",
+            "internal_transfer_gate_state_path",
             "curtailment_selected_mwh",
             "deliverable_mw_proxy",
             "deliverable_route_score_eur_per_mwh",
@@ -421,6 +607,20 @@ def _build_horizon_example_frame(frame: pd.DataFrame, forecast_horizon_hours: in
             "interval_start_utc": "feature_asof_utc",
             "feature_hour_of_day": "feature_origin_hour_of_day",
             "feature_day_of_week": "feature_origin_day_of_week",
+            "upstream_market_state_feed_available_flag": "feature_upstream_market_state_feed_available_flag_asof",
+            "upstream_market_state": "feature_upstream_market_state_asof",
+            "upstream_forward_price_eur_per_mwh": "feature_upstream_forward_price_eur_per_mwh_asof",
+            "upstream_day_ahead_price_eur_per_mwh": "feature_upstream_day_ahead_price_eur_per_mwh_asof",
+            "upstream_intraday_price_eur_per_mwh": "feature_upstream_intraday_price_eur_per_mwh_asof",
+            "upstream_day_ahead_to_intraday_spread_bucket": "feature_upstream_day_ahead_to_intraday_spread_bucket_asof",
+            "upstream_forward_to_day_ahead_spread_bucket": "feature_upstream_forward_to_day_ahead_spread_bucket_asof",
+            "route_price_score_eur_per_mwh": "feature_route_price_score_eur_per_mwh_asof",
+            "route_price_feasible_flag": "feature_route_price_feasible_flag_asof",
+            "route_price_bottleneck": "feature_route_price_bottleneck_asof",
+            "route_price_state": "feature_route_price_state_asof",
+            "route_price_delta_bucket": "feature_route_price_delta_bucket_asof",
+            "route_price_transition_state": "feature_route_price_transition_state_asof",
+            "route_price_persistence_bucket": "feature_route_price_persistence_bucket_asof",
             "route_delivery_tier": "feature_route_delivery_tier_asof",
             "connector_notice_market_state": "feature_connector_notice_market_state_asof",
             "connector_itl_state": "feature_connector_itl_state_asof",
@@ -430,6 +630,8 @@ def _build_horizon_example_frame(frame: pd.DataFrame, forecast_horizon_hours: in
             "connector_itl_transition_state": "feature_connector_itl_transition_state_asof",
             "internal_transfer_gate_transition_state": "feature_internal_transfer_gate_transition_state_asof",
             "route_state_persistence_bucket": "feature_route_state_persistence_bucket_asof",
+            "connector_itl_state_path": "feature_connector_itl_state_path_asof",
+            "internal_transfer_gate_state_path": "feature_internal_transfer_gate_state_path_asof",
             "curtailment_selected_mwh": "feature_curtailment_selected_mwh_asof",
             "deliverable_mw_proxy": "feature_deliverable_mw_proxy_asof",
             "deliverable_route_score_eur_per_mwh": "feature_route_score_eur_per_mwh_asof",
@@ -569,6 +771,70 @@ def _build_potential_ratio_backtest(frame: pd.DataFrame) -> pd.DataFrame:
     frame["realized_origin_potential_ratio"] = pd.to_numeric(
         frame["realized_origin_potential_ratio"], errors="coerce"
     ).fillna(0.0).clip(lower=0.0, upper=10.0)
+    cluster_upstream_market_state = _prior_mean_by_group(
+        frame,
+        [
+            "cluster_key",
+            "route_name",
+            "feature_hour_of_day",
+            "feature_upstream_market_state_asof",
+            "feature_upstream_day_ahead_to_intraday_spread_bucket_asof",
+            "feature_upstream_forward_to_day_ahead_spread_bucket_asof",
+        ],
+        "realized_origin_potential_ratio",
+        "ratio_cluster_upstream_market_state",
+    )
+    route_upstream_market_state = _prior_mean_by_group(
+        frame,
+        [
+            "route_name",
+            "feature_hour_of_day",
+            "feature_upstream_market_state_asof",
+            "feature_upstream_day_ahead_to_intraday_spread_bucket_asof",
+            "feature_upstream_forward_to_day_ahead_spread_bucket_asof",
+        ],
+        "realized_origin_potential_ratio",
+        "ratio_route_upstream_market_state",
+    )
+    cluster_market_state = _prior_mean_by_group(
+        frame,
+        [
+            "cluster_key",
+            "route_name",
+            "feature_hour_of_day",
+            "feature_route_price_state_asof",
+            "feature_route_price_delta_bucket_asof",
+            "feature_connector_itl_state_asof",
+            "feature_internal_transfer_gate_bucket_asof",
+        ],
+        "realized_origin_potential_ratio",
+        "ratio_cluster_market_state",
+    )
+    route_market_state = _prior_mean_by_group(
+        frame,
+        [
+            "route_name",
+            "feature_hour_of_day",
+            "feature_route_price_state_asof",
+            "feature_route_price_delta_bucket_asof",
+            "feature_route_price_feasible_flag_asof",
+            "feature_route_price_bottleneck_asof",
+        ],
+        "realized_origin_potential_ratio",
+        "ratio_route_market_state",
+    )
+    route_market_path = _prior_mean_by_group(
+        frame,
+        [
+            "route_name",
+            "feature_hour_of_day",
+            "feature_route_price_transition_state_asof",
+            "feature_connector_itl_state_path_asof",
+            "feature_internal_transfer_gate_state_path_asof",
+        ],
+        "realized_origin_potential_ratio",
+        "ratio_route_market_path",
+    )
     cluster_transition_regime = _prior_mean_by_group(
         frame,
         [
@@ -644,6 +910,11 @@ def _build_potential_ratio_backtest(frame: pd.DataFrame) -> pd.DataFrame:
     result = pd.concat(
         [
             frame.copy(),
+            cluster_upstream_market_state,
+            route_upstream_market_state,
+            cluster_market_state,
+            route_market_state,
+            route_market_path,
             cluster_transition_regime,
             transition_regime,
             transition_hour,
@@ -660,20 +931,74 @@ def _build_potential_ratio_backtest(frame: pd.DataFrame) -> pd.DataFrame:
 
     origin_available = result["feature_origin_hour_of_day"].notna()
     targeted_transition_route = result["route_name"].isin(TARGETED_TRANSITION_ROUTE_NAMES)
+    upstream_feed_available = _coerce_bool_series(
+        result["feature_upstream_market_state_feed_available_flag_asof"],
+        default=False,
+    )
+    cluster_upstream_market_state_mask = (
+        origin_available
+        & upstream_feed_available
+        & (result["ratio_cluster_upstream_market_state_prior_count"] >= RATIO_CLUSTER_ROUTE_MARKET_STATE_MIN_HISTORY)
+    )
+    route_upstream_market_state_mask = (
+        origin_available
+        & upstream_feed_available
+        & ~cluster_upstream_market_state_mask
+        & (result["ratio_route_upstream_market_state_prior_count"] >= RATIO_ROUTE_MARKET_STATE_MIN_HISTORY)
+    )
+    cluster_market_state_mask = (
+        origin_available
+        & targeted_transition_route
+        & ~cluster_upstream_market_state_mask
+        & ~route_upstream_market_state_mask
+        & (result["ratio_cluster_market_state_prior_count"] >= RATIO_CLUSTER_ROUTE_MARKET_STATE_MIN_HISTORY)
+    )
+    route_market_state_mask = (
+        origin_available
+        & targeted_transition_route
+        & ~cluster_upstream_market_state_mask
+        & ~route_upstream_market_state_mask
+        & ~cluster_market_state_mask
+        & (result["ratio_route_market_state_prior_count"] >= RATIO_ROUTE_MARKET_STATE_MIN_HISTORY)
+    )
+    route_market_path_mask = (
+        origin_available
+        & targeted_transition_route
+        & ~cluster_upstream_market_state_mask
+        & ~route_upstream_market_state_mask
+        & ~cluster_market_state_mask
+        & ~route_market_state_mask
+        & (result["ratio_route_market_path_prior_count"] >= RATIO_ROUTE_MARKET_PATH_MIN_HISTORY)
+    )
     cluster_transition_regime_mask = (
         origin_available
         & targeted_transition_route
+        & ~cluster_upstream_market_state_mask
+        & ~route_upstream_market_state_mask
+        & ~cluster_market_state_mask
+        & ~route_market_state_mask
+        & ~route_market_path_mask
         & (result["ratio_cluster_transition_regime_prior_count"] >= RATIO_CLUSTER_ROUTE_TRANSITION_REGIME_MIN_HISTORY)
     )
     transition_regime_mask = (
         origin_available
         & targeted_transition_route
+        & ~cluster_upstream_market_state_mask
+        & ~route_upstream_market_state_mask
+        & ~cluster_market_state_mask
+        & ~route_market_state_mask
+        & ~route_market_path_mask
         & ~cluster_transition_regime_mask
         & (result["ratio_transition_regime_prior_count"] >= RATIO_ROUTE_TRANSITION_REGIME_MIN_HISTORY)
     )
     transition_hour_mask = (
         origin_available
         & targeted_transition_route
+        & ~cluster_upstream_market_state_mask
+        & ~route_upstream_market_state_mask
+        & ~cluster_market_state_mask
+        & ~route_market_state_mask
+        & ~route_market_path_mask
         & ~cluster_transition_regime_mask
         & ~transition_regime_mask
         & (result["ratio_transition_hour_prior_count"] >= RATIO_ROUTE_TRANSITION_HOUR_MIN_HISTORY)
@@ -681,23 +1006,68 @@ def _build_potential_ratio_backtest(frame: pd.DataFrame) -> pd.DataFrame:
     transition_path_mask = (
         origin_available
         & targeted_transition_route
+        & ~cluster_upstream_market_state_mask
+        & ~route_upstream_market_state_mask
+        & ~cluster_market_state_mask
+        & ~route_market_state_mask
+        & ~route_market_path_mask
         & ~cluster_transition_regime_mask
         & ~transition_regime_mask
         & ~transition_hour_mask
         & (result["ratio_transition_path_prior_count"] >= RATIO_ROUTE_TRANSITION_PATH_MIN_HISTORY)
     )
-    exact_mask = origin_available & ~cluster_transition_regime_mask & ~transition_regime_mask & ~transition_hour_mask & ~transition_path_mask & (
+    exact_mask = origin_available & ~cluster_upstream_market_state_mask & ~route_upstream_market_state_mask & ~cluster_market_state_mask & ~route_market_state_mask & ~route_market_path_mask & ~cluster_transition_regime_mask & ~transition_regime_mask & ~transition_hour_mask & ~transition_path_mask & (
         result["ratio_exact_prior_count"] >= RATIO_EXACT_MIN_HISTORY
     )
-    route_notice_mask = origin_available & ~cluster_transition_regime_mask & ~transition_regime_mask & ~transition_hour_mask & ~transition_path_mask & ~exact_mask & (
+    route_notice_mask = origin_available & ~cluster_upstream_market_state_mask & ~route_upstream_market_state_mask & ~cluster_market_state_mask & ~route_market_state_mask & ~route_market_path_mask & ~cluster_transition_regime_mask & ~transition_regime_mask & ~transition_hour_mask & ~transition_path_mask & ~exact_mask & (
         result["ratio_route_notice_prior_count"] >= RATIO_ROUTE_NOTICE_MIN_HISTORY
     )
-    route_tier_mask = origin_available & ~cluster_transition_regime_mask & ~transition_regime_mask & ~transition_hour_mask & ~transition_path_mask & ~exact_mask & ~route_notice_mask & (
+    route_tier_mask = origin_available & ~cluster_upstream_market_state_mask & ~route_upstream_market_state_mask & ~cluster_market_state_mask & ~route_market_state_mask & ~route_market_path_mask & ~cluster_transition_regime_mask & ~transition_regime_mask & ~transition_hour_mask & ~transition_path_mask & ~exact_mask & ~route_notice_mask & (
         result["ratio_route_tier_prior_count"] >= RATIO_ROUTE_TIER_MIN_HISTORY
     )
-    global_mask = origin_available & ~cluster_transition_regime_mask & ~transition_regime_mask & ~transition_hour_mask & ~transition_path_mask & ~exact_mask & ~route_notice_mask & ~route_tier_mask & (
+    global_mask = origin_available & ~cluster_upstream_market_state_mask & ~route_upstream_market_state_mask & ~cluster_market_state_mask & ~route_market_state_mask & ~route_market_path_mask & ~cluster_transition_regime_mask & ~transition_regime_mask & ~transition_hour_mask & ~transition_path_mask & ~exact_mask & ~route_notice_mask & ~route_tier_mask & (
         global_count >= RATIO_GLOBAL_MIN_HISTORY
     )
+
+    result.loc[cluster_upstream_market_state_mask, "prediction_basis"] = "ratio_cluster_route_upstream_market_state"
+    result.loc[cluster_upstream_market_state_mask, "training_sample_count"] = result.loc[
+        cluster_upstream_market_state_mask, "ratio_cluster_upstream_market_state_prior_count"
+    ]
+    result.loc[cluster_upstream_market_state_mask, "predicted_ratio"] = result.loc[
+        cluster_upstream_market_state_mask, "ratio_cluster_upstream_market_state_prior_mean"
+    ]
+
+    result.loc[route_upstream_market_state_mask, "prediction_basis"] = "ratio_route_upstream_market_state"
+    result.loc[route_upstream_market_state_mask, "training_sample_count"] = result.loc[
+        route_upstream_market_state_mask, "ratio_route_upstream_market_state_prior_count"
+    ]
+    result.loc[route_upstream_market_state_mask, "predicted_ratio"] = result.loc[
+        route_upstream_market_state_mask, "ratio_route_upstream_market_state_prior_mean"
+    ]
+
+    result.loc[cluster_market_state_mask, "prediction_basis"] = "ratio_cluster_route_market_state"
+    result.loc[cluster_market_state_mask, "training_sample_count"] = result.loc[
+        cluster_market_state_mask, "ratio_cluster_market_state_prior_count"
+    ]
+    result.loc[cluster_market_state_mask, "predicted_ratio"] = result.loc[
+        cluster_market_state_mask, "ratio_cluster_market_state_prior_mean"
+    ]
+
+    result.loc[route_market_state_mask, "prediction_basis"] = "ratio_route_market_state"
+    result.loc[route_market_state_mask, "training_sample_count"] = result.loc[
+        route_market_state_mask, "ratio_route_market_state_prior_count"
+    ]
+    result.loc[route_market_state_mask, "predicted_ratio"] = result.loc[
+        route_market_state_mask, "ratio_route_market_state_prior_mean"
+    ]
+
+    result.loc[route_market_path_mask, "prediction_basis"] = "ratio_route_market_path"
+    result.loc[route_market_path_mask, "training_sample_count"] = result.loc[
+        route_market_path_mask, "ratio_route_market_path_prior_count"
+    ]
+    result.loc[route_market_path_mask, "predicted_ratio"] = result.loc[
+        route_market_path_mask, "ratio_route_market_path_prior_mean"
+    ]
 
     result.loc[cluster_transition_regime_mask, "prediction_basis"] = "ratio_cluster_route_transition_regime"
     result.loc[cluster_transition_regime_mask, "training_sample_count"] = result.loc[
@@ -865,6 +1235,8 @@ def _summary_focus_area(slice_dimension: str, slice_value: object) -> str:
             return "reviewed_internal_transfer"
     if slice_dimension == "internal_transfer_gate_state" and str(slice_value).startswith("blocked_reviewed"):
         return "blocked_internal_reviewed"
+    if slice_dimension == "upstream_market_state" and slice_value != "no_upstream_feed":
+        return "upstream_market_state"
     if slice_dimension == "connector_notice_market_state" and slice_value != "no_public_connector_restriction":
         return "connector_restriction_state"
     if slice_dimension == "hub_key" and slice_value in {"ifa", "ifa2", "eleclink"}:
@@ -1004,6 +1376,10 @@ def build_fact_backtest_top_error_hourly(fact_backtest_prediction_hourly: pd.Dat
         eligible["internal_transfer_gate_state"].fillna("").astype(str).str.startswith("blocked_reviewed"),
         "error_focus_area",
     ] = "blocked_internal_reviewed"
+    eligible.loc[
+        eligible["upstream_market_state"].fillna("no_upstream_feed").ne("no_upstream_feed"),
+        "error_focus_area",
+    ] = "upstream_market_state"
     eligible.loc[
         eligible["connector_notice_market_state"].ne("no_public_connector_restriction"),
         "error_focus_area",

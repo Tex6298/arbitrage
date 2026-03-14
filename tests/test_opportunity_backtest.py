@@ -36,6 +36,16 @@ def _opportunity_row(
     internal_transfer_evidence_tier: str = "gb_topology_transfer_gate_proxy",
     internal_transfer_gate_state: str = "capacity_unknown_reachable",
     connector_itl_state: str = "no_public_itl_restriction",
+    route_price_score_eur_per_mwh: float | None = None,
+    route_price_feasible_flag: bool | None = None,
+    route_price_bottleneck: str | None = None,
+    upstream_market_state_feed_available_flag: bool = False,
+    upstream_market_state: str = "no_upstream_feed",
+    upstream_day_ahead_price_eur_per_mwh: float | None = None,
+    upstream_intraday_price_eur_per_mwh: float | None = None,
+    upstream_forward_price_eur_per_mwh: float | None = None,
+    upstream_day_ahead_to_intraday_spread_bucket: str = "spread_unknown",
+    upstream_forward_to_day_ahead_spread_bucket: str = "spread_unknown",
 ) -> dict:
     interval_start = pd.Timestamp(interval_start_utc)
     interval_end = interval_start + pd.Timedelta(hours=1)
@@ -45,6 +55,12 @@ def _opportunity_row(
         curtailment_selected_mwh = opportunity_deliverable_mwh
     if deliverable_mw_proxy is None:
         deliverable_mw_proxy = opportunity_deliverable_mwh
+    if route_price_score_eur_per_mwh is None:
+        route_price_score_eur_per_mwh = deliverable_route_score_eur_per_mwh
+    if route_price_feasible_flag is None:
+        route_price_feasible_flag = route_price_score_eur_per_mwh > 0.0
+    if route_price_bottleneck is None:
+        route_price_bottleneck = "GB->NL" if "GB_NL" in route_name else "GB->FR"
     return {
         "date": interval_start.date(),
         "interval_start_local": interval_start_local,
@@ -59,9 +75,19 @@ def _opportunity_row(
         "route_name": route_name,
         "route_label": route_name,
         "route_border_key": "GB-FR",
+        "route_price_score_eur_per_mwh": route_price_score_eur_per_mwh,
+        "route_price_feasible_flag": route_price_feasible_flag,
+        "route_price_bottleneck": route_price_bottleneck,
         "route_delivery_tier": route_delivery_tier,
         "connector_notice_market_state": connector_notice_market_state,
         "curtailment_source_tier": curtailment_source_tier,
+        "upstream_market_state_feed_available_flag": upstream_market_state_feed_available_flag,
+        "upstream_market_state": upstream_market_state,
+        "upstream_day_ahead_price_eur_per_mwh": upstream_day_ahead_price_eur_per_mwh,
+        "upstream_intraday_price_eur_per_mwh": upstream_intraday_price_eur_per_mwh,
+        "upstream_forward_price_eur_per_mwh": upstream_forward_price_eur_per_mwh,
+        "upstream_day_ahead_to_intraday_spread_bucket": upstream_day_ahead_to_intraday_spread_bucket,
+        "upstream_forward_to_day_ahead_spread_bucket": upstream_forward_to_day_ahead_spread_bucket,
         "curtailment_selected_mwh": curtailment_selected_mwh,
         "deliverable_mw_proxy": deliverable_mw_proxy,
         "opportunity_deliverable_mwh": opportunity_deliverable_mwh,
@@ -175,7 +201,7 @@ class OpportunityBacktestTests(unittest.TestCase):
         self.assertAlmostEqual(float(third["predicted_opportunity_deliverable_mwh"]), 9.0)
         self.assertAlmostEqual(float(third["predicted_opportunity_gross_value_eur"]), 540.0)
 
-    def test_build_fact_backtest_prediction_hourly_uses_route_transition_features_for_britned_flip(self) -> None:
+    def test_build_fact_backtest_prediction_hourly_uses_market_state_features_for_britned_flip(self) -> None:
         fact = pd.DataFrame(
             [
                 _opportunity_row(
@@ -192,6 +218,9 @@ class OpportunityBacktestTests(unittest.TestCase):
                     internal_transfer_evidence_tier="reviewed_internal_constraint_boundary",
                     internal_transfer_gate_state="reviewed_boundary_cap",
                     connector_itl_state="published_restriction",
+                    route_price_score_eur_per_mwh=-5.0,
+                    route_price_feasible_flag=False,
+                    route_price_bottleneck="GB->NL",
                 ),
                 _opportunity_row(
                     "2024-10-01T05:00:00Z",
@@ -207,6 +236,9 @@ class OpportunityBacktestTests(unittest.TestCase):
                     internal_transfer_evidence_tier="reviewed_internal_constraint_boundary",
                     internal_transfer_gate_state="reviewed_boundary_cap",
                     connector_itl_state="published_restriction",
+                    route_price_score_eur_per_mwh=60.0,
+                    route_price_feasible_flag=True,
+                    route_price_bottleneck="GB->NL",
                 ),
                 _opportunity_row(
                     "2024-10-02T04:00:00Z",
@@ -222,6 +254,9 @@ class OpportunityBacktestTests(unittest.TestCase):
                     internal_transfer_evidence_tier="reviewed_internal_constraint_boundary",
                     internal_transfer_gate_state="reviewed_boundary_cap",
                     connector_itl_state="published_restriction",
+                    route_price_score_eur_per_mwh=-2.0,
+                    route_price_feasible_flag=False,
+                    route_price_bottleneck="GB->NL",
                 ),
                 _opportunity_row(
                     "2024-10-02T05:00:00Z",
@@ -237,6 +272,9 @@ class OpportunityBacktestTests(unittest.TestCase):
                     internal_transfer_evidence_tier="reviewed_internal_constraint_boundary",
                     internal_transfer_gate_state="reviewed_boundary_cap",
                     connector_itl_state="published_restriction",
+                    route_price_score_eur_per_mwh=65.0,
+                    route_price_feasible_flag=True,
+                    route_price_bottleneck="GB->NL",
                 ),
             ]
         )
@@ -246,11 +284,121 @@ class OpportunityBacktestTests(unittest.TestCase):
         )
         target = backtest[backtest["interval_start_utc"] == pd.Timestamp("2024-10-02T05:00:00+00:00")].iloc[0]
         self.assertTrue(bool(target["prediction_eligible_flag"]))
-        self.assertEqual(target["prediction_basis"], "ratio_cluster_route_transition_regime")
+        self.assertEqual(target["prediction_basis"], "ratio_cluster_route_market_state")
+        self.assertAlmostEqual(float(target["feature_route_price_score_eur_per_mwh_asof"]), -2.0)
+        self.assertFalse(bool(target["feature_route_price_feasible_flag_asof"]))
+        self.assertEqual(target["feature_route_price_bottleneck_asof"], "GB->NL")
+        self.assertEqual(target["feature_route_price_state_asof"], "price_non_positive")
+        self.assertEqual(target["feature_route_price_delta_bucket_asof"], "price_no_prior")
+        self.assertEqual(target["feature_route_price_transition_state_asof"], "START->price_non_positive")
+        self.assertEqual(target["feature_route_price_persistence_bucket_asof"], "price_persist_1h")
         self.assertEqual(target["feature_connector_itl_state_asof"], "published_restriction")
         self.assertEqual(target["feature_internal_transfer_gate_state_asof"], "reviewed_boundary_cap")
         self.assertEqual(target["feature_internal_transfer_gate_bucket_asof"], "nonblocking_transfer")
-        self.assertEqual(target["feature_route_state_persistence_bucket_asof"], "persist_1h")
+        self.assertEqual(
+            target["feature_connector_itl_state_path_asof"],
+            "START|START|published_restriction",
+        )
+        self.assertEqual(
+            target["feature_internal_transfer_gate_state_path_asof"],
+            "START|START|reviewed_boundary_cap",
+        )
+        self.assertAlmostEqual(float(target["predicted_opportunity_deliverable_mwh"]), 113.33333333333333)
+
+    def test_build_fact_backtest_prediction_hourly_prefers_upstream_market_state_when_available(self) -> None:
+        fact = pd.DataFrame(
+            [
+                _opportunity_row(
+                    "2024-10-01T04:00:00Z",
+                    "dogger_hornsea_offshore",
+                    "R2_netback_GB_NL_DE_PL",
+                    "britned",
+                    "reviewed",
+                    "no_public_connector_restriction",
+                    110.0,
+                    52.0,
+                    curtailment_selected_mwh=150.0,
+                    deliverable_mw_proxy=170.0,
+                    upstream_market_state_feed_available_flag=True,
+                    upstream_market_state="intraday_stronger_than_day_ahead",
+                    upstream_day_ahead_price_eur_per_mwh=38.0,
+                    upstream_intraday_price_eur_per_mwh=52.0,
+                    upstream_forward_price_eur_per_mwh=36.0,
+                    upstream_day_ahead_to_intraday_spread_bucket="spread_positive",
+                    upstream_forward_to_day_ahead_spread_bucket="spread_flat",
+                ),
+                _opportunity_row(
+                    "2024-10-01T05:00:00Z",
+                    "dogger_hornsea_offshore",
+                    "R2_netback_GB_NL_DE_PL",
+                    "britned",
+                    "reviewed",
+                    "no_public_connector_restriction",
+                    100.0,
+                    55.0,
+                    curtailment_selected_mwh=150.0,
+                    deliverable_mw_proxy=170.0,
+                    upstream_market_state_feed_available_flag=True,
+                    upstream_market_state="intraday_stronger_than_day_ahead",
+                    upstream_day_ahead_price_eur_per_mwh=40.0,
+                    upstream_intraday_price_eur_per_mwh=55.0,
+                    upstream_forward_price_eur_per_mwh=38.0,
+                    upstream_day_ahead_to_intraday_spread_bucket="spread_positive",
+                    upstream_forward_to_day_ahead_spread_bucket="spread_flat",
+                ),
+                _opportunity_row(
+                    "2024-10-02T04:00:00Z",
+                    "dogger_hornsea_offshore",
+                    "R2_netback_GB_NL_DE_PL",
+                    "britned",
+                    "reviewed",
+                    "no_public_connector_restriction",
+                    130.0,
+                    57.0,
+                    curtailment_selected_mwh=180.0,
+                    deliverable_mw_proxy=170.0,
+                    upstream_market_state_feed_available_flag=True,
+                    upstream_market_state="intraday_stronger_than_day_ahead",
+                    upstream_day_ahead_price_eur_per_mwh=42.0,
+                    upstream_intraday_price_eur_per_mwh=57.0,
+                    upstream_forward_price_eur_per_mwh=40.0,
+                    upstream_day_ahead_to_intraday_spread_bucket="spread_positive",
+                    upstream_forward_to_day_ahead_spread_bucket="spread_flat",
+                ),
+                _opportunity_row(
+                    "2024-10-02T05:00:00Z",
+                    "dogger_hornsea_offshore",
+                    "R2_netback_GB_NL_DE_PL",
+                    "britned",
+                    "reviewed",
+                    "no_public_connector_restriction",
+                    120.0,
+                    60.0,
+                    curtailment_selected_mwh=180.0,
+                    deliverable_mw_proxy=170.0,
+                    upstream_market_state_feed_available_flag=True,
+                    upstream_market_state="intraday_stronger_than_day_ahead",
+                    upstream_day_ahead_price_eur_per_mwh=45.0,
+                    upstream_intraday_price_eur_per_mwh=60.0,
+                    upstream_forward_price_eur_per_mwh=43.0,
+                    upstream_day_ahead_to_intraday_spread_bucket="spread_positive",
+                    upstream_forward_to_day_ahead_spread_bucket="spread_flat",
+                ),
+            ]
+        )
+
+        backtest = build_fact_backtest_prediction_hourly(
+            fact, model_key=MODEL_POTENTIAL_RATIO_V2, forecast_horizons=(1,)
+        )
+        target = backtest.iloc[3]
+        self.assertTrue(bool(target["prediction_eligible_flag"]))
+        self.assertEqual(target["prediction_basis"], "ratio_cluster_route_upstream_market_state")
+        self.assertTrue(bool(target["feature_upstream_market_state_feed_available_flag_asof"]))
+        self.assertEqual(target["feature_upstream_market_state_asof"], "intraday_stronger_than_day_ahead")
+        self.assertAlmostEqual(float(target["feature_upstream_day_ahead_price_eur_per_mwh_asof"]), 42.0)
+        self.assertAlmostEqual(float(target["feature_upstream_intraday_price_eur_per_mwh_asof"]), 57.0)
+        self.assertEqual(target["feature_upstream_day_ahead_to_intraday_spread_bucket_asof"], "spread_positive")
+        self.assertEqual(target["feature_upstream_forward_to_day_ahead_spread_bucket_asof"], "spread_flat")
         self.assertAlmostEqual(float(target["predicted_opportunity_deliverable_mwh"]), 113.33333333333333)
 
     def test_build_fact_backtest_summary_slice_includes_multiple_dimensions(self) -> None:

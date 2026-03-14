@@ -32,6 +32,23 @@ def _empty_curtailment_opportunity_frame() -> pd.DataFrame:
             "route_label",
             "route_border_key",
             "route_target_zone",
+            "route_price_score_eur_per_mwh",
+            "route_price_feasible_flag",
+            "route_price_bottleneck",
+            "upstream_market_state_feed_available_flag",
+            "upstream_market_state",
+            "upstream_forward_price_eur_per_mwh",
+            "upstream_day_ahead_price_eur_per_mwh",
+            "upstream_intraday_price_eur_per_mwh",
+            "upstream_imbalance_price_eur_per_mwh",
+            "upstream_forward_to_day_ahead_spread_eur_per_mwh",
+            "upstream_day_ahead_to_intraday_spread_eur_per_mwh",
+            "upstream_forward_to_day_ahead_spread_bucket",
+            "upstream_day_ahead_to_intraday_spread_bucket",
+            "upstream_market_state_source_provider",
+            "upstream_market_state_source_family",
+            "upstream_market_state_source_key",
+            "upstream_market_state_source_published_utc",
             "route_delivery_tier",
             "route_delivery_signal",
             "route_delivery_reason",
@@ -280,6 +297,7 @@ def build_fact_curtailment_opportunity_hourly(
     fact_route_score_hourly: pd.DataFrame,
     fact_regional_curtailment_hourly_proxy: pd.DataFrame | None,
     fact_bmu_curtailment_truth_half_hourly: pd.DataFrame | None = None,
+    fact_upstream_market_state_hourly: pd.DataFrame | None = None,
     truth_profile: str = "proxy",
 ) -> pd.DataFrame:
     if fact_route_score_hourly is None or fact_route_score_hourly.empty:
@@ -305,6 +323,33 @@ def build_fact_curtailment_opportunity_hourly(
         how="left",
         suffixes=("", "_signal"),
     )
+    market_state = (
+        fact_upstream_market_state_hourly.copy()
+        if fact_upstream_market_state_hourly is not None and not fact_upstream_market_state_hourly.empty
+        else pd.DataFrame()
+    )
+    if not market_state.empty:
+        market_state["interval_start_utc"] = pd.to_datetime(
+            market_state["interval_start_utc"], utc=True, errors="coerce"
+        )
+        market_state = market_state.rename(
+            columns={
+                "forward_price_eur_per_mwh": "upstream_forward_price_eur_per_mwh",
+                "day_ahead_price_eur_per_mwh": "upstream_day_ahead_price_eur_per_mwh",
+                "intraday_price_eur_per_mwh": "upstream_intraday_price_eur_per_mwh",
+                "imbalance_price_eur_per_mwh": "upstream_imbalance_price_eur_per_mwh",
+                "forward_to_day_ahead_spread_eur_per_mwh": "upstream_forward_to_day_ahead_spread_eur_per_mwh",
+                "day_ahead_to_intraday_spread_eur_per_mwh": "upstream_day_ahead_to_intraday_spread_eur_per_mwh",
+                "forward_to_day_ahead_spread_bucket": "upstream_forward_to_day_ahead_spread_bucket",
+                "day_ahead_to_intraday_spread_bucket": "upstream_day_ahead_to_intraday_spread_bucket",
+                "source_provider": "upstream_market_state_source_provider",
+                "source_family": "upstream_market_state_source_family",
+                "source_key": "upstream_market_state_source_key",
+                "source_published_utc": "upstream_market_state_source_published_utc",
+            }
+        )
+        market_state = market_state.drop_duplicates(["interval_start_utc", "route_name"], keep="last")
+        fact = fact.merge(market_state, on=["interval_start_utc", "route_name"], how="left")
     fact["cluster_label"] = fact["cluster_label"].where(fact["cluster_label"].notna(), fact.get("cluster_label_signal"))
     fact["parent_region"] = fact["parent_region"].where(fact["parent_region"].notna(), fact.get("parent_region_signal"))
     fact = fact.drop(columns=["cluster_label_signal", "parent_region_signal"], errors="ignore")
@@ -326,6 +371,23 @@ def build_fact_curtailment_opportunity_hourly(
         "internal_transfer_capacity_limit_mw": 0.0,
         "internal_transfer_source_provider": "proxy",
         "internal_transfer_source_key": "gb_topology_transfer_gate_proxy",
+        "route_price_score_eur_per_mwh": 0.0,
+        "route_price_feasible_flag": False,
+        "route_price_bottleneck": pd.NA,
+        "upstream_market_state_feed_available_flag": False,
+        "upstream_market_state": "no_upstream_feed",
+        "upstream_forward_price_eur_per_mwh": np.nan,
+        "upstream_day_ahead_price_eur_per_mwh": np.nan,
+        "upstream_intraday_price_eur_per_mwh": np.nan,
+        "upstream_imbalance_price_eur_per_mwh": np.nan,
+        "upstream_forward_to_day_ahead_spread_eur_per_mwh": np.nan,
+        "upstream_day_ahead_to_intraday_spread_eur_per_mwh": np.nan,
+        "upstream_forward_to_day_ahead_spread_bucket": "spread_unknown",
+        "upstream_day_ahead_to_intraday_spread_bucket": "spread_unknown",
+        "upstream_market_state_source_provider": pd.NA,
+        "upstream_market_state_source_family": pd.NA,
+        "upstream_market_state_source_key": pd.NA,
+        "upstream_market_state_source_published_utc": pd.NaT,
         "connector_notice_state": pd.NA,
         "connector_notice_known_flag": False,
         "connector_notice_active_flag": False,
@@ -353,7 +415,23 @@ def build_fact_curtailment_opportunity_hourly(
     fact["connector_notice_known_flag"] = _coerce_bool_series(fact["connector_notice_known_flag"])
     fact["connector_notice_active_flag"] = _coerce_bool_series(fact["connector_notice_active_flag"])
     fact["connector_notice_upcoming_flag"] = _coerce_bool_series(fact["connector_notice_upcoming_flag"])
+    fact["route_price_feasible_flag"] = _coerce_bool_series(fact["route_price_feasible_flag"])
+    fact["upstream_market_state_feed_available_flag"] = _coerce_bool_series(
+        fact["upstream_market_state_feed_available_flag"]
+    )
 
+    fact["route_price_score_eur_per_mwh"] = pd.to_numeric(
+        fact["route_price_score_eur_per_mwh"], errors="coerce"
+    )
+    for column in (
+        "upstream_forward_price_eur_per_mwh",
+        "upstream_day_ahead_price_eur_per_mwh",
+        "upstream_intraday_price_eur_per_mwh",
+        "upstream_imbalance_price_eur_per_mwh",
+        "upstream_forward_to_day_ahead_spread_eur_per_mwh",
+        "upstream_day_ahead_to_intraday_spread_eur_per_mwh",
+    ):
+        fact[column] = pd.to_numeric(fact[column], errors="coerce")
     fact["deliverable_mw_proxy"] = pd.to_numeric(fact["deliverable_mw_proxy"], errors="coerce")
     fact["deliverable_route_score_eur_per_mwh"] = pd.to_numeric(
         fact["deliverable_route_score_eur_per_mwh"], errors="coerce"
@@ -459,6 +537,10 @@ def build_fact_curtailment_opportunity_hourly(
     fact.loc[truth_lineage_mask, "source_lineage"] = (
         "fact_route_score_hourly|fact_bmu_curtailment_truth_half_hourly|fact_regional_curtailment_hourly_proxy"
     )
+    fact.loc[fact["upstream_market_state_feed_available_flag"], "source_lineage"] = (
+        fact.loc[fact["upstream_market_state_feed_available_flag"], "source_lineage"]
+        + "|fact_upstream_market_state_hourly"
+    )
 
     keep_columns = list(_empty_curtailment_opportunity_frame().columns)
     for column in keep_columns:
@@ -474,15 +556,21 @@ def materialize_curtailment_opportunity_history(
     fact_route_score_hourly: pd.DataFrame,
     fact_regional_curtailment_hourly_proxy: pd.DataFrame | None,
     fact_bmu_curtailment_truth_half_hourly: pd.DataFrame | None = None,
+    fact_upstream_market_state_hourly: pd.DataFrame | None = None,
     truth_profile: str = "proxy",
 ) -> Dict[str, pd.DataFrame]:
     fact = build_fact_curtailment_opportunity_hourly(
         fact_route_score_hourly=fact_route_score_hourly,
         fact_regional_curtailment_hourly_proxy=fact_regional_curtailment_hourly_proxy,
         fact_bmu_curtailment_truth_half_hourly=fact_bmu_curtailment_truth_half_hourly,
+        fact_upstream_market_state_hourly=fact_upstream_market_state_hourly,
         truth_profile=truth_profile,
     )
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     fact.to_csv(output_path / f"{CURTAILMENT_OPPORTUNITY_TABLE}.csv", index=False)
-    return {CURTAILMENT_OPPORTUNITY_TABLE: fact}
+    frames = {CURTAILMENT_OPPORTUNITY_TABLE: fact}
+    if fact_upstream_market_state_hourly is not None and not fact_upstream_market_state_hourly.empty:
+        frames["fact_upstream_market_state_hourly"] = fact_upstream_market_state_hourly.copy()
+        fact_upstream_market_state_hourly.to_csv(output_path / "fact_upstream_market_state_hourly.csv", index=False)
+    return frames
