@@ -39,6 +39,7 @@ def _route_rows() -> pd.DataFrame:
                 "internal_transfer_gate_state": "reviewed_pass_restricted",
                 "internal_transfer_capacity_limit_mw": 85.0,
                 "internal_transfer_source_provider": "public_reviewed_doc",
+                "internal_transfer_source_family": "day_ahead_constraint_boundary",
                 "internal_transfer_source_key": "internal_boundary_restriction",
                 "connector_notice_state": "upcoming",
                 "connector_notice_known_flag": True,
@@ -169,6 +170,7 @@ class CurtailmentOpportunityTests(unittest.TestCase):
         self.assertEqual(row["internal_transfer_gate_state"], "reviewed_pass_restricted")
         self.assertAlmostEqual(float(row["internal_transfer_capacity_limit_mw"]), 85.0)
         self.assertEqual(row["internal_transfer_source_provider"], "public_reviewed_doc")
+        self.assertEqual(row["internal_transfer_source_family"], "day_ahead_constraint_boundary")
         self.assertEqual(row["internal_transfer_source_key"], "internal_boundary_restriction")
         self.assertEqual(row["connector_itl_state"], "published_restriction")
         self.assertAlmostEqual(float(row["connector_itl_capacity_limit_mw"]), 80.0)

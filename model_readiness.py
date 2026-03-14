@@ -6,12 +6,16 @@ from typing import Dict
 import numpy as np
 import pandas as pd
 
-from opportunity_backtest import MODEL_POTENTIAL_RATIO_V2
+from opportunity_backtest import MODEL_GB_NL_REVIEWED_SPECIALIST_V3, MODEL_POTENTIAL_RATIO_V2
 
 
 MODEL_READINESS_TABLE = "fact_model_readiness_daily"
 MODEL_BLOCKER_PRIORITY_TABLE = "fact_model_blocker_priority"
+MODEL_CANDIDATE_COMPARE_TABLE = "fact_model_candidate_compare_daily"
+MODEL_CANDIDATE_COMPARE_WINDOW_TABLE = "fact_model_candidate_compare_window"
+MODEL_CANDIDATE_COMPARE_SUITE_TABLE = "fact_model_candidate_compare_suite"
 DEFAULT_READINESS_MODEL_KEY = MODEL_POTENTIAL_RATIO_V2
+DEFAULT_CANDIDATE_MODEL_KEY = MODEL_GB_NL_REVIEWED_SPECIALIST_V3
 TARGET_ROUTE_NAME = "R2_netback_GB_NL_DE_PL"
 TARGET_T1_DELIVERABLE_MAE = 0.50
 TARGET_GBNL_T1_DELIVERABLE_MAE = 1.50
@@ -99,6 +103,102 @@ def _empty_model_blocker_priority_frame() -> pd.DataFrame:
             "blocker_priority_rank",
             "blocker_summary",
             "recommended_next_step",
+            "source_lineage",
+        ]
+    )
+
+
+def _empty_model_candidate_compare_frame() -> pd.DataFrame:
+    return pd.DataFrame(
+        columns=[
+            "window_date",
+            "baseline_model_key",
+            "candidate_model_key",
+            "overall_t_plus_1h_deliverable_mae_delta_mwh",
+            "gb_nl_t_plus_1h_deliverable_mae_delta_mwh",
+            "gb_nl_reviewed_internal_t_plus_1h_deliverable_mae_delta_mwh",
+            "blocker_row_delta",
+            "severe_focus_area_delta",
+            "candidate_scope_row_count",
+            "promotion_state",
+            "source_lineage",
+        ]
+    )
+
+
+def _empty_model_candidate_compare_window_frame() -> pd.DataFrame:
+    return pd.DataFrame(
+        columns=[
+            "benchmark_suite_name",
+            "benchmark_window_key",
+            "benchmark_window_label",
+            "benchmark_window_start_date",
+            "benchmark_window_end_date",
+            "benchmark_window_family",
+            "benchmark_role",
+            "promotion_window_flag",
+            "display_order",
+            "baseline_model_key",
+            "candidate_model_key",
+            "window_day_count",
+            "candidate_scope_row_count",
+            "overall_joined_row_count",
+            "baseline_overall_deliverable_abs_error_mwh_sum",
+            "candidate_overall_deliverable_abs_error_mwh_sum",
+            "overall_t_plus_1h_deliverable_mae_delta_mwh",
+            "gb_nl_joined_row_count",
+            "baseline_gb_nl_deliverable_abs_error_mwh_sum",
+            "candidate_gb_nl_deliverable_abs_error_mwh_sum",
+            "gb_nl_t_plus_1h_deliverable_mae_delta_mwh",
+            "gb_nl_reviewed_internal_joined_row_count",
+            "baseline_gb_nl_reviewed_internal_deliverable_abs_error_mwh_sum",
+            "candidate_gb_nl_reviewed_internal_deliverable_abs_error_mwh_sum",
+            "gb_nl_reviewed_internal_t_plus_1h_deliverable_mae_delta_mwh",
+            "baseline_blocker_row_count",
+            "candidate_blocker_row_count",
+            "blocker_row_delta",
+            "baseline_severe_focus_area_count",
+            "candidate_severe_focus_area_count",
+            "severe_focus_area_delta",
+            "promotion_state",
+            "source_lineage",
+        ]
+    )
+
+
+def _empty_model_candidate_compare_suite_frame() -> pd.DataFrame:
+    return pd.DataFrame(
+        columns=[
+            "benchmark_suite_name",
+            "suite_scope",
+            "baseline_model_key",
+            "candidate_model_key",
+            "window_count",
+            "benchmark_day_count",
+            "candidate_scope_row_count",
+            "overall_joined_row_count",
+            "baseline_overall_deliverable_abs_error_mwh_sum",
+            "candidate_overall_deliverable_abs_error_mwh_sum",
+            "overall_t_plus_1h_deliverable_mae_delta_mwh",
+            "gb_nl_joined_row_count",
+            "baseline_gb_nl_deliverable_abs_error_mwh_sum",
+            "candidate_gb_nl_deliverable_abs_error_mwh_sum",
+            "gb_nl_t_plus_1h_deliverable_mae_delta_mwh",
+            "gb_nl_reviewed_internal_joined_row_count",
+            "baseline_gb_nl_reviewed_internal_deliverable_abs_error_mwh_sum",
+            "candidate_gb_nl_reviewed_internal_deliverable_abs_error_mwh_sum",
+            "gb_nl_reviewed_internal_t_plus_1h_deliverable_mae_delta_mwh",
+            "baseline_blocker_row_count",
+            "candidate_blocker_row_count",
+            "blocker_row_delta",
+            "baseline_severe_focus_area_count",
+            "candidate_severe_focus_area_count",
+            "severe_focus_area_delta",
+            "candidate_beats_window_count",
+            "candidate_mixed_window_count",
+            "candidate_regresses_window_count",
+            "candidate_insufficient_coverage_window_count",
+            "promotion_state",
             "source_lineage",
         ]
     )
@@ -250,6 +350,161 @@ def _normalize_window_dates(frame: pd.DataFrame) -> pd.DataFrame:
     if "window_date" in normalized.columns:
         normalized["window_date"] = pd.to_datetime(normalized["window_date"], utc=True, errors="coerce")
     return normalized
+
+
+def _candidate_compare_join(
+    predictions: pd.DataFrame,
+    *,
+    baseline_model_key: str,
+    candidate_model_key: str,
+) -> pd.DataFrame:
+    empty_columns = [
+        "forecast_horizon_hours",
+        "interval_start_utc",
+        "cluster_key",
+        "route_name",
+        "hub_key",
+        "baseline_window_date",
+        "baseline_prediction_eligible_flag",
+        "baseline_deliverable_abs_error_mwh",
+        "baseline_internal_transfer_evidence_tier",
+        "candidate_window_date",
+        "candidate_prediction_eligible_flag",
+        "candidate_deliverable_abs_error_mwh",
+        "candidate_internal_transfer_evidence_tier",
+        "window_date",
+    ]
+    if predictions is None or predictions.empty:
+        return pd.DataFrame(columns=empty_columns)
+    frame = predictions.copy()
+    frame["interval_start_utc"] = pd.to_datetime(frame["interval_start_utc"], utc=True, errors="coerce")
+    frame["window_date"] = frame["interval_start_utc"].dt.floor("d")
+    frame["forecast_horizon_hours"] = pd.to_numeric(frame["forecast_horizon_hours"], errors="coerce")
+    frame["prediction_eligible_flag"] = frame["prediction_eligible_flag"].fillna(False).astype(bool)
+    t1 = frame[frame["forecast_horizon_hours"].eq(READINESS_HORIZON_HOURS)].copy()
+    baseline = t1[t1["model_key"].eq(baseline_model_key)].copy()
+    candidate = t1[t1["model_key"].eq(candidate_model_key)].copy()
+    if baseline.empty or candidate.empty:
+        return pd.DataFrame(columns=empty_columns)
+
+    join_keys = [
+        "forecast_horizon_hours",
+        "interval_start_utc",
+        "cluster_key",
+        "route_name",
+        "hub_key",
+    ]
+    baseline = baseline[
+        [
+            *join_keys,
+            "window_date",
+            "prediction_eligible_flag",
+            "opportunity_deliverable_abs_error_mwh",
+            "internal_transfer_evidence_tier",
+        ]
+    ].rename(
+        columns={
+            "window_date": "baseline_window_date",
+            "prediction_eligible_flag": "baseline_prediction_eligible_flag",
+            "opportunity_deliverable_abs_error_mwh": "baseline_deliverable_abs_error_mwh",
+            "internal_transfer_evidence_tier": "baseline_internal_transfer_evidence_tier",
+        }
+    )
+    candidate = candidate[
+        [
+            *join_keys,
+            "window_date",
+            "prediction_eligible_flag",
+            "opportunity_deliverable_abs_error_mwh",
+            "internal_transfer_evidence_tier",
+        ]
+    ].rename(
+        columns={
+            "window_date": "candidate_window_date",
+            "prediction_eligible_flag": "candidate_prediction_eligible_flag",
+            "opportunity_deliverable_abs_error_mwh": "candidate_deliverable_abs_error_mwh",
+            "internal_transfer_evidence_tier": "candidate_internal_transfer_evidence_tier",
+        }
+    )
+    joined = baseline.merge(candidate, on=join_keys, how="inner")
+    joined["window_date"] = joined["candidate_window_date"].where(
+        joined["candidate_window_date"].notna(),
+        joined["baseline_window_date"],
+    )
+    joined = joined[
+        joined["baseline_prediction_eligible_flag"] & joined["candidate_prediction_eligible_flag"]
+    ].copy()
+    for column in empty_columns:
+        if column not in joined.columns:
+            joined[column] = pd.NA
+    return joined[empty_columns]
+
+
+def _candidate_mae_delta(frame: pd.DataFrame) -> float:
+    if frame.empty:
+        return np.nan
+    candidate_mae = pd.to_numeric(frame["candidate_deliverable_abs_error_mwh"], errors="coerce").mean()
+    baseline_mae = pd.to_numeric(frame["baseline_deliverable_abs_error_mwh"], errors="coerce").mean()
+    if pd.isna(candidate_mae) or pd.isna(baseline_mae):
+        return np.nan
+    return float(candidate_mae - baseline_mae)
+
+
+def _promotion_state_from_deltas(
+    *,
+    candidate_scope_row_count: int,
+    deltas: list[float],
+) -> str:
+    valid_deltas = [float(value) for value in deltas if pd.notna(value)]
+    if candidate_scope_row_count <= 0 or not valid_deltas:
+        return "candidate_insufficient_coverage"
+    if all(value <= 0.0 for value in valid_deltas) and any(value < 0.0 for value in valid_deltas):
+        return "candidate_beats_baseline"
+    if all(value >= 0.0 for value in valid_deltas) and any(value > 0.0 for value in valid_deltas):
+        return "candidate_regresses_baseline"
+    return "candidate_mixed"
+
+
+def _candidate_compare_slice_stats(frame: pd.DataFrame) -> dict[str, float | int]:
+    empty = {
+        "row_count": 0,
+        "baseline_abs_error_sum": 0.0,
+        "candidate_abs_error_sum": 0.0,
+        "mae_delta_mwh": np.nan,
+    }
+    if frame.empty:
+        return empty
+    baseline = pd.to_numeric(frame["baseline_deliverable_abs_error_mwh"], errors="coerce")
+    candidate = pd.to_numeric(frame["candidate_deliverable_abs_error_mwh"], errors="coerce")
+    valid = frame[baseline.notna() & candidate.notna()].copy()
+    if valid.empty:
+        return empty
+    baseline_valid = pd.to_numeric(valid["baseline_deliverable_abs_error_mwh"], errors="coerce")
+    candidate_valid = pd.to_numeric(valid["candidate_deliverable_abs_error_mwh"], errors="coerce")
+    row_count = int(len(valid))
+    baseline_sum = float(baseline_valid.sum())
+    candidate_sum = float(candidate_valid.sum())
+    return {
+        "row_count": row_count,
+        "baseline_abs_error_sum": baseline_sum,
+        "candidate_abs_error_sum": candidate_sum,
+        "mae_delta_mwh": float((candidate_sum / row_count) - (baseline_sum / row_count)),
+    }
+
+
+def _safe_numeric_sum(frame: pd.DataFrame, column: str) -> float:
+    if frame.empty or column not in frame.columns:
+        return 0.0
+    series = pd.to_numeric(frame[column], errors="coerce")
+    if not series.notna().any():
+        return 0.0
+    return float(series.sum())
+
+
+def _mae_delta_from_sums(*, baseline_sum: float, candidate_sum: float, row_count: int) -> float:
+    if row_count <= 0:
+        return np.nan
+    return float((candidate_sum / row_count) - (baseline_sum / row_count))
 
 
 def _summary_row_for_candidate(
@@ -555,9 +810,61 @@ def build_fact_model_blocker_priority(
         return _empty_model_blocker_priority_frame()
 
     readiness = _normalize_window_dates(fact_model_readiness_daily)
-    summary = fact_backtest_summary_slice.copy() if fact_backtest_summary_slice is not None else pd.DataFrame()
-    top_error = fact_backtest_top_error_hourly.copy() if fact_backtest_top_error_hourly is not None else pd.DataFrame()
-    drift = _normalize_window_dates(fact_drift_window.copy()) if fact_drift_window is not None else pd.DataFrame()
+    summary = (
+        fact_backtest_summary_slice.copy()
+        if fact_backtest_summary_slice is not None and not fact_backtest_summary_slice.empty
+        else pd.DataFrame(
+            columns=[
+                "model_key",
+                "forecast_horizon_hours",
+                "slice_dimension",
+                "slice_value",
+                "eligible_row_count",
+                "mae_opportunity_deliverable_mwh",
+                "mae_opportunity_gross_value_eur",
+                "error_reduction_priority_rank",
+            ]
+        )
+    )
+    top_error = (
+        fact_backtest_top_error_hourly.copy()
+        if fact_backtest_top_error_hourly is not None and not fact_backtest_top_error_hourly.empty
+        else pd.DataFrame(
+            columns=[
+                "model_key",
+                "forecast_horizon_hours",
+                "window_date",
+                "interval_start_utc",
+                "route_name",
+                "cluster_key",
+                "hub_key",
+                "internal_transfer_evidence_tier",
+                "route_delivery_tier",
+                "error_focus_area",
+                "actual_opportunity_deliverable_mwh",
+                "opportunity_deliverable_abs_error_mwh",
+            ]
+        )
+    )
+    drift = (
+        _normalize_window_dates(fact_drift_window.copy())
+        if fact_drift_window is not None and not fact_drift_window.empty
+        else pd.DataFrame(
+            columns=[
+                "model_key",
+                "forecast_horizon_hours",
+                "window_date",
+                "drift_scope",
+                "drift_state",
+                "route_name",
+                "cluster_key",
+                "eligible_row_count",
+                "feature_drift_score",
+                "target_drift_score",
+                "residual_drift_score",
+            ]
+        )
+    )
 
     if not top_error.empty:
         top_error["interval_start_utc"] = pd.to_datetime(top_error["interval_start_utc"], utc=True, errors="coerce")
@@ -727,6 +1034,388 @@ def build_fact_model_blocker_priority(
     ).reset_index(drop=True)
 
 
+def build_fact_model_candidate_compare_daily(
+    fact_backtest_prediction_hourly: pd.DataFrame,
+    fact_backtest_summary_slice: pd.DataFrame,
+    fact_backtest_top_error_hourly: pd.DataFrame,
+    fact_drift_window: pd.DataFrame,
+    *,
+    baseline_model_key: str = DEFAULT_READINESS_MODEL_KEY,
+    candidate_model_key: str = DEFAULT_CANDIDATE_MODEL_KEY,
+) -> pd.DataFrame:
+    if fact_backtest_prediction_hourly is None or fact_backtest_prediction_hourly.empty:
+        return _empty_model_candidate_compare_frame()
+
+    predictions = fact_backtest_prediction_hourly.copy()
+    available_model_keys = set(predictions.get("model_key", pd.Series(dtype=object)).dropna())
+    if baseline_model_key not in available_model_keys or candidate_model_key not in available_model_keys:
+        return _empty_model_candidate_compare_frame()
+
+    predictions["interval_start_utc"] = pd.to_datetime(predictions["interval_start_utc"], utc=True, errors="coerce")
+    predictions["window_date"] = predictions["interval_start_utc"].dt.floor("d")
+    predictions["forecast_horizon_hours"] = pd.to_numeric(predictions["forecast_horizon_hours"], errors="coerce")
+    joined = _candidate_compare_join(
+        predictions,
+        baseline_model_key=baseline_model_key,
+        candidate_model_key=candidate_model_key,
+    )
+    t1 = predictions[
+        predictions["forecast_horizon_hours"].eq(READINESS_HORIZON_HOURS)
+        & predictions["model_key"].isin([baseline_model_key, candidate_model_key])
+    ].copy()
+    if t1.empty:
+        return _empty_model_candidate_compare_frame()
+
+    baseline_readiness = build_fact_model_readiness_daily(
+        fact_backtest_prediction_hourly=predictions,
+        fact_drift_window=fact_drift_window,
+        model_key=baseline_model_key,
+    )
+    candidate_readiness = build_fact_model_readiness_daily(
+        fact_backtest_prediction_hourly=predictions,
+        fact_drift_window=fact_drift_window,
+        model_key=candidate_model_key,
+    )
+    baseline_blocker = build_fact_model_blocker_priority(
+        fact_model_readiness_daily=baseline_readiness,
+        fact_backtest_summary_slice=fact_backtest_summary_slice,
+        fact_backtest_top_error_hourly=fact_backtest_top_error_hourly,
+        fact_drift_window=fact_drift_window,
+    )
+    candidate_blocker = build_fact_model_blocker_priority(
+        fact_model_readiness_daily=candidate_readiness,
+        fact_backtest_summary_slice=fact_backtest_summary_slice,
+        fact_backtest_top_error_hourly=fact_backtest_top_error_hourly,
+        fact_drift_window=fact_drift_window,
+    )
+
+    all_dates = sorted(set(t1["window_date"]))
+    rows: list[dict[str, object]] = []
+    for window_date in all_dates:
+        date_joined = joined[joined["window_date"].eq(window_date)].copy()
+        gb_nl_joined = date_joined[date_joined["route_name"].eq(TARGET_ROUTE_NAME)].copy()
+        reviewed_joined = gb_nl_joined[
+            gb_nl_joined["candidate_internal_transfer_evidence_tier"].ne("gb_topology_transfer_gate_proxy")
+        ].copy()
+        candidate_scope_row_count = int(len(date_joined))
+
+        overall_delta = _candidate_mae_delta(date_joined)
+        gb_nl_delta = _candidate_mae_delta(gb_nl_joined)
+        reviewed_delta = _candidate_mae_delta(reviewed_joined)
+
+        blocker_delta = np.nan
+        severe_delta = np.nan
+        if candidate_scope_row_count > 0:
+            baseline_blocker_count = int(len(baseline_blocker[baseline_blocker["window_date"].eq(window_date)]))
+            candidate_blocker_count = int(len(candidate_blocker[candidate_blocker["window_date"].eq(window_date)]))
+            blocker_delta = float(candidate_blocker_count - baseline_blocker_count)
+
+            baseline_row = baseline_readiness[baseline_readiness["window_date"].eq(window_date)].copy()
+            candidate_row = candidate_readiness[candidate_readiness["window_date"].eq(window_date)].copy()
+            if not baseline_row.empty and not candidate_row.empty:
+                baseline_severe = pd.to_numeric(
+                    baseline_row["severe_unresolved_focus_area_count_t_plus_1h"],
+                    errors="coerce",
+                ).iloc[0]
+                candidate_severe = pd.to_numeric(
+                    candidate_row["severe_unresolved_focus_area_count_t_plus_1h"],
+                    errors="coerce",
+                ).iloc[0]
+                if pd.notna(baseline_severe) and pd.notna(candidate_severe):
+                    severe_delta = float(candidate_severe - baseline_severe)
+
+        promotion_state = _promotion_state_from_deltas(
+            candidate_scope_row_count=candidate_scope_row_count,
+            deltas=[overall_delta, gb_nl_delta, reviewed_delta, blocker_delta, severe_delta],
+        )
+        rows.append(
+            {
+                "window_date": window_date,
+                "baseline_model_key": baseline_model_key,
+                "candidate_model_key": candidate_model_key,
+                "overall_t_plus_1h_deliverable_mae_delta_mwh": overall_delta,
+                "gb_nl_t_plus_1h_deliverable_mae_delta_mwh": gb_nl_delta,
+                "gb_nl_reviewed_internal_t_plus_1h_deliverable_mae_delta_mwh": reviewed_delta,
+                "blocker_row_delta": blocker_delta,
+                "severe_focus_area_delta": severe_delta,
+                "candidate_scope_row_count": candidate_scope_row_count,
+                "promotion_state": promotion_state,
+                "source_lineage": (
+                    "fact_backtest_prediction_hourly|fact_backtest_summary_slice|"
+                    "fact_backtest_top_error_hourly|fact_drift_window"
+                ),
+            }
+        )
+
+    compare = pd.DataFrame(rows, columns=_empty_model_candidate_compare_frame().columns)
+    return compare.sort_values(["window_date", "baseline_model_key", "candidate_model_key"]).reset_index(drop=True)
+
+
+def build_fact_model_candidate_compare_window(
+    fact_backtest_prediction_hourly: pd.DataFrame,
+    fact_backtest_summary_slice: pd.DataFrame,
+    fact_backtest_top_error_hourly: pd.DataFrame,
+    fact_drift_window: pd.DataFrame,
+    *,
+    benchmark_suite_name: str,
+    benchmark_window_key: str,
+    benchmark_window_label: str,
+    benchmark_window_start_date: str,
+    benchmark_window_end_date: str,
+    benchmark_window_family: str,
+    benchmark_role: str,
+    promotion_window_flag: bool,
+    display_order: int = 0,
+    baseline_model_key: str = DEFAULT_READINESS_MODEL_KEY,
+    candidate_model_key: str = DEFAULT_CANDIDATE_MODEL_KEY,
+) -> pd.DataFrame:
+    predictions = fact_backtest_prediction_hourly.copy() if fact_backtest_prediction_hourly is not None else pd.DataFrame()
+    predictions["interval_start_utc"] = pd.to_datetime(predictions.get("interval_start_utc"), utc=True, errors="coerce")
+    predictions["forecast_horizon_hours"] = pd.to_numeric(predictions.get("forecast_horizon_hours"), errors="coerce")
+
+    joined = _candidate_compare_join(
+        predictions,
+        baseline_model_key=baseline_model_key,
+        candidate_model_key=candidate_model_key,
+    )
+    window_day_count = int(joined["window_date"].nunique()) if "window_date" in joined.columns else 0
+
+    overall_stats = _candidate_compare_slice_stats(joined)
+    gb_nl_joined = joined[joined["route_name"].eq(TARGET_ROUTE_NAME)].copy() if not joined.empty else pd.DataFrame()
+    gb_nl_stats = _candidate_compare_slice_stats(gb_nl_joined)
+    reviewed_joined = (
+        gb_nl_joined[gb_nl_joined["candidate_internal_transfer_evidence_tier"].ne("gb_topology_transfer_gate_proxy")].copy()
+        if not gb_nl_joined.empty
+        else pd.DataFrame()
+    )
+    reviewed_stats = _candidate_compare_slice_stats(reviewed_joined)
+
+    baseline_readiness = build_fact_model_readiness_daily(
+        fact_backtest_prediction_hourly=predictions,
+        fact_drift_window=fact_drift_window,
+        model_key=baseline_model_key,
+    )
+    candidate_readiness = build_fact_model_readiness_daily(
+        fact_backtest_prediction_hourly=predictions,
+        fact_drift_window=fact_drift_window,
+        model_key=candidate_model_key,
+    )
+    baseline_blocker = build_fact_model_blocker_priority(
+        fact_model_readiness_daily=baseline_readiness,
+        fact_backtest_summary_slice=fact_backtest_summary_slice,
+        fact_backtest_top_error_hourly=fact_backtest_top_error_hourly,
+        fact_drift_window=fact_drift_window,
+    )
+    candidate_blocker = build_fact_model_blocker_priority(
+        fact_model_readiness_daily=candidate_readiness,
+        fact_backtest_summary_slice=fact_backtest_summary_slice,
+        fact_backtest_top_error_hourly=fact_backtest_top_error_hourly,
+        fact_drift_window=fact_drift_window,
+    )
+
+    baseline_blocker_row_count = int(len(baseline_blocker))
+    candidate_blocker_row_count = int(len(candidate_blocker))
+    baseline_severe_focus_area_count = int(
+        round(_safe_numeric_sum(baseline_readiness, "severe_unresolved_focus_area_count_t_plus_1h"))
+    )
+    candidate_severe_focus_area_count = int(
+        round(_safe_numeric_sum(candidate_readiness, "severe_unresolved_focus_area_count_t_plus_1h"))
+    )
+    blocker_row_delta = float(candidate_blocker_row_count - baseline_blocker_row_count)
+    severe_focus_area_delta = float(candidate_severe_focus_area_count - baseline_severe_focus_area_count)
+    candidate_scope_row_count = int(overall_stats["row_count"])
+    promotion_state = _promotion_state_from_deltas(
+        candidate_scope_row_count=candidate_scope_row_count,
+        deltas=[
+            float(overall_stats["mae_delta_mwh"]) if pd.notna(overall_stats["mae_delta_mwh"]) else np.nan,
+            float(gb_nl_stats["mae_delta_mwh"]) if pd.notna(gb_nl_stats["mae_delta_mwh"]) else np.nan,
+            float(reviewed_stats["mae_delta_mwh"]) if pd.notna(reviewed_stats["mae_delta_mwh"]) else np.nan,
+            blocker_row_delta,
+            severe_focus_area_delta,
+        ],
+    )
+
+    row = {
+        "benchmark_suite_name": benchmark_suite_name,
+        "benchmark_window_key": benchmark_window_key,
+        "benchmark_window_label": benchmark_window_label,
+        "benchmark_window_start_date": benchmark_window_start_date,
+        "benchmark_window_end_date": benchmark_window_end_date,
+        "benchmark_window_family": benchmark_window_family,
+        "benchmark_role": benchmark_role,
+        "promotion_window_flag": bool(promotion_window_flag),
+        "display_order": int(display_order),
+        "baseline_model_key": baseline_model_key,
+        "candidate_model_key": candidate_model_key,
+        "window_day_count": window_day_count,
+        "candidate_scope_row_count": candidate_scope_row_count,
+        "overall_joined_row_count": int(overall_stats["row_count"]),
+        "baseline_overall_deliverable_abs_error_mwh_sum": float(overall_stats["baseline_abs_error_sum"]),
+        "candidate_overall_deliverable_abs_error_mwh_sum": float(overall_stats["candidate_abs_error_sum"]),
+        "overall_t_plus_1h_deliverable_mae_delta_mwh": overall_stats["mae_delta_mwh"],
+        "gb_nl_joined_row_count": int(gb_nl_stats["row_count"]),
+        "baseline_gb_nl_deliverable_abs_error_mwh_sum": float(gb_nl_stats["baseline_abs_error_sum"]),
+        "candidate_gb_nl_deliverable_abs_error_mwh_sum": float(gb_nl_stats["candidate_abs_error_sum"]),
+        "gb_nl_t_plus_1h_deliverable_mae_delta_mwh": gb_nl_stats["mae_delta_mwh"],
+        "gb_nl_reviewed_internal_joined_row_count": int(reviewed_stats["row_count"]),
+        "baseline_gb_nl_reviewed_internal_deliverable_abs_error_mwh_sum": float(
+            reviewed_stats["baseline_abs_error_sum"]
+        ),
+        "candidate_gb_nl_reviewed_internal_deliverable_abs_error_mwh_sum": float(
+            reviewed_stats["candidate_abs_error_sum"]
+        ),
+        "gb_nl_reviewed_internal_t_plus_1h_deliverable_mae_delta_mwh": reviewed_stats["mae_delta_mwh"],
+        "baseline_blocker_row_count": baseline_blocker_row_count,
+        "candidate_blocker_row_count": candidate_blocker_row_count,
+        "blocker_row_delta": blocker_row_delta,
+        "baseline_severe_focus_area_count": baseline_severe_focus_area_count,
+        "candidate_severe_focus_area_count": candidate_severe_focus_area_count,
+        "severe_focus_area_delta": severe_focus_area_delta,
+        "promotion_state": promotion_state,
+        "source_lineage": (
+            "fact_backtest_prediction_hourly|fact_backtest_summary_slice|"
+            "fact_backtest_top_error_hourly|fact_drift_window"
+        ),
+    }
+    return pd.DataFrame([row], columns=_empty_model_candidate_compare_window_frame().columns)
+
+
+def build_fact_model_candidate_compare_suite(
+    fact_model_candidate_compare_window: pd.DataFrame,
+) -> pd.DataFrame:
+    if fact_model_candidate_compare_window is None or fact_model_candidate_compare_window.empty:
+        return _empty_model_candidate_compare_suite_frame()
+
+    window_compare = fact_model_candidate_compare_window.copy()
+    window_compare["promotion_window_flag"] = window_compare["promotion_window_flag"].fillna(False).astype(bool)
+    rows: list[dict[str, object]] = []
+    group_keys = ["benchmark_suite_name", "baseline_model_key", "candidate_model_key"]
+
+    for (suite_name, baseline_model_key, candidate_model_key), suite_frame in window_compare.groupby(group_keys, dropna=False):
+        for suite_scope, subset in (
+            ("all_windows", suite_frame.copy()),
+            ("promotion_windows", suite_frame[suite_frame["promotion_window_flag"]].copy()),
+        ):
+            window_count = int(len(subset))
+            benchmark_day_count = int(pd.to_numeric(subset.get("window_day_count"), errors="coerce").fillna(0).sum()) if window_count > 0 else 0
+            candidate_scope_row_count = int(
+                pd.to_numeric(subset.get("candidate_scope_row_count"), errors="coerce").fillna(0).sum()
+            ) if window_count > 0 else 0
+            overall_joined_row_count = int(
+                pd.to_numeric(subset.get("overall_joined_row_count"), errors="coerce").fillna(0).sum()
+            ) if window_count > 0 else 0
+            baseline_overall_sum = _safe_numeric_sum(subset, "baseline_overall_deliverable_abs_error_mwh_sum")
+            candidate_overall_sum = _safe_numeric_sum(subset, "candidate_overall_deliverable_abs_error_mwh_sum")
+            gb_nl_joined_row_count = int(
+                pd.to_numeric(subset.get("gb_nl_joined_row_count"), errors="coerce").fillna(0).sum()
+            ) if window_count > 0 else 0
+            baseline_gb_nl_sum = _safe_numeric_sum(subset, "baseline_gb_nl_deliverable_abs_error_mwh_sum")
+            candidate_gb_nl_sum = _safe_numeric_sum(subset, "candidate_gb_nl_deliverable_abs_error_mwh_sum")
+            reviewed_joined_row_count = int(
+                pd.to_numeric(subset.get("gb_nl_reviewed_internal_joined_row_count"), errors="coerce").fillna(0).sum()
+            ) if window_count > 0 else 0
+            baseline_reviewed_sum = _safe_numeric_sum(
+                subset,
+                "baseline_gb_nl_reviewed_internal_deliverable_abs_error_mwh_sum",
+            )
+            candidate_reviewed_sum = _safe_numeric_sum(
+                subset,
+                "candidate_gb_nl_reviewed_internal_deliverable_abs_error_mwh_sum",
+            )
+            baseline_blocker_row_count = int(
+                pd.to_numeric(subset.get("baseline_blocker_row_count"), errors="coerce").fillna(0).sum()
+            ) if window_count > 0 else 0
+            candidate_blocker_row_count = int(
+                pd.to_numeric(subset.get("candidate_blocker_row_count"), errors="coerce").fillna(0).sum()
+            ) if window_count > 0 else 0
+            baseline_severe_focus_area_count = int(
+                pd.to_numeric(subset.get("baseline_severe_focus_area_count"), errors="coerce").fillna(0).sum()
+            ) if window_count > 0 else 0
+            candidate_severe_focus_area_count = int(
+                pd.to_numeric(subset.get("candidate_severe_focus_area_count"), errors="coerce").fillna(0).sum()
+            ) if window_count > 0 else 0
+
+            overall_delta = _mae_delta_from_sums(
+                baseline_sum=baseline_overall_sum,
+                candidate_sum=candidate_overall_sum,
+                row_count=overall_joined_row_count,
+            )
+            gb_nl_delta = _mae_delta_from_sums(
+                baseline_sum=baseline_gb_nl_sum,
+                candidate_sum=candidate_gb_nl_sum,
+                row_count=gb_nl_joined_row_count,
+            )
+            reviewed_delta = _mae_delta_from_sums(
+                baseline_sum=baseline_reviewed_sum,
+                candidate_sum=candidate_reviewed_sum,
+                row_count=reviewed_joined_row_count,
+            )
+            blocker_row_delta = float(candidate_blocker_row_count - baseline_blocker_row_count)
+            severe_focus_area_delta = float(candidate_severe_focus_area_count - baseline_severe_focus_area_count)
+            aggregate_promotion_state = _promotion_state_from_deltas(
+                candidate_scope_row_count=candidate_scope_row_count,
+                deltas=[overall_delta, gb_nl_delta, reviewed_delta, blocker_row_delta, severe_focus_area_delta],
+            )
+            candidate_beats_window_count = int(subset["promotion_state"].fillna("").eq("candidate_beats_baseline").sum())
+            candidate_mixed_window_count = int(subset["promotion_state"].fillna("").eq("candidate_mixed").sum())
+            candidate_regresses_window_count = int(
+                subset["promotion_state"].fillna("").eq("candidate_regresses_baseline").sum()
+            )
+            candidate_insufficient_coverage_window_count = int(
+                subset["promotion_state"].fillna("").eq("candidate_insufficient_coverage").sum()
+            )
+            promotion_state = aggregate_promotion_state
+            if aggregate_promotion_state == "candidate_beats_baseline" and (
+                candidate_mixed_window_count > 0 or candidate_regresses_window_count > 0
+            ):
+                promotion_state = "candidate_mixed"
+            if aggregate_promotion_state == "candidate_regresses_baseline" and (
+                candidate_mixed_window_count > 0 or candidate_beats_window_count > 0
+            ):
+                promotion_state = "candidate_mixed"
+
+            rows.append(
+                {
+                    "benchmark_suite_name": suite_name,
+                    "suite_scope": suite_scope,
+                    "baseline_model_key": baseline_model_key,
+                    "candidate_model_key": candidate_model_key,
+                    "window_count": window_count,
+                    "benchmark_day_count": benchmark_day_count,
+                    "candidate_scope_row_count": candidate_scope_row_count,
+                    "overall_joined_row_count": overall_joined_row_count,
+                    "baseline_overall_deliverable_abs_error_mwh_sum": baseline_overall_sum,
+                    "candidate_overall_deliverable_abs_error_mwh_sum": candidate_overall_sum,
+                    "overall_t_plus_1h_deliverable_mae_delta_mwh": overall_delta,
+                    "gb_nl_joined_row_count": gb_nl_joined_row_count,
+                    "baseline_gb_nl_deliverable_abs_error_mwh_sum": baseline_gb_nl_sum,
+                    "candidate_gb_nl_deliverable_abs_error_mwh_sum": candidate_gb_nl_sum,
+                    "gb_nl_t_plus_1h_deliverable_mae_delta_mwh": gb_nl_delta,
+                    "gb_nl_reviewed_internal_joined_row_count": reviewed_joined_row_count,
+                    "baseline_gb_nl_reviewed_internal_deliverable_abs_error_mwh_sum": baseline_reviewed_sum,
+                    "candidate_gb_nl_reviewed_internal_deliverable_abs_error_mwh_sum": candidate_reviewed_sum,
+                    "gb_nl_reviewed_internal_t_plus_1h_deliverable_mae_delta_mwh": reviewed_delta,
+                    "baseline_blocker_row_count": baseline_blocker_row_count,
+                    "candidate_blocker_row_count": candidate_blocker_row_count,
+                    "blocker_row_delta": blocker_row_delta,
+                    "baseline_severe_focus_area_count": baseline_severe_focus_area_count,
+                    "candidate_severe_focus_area_count": candidate_severe_focus_area_count,
+                    "severe_focus_area_delta": severe_focus_area_delta,
+                    "candidate_beats_window_count": candidate_beats_window_count,
+                    "candidate_mixed_window_count": candidate_mixed_window_count,
+                    "candidate_regresses_window_count": candidate_regresses_window_count,
+                    "candidate_insufficient_coverage_window_count": candidate_insufficient_coverage_window_count,
+                    "promotion_state": promotion_state,
+                    "source_lineage": "fact_model_candidate_compare_window",
+                }
+            )
+
+    suite = pd.DataFrame(rows, columns=_empty_model_candidate_compare_suite_frame().columns)
+    return suite.sort_values(["benchmark_suite_name", "suite_scope", "baseline_model_key", "candidate_model_key"]).reset_index(
+        drop=True
+    )
+
+
 def materialize_model_readiness_daily(
     output_dir: str | Path,
     fact_backtest_prediction_hourly: pd.DataFrame,
@@ -751,6 +1440,8 @@ def materialize_model_readiness_review(
     fact_backtest_top_error_hourly: pd.DataFrame,
     fact_drift_window: pd.DataFrame,
     model_key: str = DEFAULT_READINESS_MODEL_KEY,
+    baseline_model_key: str = DEFAULT_READINESS_MODEL_KEY,
+    candidate_model_key: str = DEFAULT_CANDIDATE_MODEL_KEY,
 ) -> Dict[str, pd.DataFrame]:
     readiness = build_fact_model_readiness_daily(
         fact_backtest_prediction_hourly=fact_backtest_prediction_hourly,
@@ -767,7 +1458,19 @@ def materialize_model_readiness_review(
     output_path.mkdir(parents=True, exist_ok=True)
     readiness.to_csv(output_path / f"{MODEL_READINESS_TABLE}.csv", index=False)
     blocker.to_csv(output_path / f"{MODEL_BLOCKER_PRIORITY_TABLE}.csv", index=False)
-    return {
+    frames = {
         MODEL_READINESS_TABLE: readiness,
         MODEL_BLOCKER_PRIORITY_TABLE: blocker,
     }
+    compare = build_fact_model_candidate_compare_daily(
+        fact_backtest_prediction_hourly=fact_backtest_prediction_hourly,
+        fact_backtest_summary_slice=fact_backtest_summary_slice,
+        fact_backtest_top_error_hourly=fact_backtest_top_error_hourly,
+        fact_drift_window=fact_drift_window,
+        baseline_model_key=baseline_model_key,
+        candidate_model_key=candidate_model_key,
+    )
+    if not compare.empty:
+        compare.to_csv(output_path / f"{MODEL_CANDIDATE_COMPARE_TABLE}.csv", index=False)
+        frames[MODEL_CANDIDATE_COMPARE_TABLE] = compare
+    return frames

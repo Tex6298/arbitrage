@@ -40,6 +40,12 @@ from asset_mapping import cluster_frame, parent_region_frame, signal_source_fram
 from bmu_availability import fetch_remit_event_detail_with_status
 from bmu_dispatch import materialize_bmu_dispatch_history, parse_iso_date as parse_dispatch_iso_date
 from bmu_generation import materialize_bmu_generation_history, parse_iso_date as parse_bmu_iso_date
+from benchmark_suite import (
+    BENCHMARK_WINDOW_TABLE,
+    MODEL_CANDIDATE_COMPARE_WINDOW_DAILY_TABLE,
+    load_benchmark_suite_manifest,
+    materialize_model_benchmark_suite,
+)
 from curtailment_truth import materialize_bmu_curtailment_truth
 from curtailment_signals import materialize_curtailed_history, parse_iso_date
 from curtailment_opportunity import (
@@ -61,6 +67,7 @@ from opportunity_backtest import (
     DEFAULT_BACKTEST_MODEL_SELECTION,
     DEFAULT_FORECAST_HORIZON_HOURS,
     DRIFT_WINDOW_TABLE,
+    MODEL_GB_NL_REVIEWED_SPECIALIST_V3,
     MODEL_POTENTIAL_RATIO_V2,
     VALID_BACKTEST_MODEL_SELECTIONS,
     coerce_forecast_horizons,
@@ -151,6 +158,9 @@ from market_state_feed import (
 )
 from model_readiness import (
     MODEL_BLOCKER_PRIORITY_TABLE,
+    MODEL_CANDIDATE_COMPARE_TABLE,
+    MODEL_CANDIDATE_COMPARE_SUITE_TABLE,
+    MODEL_CANDIDATE_COMPARE_WINDOW_TABLE,
     MODEL_READINESS_TABLE,
     build_fact_model_readiness_daily,
     materialize_model_readiness_daily,
@@ -1141,7 +1151,10 @@ def main() -> int:
         "--backtest-model-key",
         default=DEFAULT_BACKTEST_MODEL_SELECTION,
         choices=sorted(VALID_BACKTEST_MODEL_SELECTIONS),
-        help="Backtest model selection: all, opportunity_group_mean_notice_v1, or opportunity_potential_ratio_v2",
+        help=(
+            "Backtest model selection: all, opportunity_group_mean_notice_v1, "
+            "opportunity_potential_ratio_v2, or opportunity_gb_nl_reviewed_specialist_v3"
+        ),
     )
     parser.add_argument(
         "--backtest-horizons",
@@ -1160,6 +1173,24 @@ def main() -> int:
         "--readiness-output-dir",
         default="model_readiness_history",
         help="Output directory for fact_model_readiness_daily",
+    )
+    parser.add_argument(
+        "--materialize-benchmark-suite",
+        action="store_true",
+        help="Materialize a multi-window benchmark suite from a CSV manifest",
+    )
+    parser.add_argument(
+        "--benchmark-suite-manifest",
+        help="CSV manifest describing benchmark suite windows",
+    )
+    parser.add_argument(
+        "--benchmark-suite-name",
+        help="Benchmark suite name to select when the manifest contains multiple suites",
+    )
+    parser.add_argument(
+        "--benchmark-suite-output-dir",
+        default="model_readiness_benchmark_suite",
+        help="Output directory for suite-level candidate compare outputs",
     )
     parser.add_argument(
         "--capacity-audit-start",
@@ -2901,7 +2932,12 @@ def main() -> int:
                 model_key=args.backtest_model_key,
                 forecast_horizons=forecast_horizons,
             )
-            readiness_model_key = MODEL_POTENTIAL_RATIO_V2 if args.backtest_model_key == "all" else args.backtest_model_key
+            selected_model_keys = set(backtest_frames[BACKTEST_PREDICTION_TABLE]["model_key"].dropna())
+            readiness_model_key = (
+                MODEL_POTENTIAL_RATIO_V2
+                if MODEL_POTENTIAL_RATIO_V2 in selected_model_keys
+                else args.backtest_model_key
+            )
             readiness_frames = materialize_model_readiness_review(
                 output_dir=args.readiness_output_dir,
                 fact_backtest_prediction_hourly=backtest_frames[BACKTEST_PREDICTION_TABLE],
@@ -2909,6 +2945,8 @@ def main() -> int:
                 fact_backtest_top_error_hourly=backtest_frames[BACKTEST_TOP_ERROR_TABLE],
                 fact_drift_window=backtest_frames[DRIFT_WINDOW_TABLE],
                 model_key=readiness_model_key,
+                baseline_model_key=MODEL_POTENTIAL_RATIO_V2,
+                candidate_model_key=MODEL_GB_NL_REVIEWED_SPECIALIST_V3,
             )
             frames = {**backtest_frames, **readiness_frames}
             print(
@@ -2945,9 +2983,79 @@ def main() -> int:
                     .head(20)
                     .to_string(index=False)
                 )
+            candidate_compare = frames.get(MODEL_CANDIDATE_COMPARE_TABLE)
+            if candidate_compare is not None and not candidate_compare.empty:
+                print()
+                print("Model Candidate Compare Daily")
+                print(candidate_compare.to_string(index=False))
             if args.truth_store_db_path:
                 store_summary = upsert_truth_frames_to_sqlite(frames, args.truth_store_db_path)
                 print(f"[store=sqlite] Upserted model readiness tables into {args.truth_store_db_path}")
+                for _, row in store_summary.iterrows():
+                    print(
+                        f"{row['table_name']}: rows_loaded={int(row['rows_loaded'])} "
+                        f"table_rows={int(row['table_row_count'])}"
+                    )
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
+    if args.materialize_benchmark_suite:
+        if not args.benchmark_suite_manifest:
+            raise SystemExit("--materialize-benchmark-suite requires --benchmark-suite-manifest")
+        try:
+            benchmark_windows = load_benchmark_suite_manifest(
+                args.benchmark_suite_manifest,
+                suite_name=args.benchmark_suite_name,
+            )
+            forecast_horizons = coerce_forecast_horizons(args.backtest_horizons)
+            frames = materialize_model_benchmark_suite(
+                output_dir=args.benchmark_suite_output_dir,
+                benchmark_windows=benchmark_windows,
+                model_key=args.backtest_model_key,
+                forecast_horizons=forecast_horizons,
+                baseline_model_key=MODEL_POTENTIAL_RATIO_V2,
+                candidate_model_key=MODEL_GB_NL_REVIEWED_SPECIALIST_V3,
+                manifest_source=str(args.benchmark_suite_manifest),
+            )
+            print(
+                f"[source={BENCHMARK_WINDOW_TABLE}+model_readiness_suite] Materialized {len(frames)} tables from "
+                f"{args.benchmark_suite_manifest} for suite={benchmark_windows[0].benchmark_suite_name} "
+                f"windows={len(benchmark_windows)} model_selection={args.backtest_model_key} "
+                f"horizons={','.join(str(value) for value in forecast_horizons)}"
+            )
+            for table_name, frame in frames.items():
+                output_path = os.path.join(args.benchmark_suite_output_dir, f"{table_name}.csv")
+                print(f"{table_name}: rows={len(frame)} path={output_path}")
+            window_compare = frames[MODEL_CANDIDATE_COMPARE_WINDOW_TABLE]
+            if not window_compare.empty:
+                print()
+                print("Model Candidate Compare Window")
+                print(
+                    window_compare[
+                        [
+                            "benchmark_window_key",
+                            "benchmark_role",
+                            "promotion_window_flag",
+                            "candidate_scope_row_count",
+                            "overall_t_plus_1h_deliverable_mae_delta_mwh",
+                            "gb_nl_t_plus_1h_deliverable_mae_delta_mwh",
+                            "gb_nl_reviewed_internal_t_plus_1h_deliverable_mae_delta_mwh",
+                            "blocker_row_delta",
+                            "severe_focus_area_delta",
+                            "promotion_state",
+                        ]
+                    ].to_string(index=False)
+                )
+            suite_compare = frames[MODEL_CANDIDATE_COMPARE_SUITE_TABLE]
+            if not suite_compare.empty:
+                print()
+                print("Model Candidate Compare Suite")
+                print(suite_compare.to_string(index=False))
+            if args.truth_store_db_path:
+                store_summary = upsert_truth_frames_to_sqlite(frames, args.truth_store_db_path)
+                print(f"[store=sqlite] Upserted benchmark suite tables into {args.truth_store_db_path}")
                 for _, row in store_summary.iterrows():
                     print(
                         f"{row['table_name']}: rows_loaded={int(row['rows_loaded'])} "

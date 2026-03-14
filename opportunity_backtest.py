@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Dict, Iterable
 
@@ -16,7 +17,12 @@ DRIFT_WINDOW_TABLE = "fact_drift_window"
 
 MODEL_GROUP_MEAN_NOTICE_V1 = "opportunity_group_mean_notice_v1"
 MODEL_POTENTIAL_RATIO_V2 = "opportunity_potential_ratio_v2"
-VALID_BACKTEST_MODEL_KEYS = {MODEL_GROUP_MEAN_NOTICE_V1, MODEL_POTENTIAL_RATIO_V2}
+MODEL_GB_NL_REVIEWED_SPECIALIST_V3 = "opportunity_gb_nl_reviewed_specialist_v3"
+VALID_BACKTEST_MODEL_KEYS = {
+    MODEL_GROUP_MEAN_NOTICE_V1,
+    MODEL_POTENTIAL_RATIO_V2,
+    MODEL_GB_NL_REVIEWED_SPECIALIST_V3,
+}
 VALID_BACKTEST_MODEL_SELECTIONS = {"all", *VALID_BACKTEST_MODEL_KEYS}
 TARGETED_TRANSITION_ROUTE_NAMES = {"R2_netback_GB_NL_DE_PL"}
 
@@ -26,6 +32,7 @@ DEFAULT_FORECAST_HORIZON_HOURS = (1, 6, 24, 168)
 
 SPLIT_STRATEGY_GROUP_MEAN = "walk_forward_group_mean"
 SPLIT_STRATEGY_POTENTIAL_RATIO = "walk_forward_potential_ratio"
+SPLIT_STRATEGY_GB_NL_REVIEWED_SPECIALIST = "walk_forward_gb_nl_reviewed_specialist"
 
 EXACT_MIN_HISTORY = 1
 CLUSTER_ROUTE_MIN_HISTORY = 3
@@ -52,6 +59,41 @@ ROUTE_PRICE_LOW_POSITIVE_MAX_EUR_PER_MWH = 25.0
 ROUTE_PRICE_HIGH_POSITIVE_MIN_EUR_PER_MWH = 75.0
 ROUTE_PRICE_SOFT_MOVE_EUR_PER_MWH = 10.0
 ROUTE_PRICE_JUMP_MOVE_EUR_PER_MWH = 40.0
+
+SPECIALIST_SCOPE_FORECAST_HORIZON_HOURS = 1
+SPECIALIST_SCOPE_ROUTE_NAME = "R2_netback_GB_NL_DE_PL"
+SPECIALIST_SCOPE_HUB_KEY = "britned"
+SPECIALIST_SCOPE_INTERNAL_TIER = "reviewed_internal_constraint_boundary"
+SPECIALIST_RATIO_EPSILON = 1e-6
+
+SPECIALIST_NUMERIC_FEATURE_COLUMNS = (
+    "feature_deliverable_mw_proxy_asof",
+)
+
+SPECIALIST_CATEGORICAL_FEATURE_COLUMNS = (
+    "cluster_key",
+    "feature_internal_transfer_source_family_asof",
+    "feature_internal_transfer_source_key_asof",
+    "feature_internal_transfer_boundary_family_asof",
+    "feature_connector_itl_source_key_asof",
+    "feature_internal_transfer_gate_state_asof",
+    "feature_internal_transfer_gate_transition_state_asof",
+    "feature_internal_transfer_gate_state_path_asof",
+    "feature_route_price_state_asof",
+    "feature_route_price_transition_state_asof",
+    "feature_route_price_persistence_bucket_asof",
+    "feature_upstream_market_state_asof",
+    "feature_upstream_day_ahead_to_intraday_spread_bucket_asof",
+    "feature_upstream_forward_to_day_ahead_spread_bucket_asof",
+    "feature_system_balance_state_asof",
+    "feature_system_balance_transition_state_asof",
+    "feature_system_balance_persistence_bucket_asof",
+    "feature_connector_itl_state_asof",
+    "feature_connector_itl_transition_state_asof",
+    "feature_connector_notice_market_state_asof",
+    "feature_hour_of_day",
+    "feature_origin_hour_of_day",
+)
 
 SUMMARY_SLICE_DIMENSIONS = (
     "all",
@@ -96,9 +138,12 @@ def _empty_backtest_prediction_frame() -> pd.DataFrame:
             "route_delivery_tier",
             "internal_transfer_evidence_tier",
             "internal_transfer_gate_state",
+            "internal_transfer_source_family",
+            "internal_transfer_source_key",
             "upstream_market_state",
             "system_balance_state",
             "connector_notice_market_state",
+            "connector_itl_source_key",
             "curtailment_source_tier",
             "model_key",
             "split_strategy",
@@ -131,7 +176,11 @@ def _empty_backtest_prediction_frame() -> pd.DataFrame:
             "feature_route_delivery_tier_asof",
             "feature_connector_notice_market_state_asof",
             "feature_connector_itl_state_asof",
+            "feature_connector_itl_source_key_asof",
             "feature_internal_transfer_gate_state_asof",
+            "feature_internal_transfer_source_family_asof",
+            "feature_internal_transfer_source_key_asof",
+            "feature_internal_transfer_boundary_family_asof",
             "feature_internal_transfer_gate_bucket_asof",
             "feature_route_delivery_transition_state_asof",
             "feature_connector_itl_transition_state_asof",
@@ -315,6 +364,111 @@ def _coerce_bool_series(values: pd.Series | object, default: bool = False) -> pd
     return series.where(series.notna(), default).astype(bool)
 
 
+def _derive_internal_transfer_boundary_family(
+    internal_transfer_source_family: pd.Series,
+    internal_transfer_source_key: pd.Series,
+    internal_transfer_evidence_tier: pd.Series,
+) -> pd.Series:
+    family = internal_transfer_source_family.astype("string")
+    source_key = internal_transfer_source_key.astype("string")
+    evidence_tier = internal_transfer_evidence_tier.astype("string")
+    derived = family.copy()
+    derived = derived.where(
+        ~source_key.fillna("").str.startswith("fact_day_ahead_constraint_boundary_half_hourly:"),
+        "day_ahead_constraint_boundary",
+    )
+    derived = derived.where(
+        ~(
+            evidence_tier.eq(SPECIALIST_SCOPE_INTERNAL_TIER)
+            & derived.isna()
+        ),
+        "reviewed_internal_constraint_boundary",
+    )
+    return derived.astype(object)
+
+
+def _specialist_scope_mask(frame: pd.DataFrame) -> pd.Series:
+    return (
+        pd.to_numeric(frame["forecast_horizon_hours"], errors="coerce").eq(SPECIALIST_SCOPE_FORECAST_HORIZON_HOURS)
+        & frame["route_name"].eq(SPECIALIST_SCOPE_ROUTE_NAME)
+        & frame["hub_key"].eq(SPECIALIST_SCOPE_HUB_KEY)
+        & frame["internal_transfer_evidence_tier"].eq(SPECIALIST_SCOPE_INTERNAL_TIER)
+    )
+
+
+def _make_one_hot_encoder():
+    from sklearn.preprocessing import OneHotEncoder
+
+    try:
+        return OneHotEncoder(handle_unknown="ignore", sparse_output=False)
+    except TypeError:
+        return OneHotEncoder(handle_unknown="ignore", sparse=False)
+
+
+def _build_specialist_pipeline(kind: str):
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+    os.environ.setdefault("MKL_NUM_THREADS", "1")
+    os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
+    os.environ.setdefault("LOKY_MAX_CPU_COUNT", "1")
+
+    from sklearn.compose import ColumnTransformer
+    from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
+    from sklearn.impute import SimpleImputer
+    from sklearn.pipeline import Pipeline
+
+    preprocessor = ColumnTransformer(
+        transformers=[
+            (
+                "numeric",
+                Pipeline(
+                    steps=[
+                        ("imputer", SimpleImputer(strategy="median")),
+                    ]
+                ),
+                list(SPECIALIST_NUMERIC_FEATURE_COLUMNS),
+            ),
+            (
+                "categorical",
+                Pipeline(
+                    steps=[
+                        ("imputer", SimpleImputer(strategy="constant", fill_value="missing")),
+                        ("encoder", _make_one_hot_encoder()),
+                    ]
+                ),
+                list(SPECIALIST_CATEGORICAL_FEATURE_COLUMNS),
+            ),
+        ],
+        remainder="drop",
+        sparse_threshold=0.0,
+    )
+    if kind == "classifier":
+        estimator = HistGradientBoostingClassifier(random_state=42)
+    elif kind == "regressor":
+        estimator = HistGradientBoostingRegressor(random_state=42)
+    else:
+        raise ValueError(f"unsupported specialist pipeline kind '{kind}'")
+    return Pipeline(
+        steps=[
+            ("preprocessor", preprocessor),
+            ("estimator", estimator),
+        ]
+    )
+
+
+def _prepare_specialist_feature_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    features = frame.copy()
+    for column in SPECIALIST_NUMERIC_FEATURE_COLUMNS:
+        features[column] = pd.to_numeric(features.get(column, pd.Series(np.nan, index=features.index)), errors="coerce")
+    for column in SPECIALIST_CATEGORICAL_FEATURE_COLUMNS:
+        values = features.get(column, pd.Series(pd.NA, index=features.index))
+        categorical = pd.Series(np.nan, index=features.index, dtype=object)
+        non_missing = values.notna()
+        categorical.loc[non_missing] = values.loc[non_missing].astype(str)
+        features[column] = categorical
+    return features[[*SPECIALIST_NUMERIC_FEATURE_COLUMNS, *SPECIALIST_CATEGORICAL_FEATURE_COLUMNS]]
+
+
 def load_curtailment_opportunity_input(path: str | Path) -> pd.DataFrame:
     input_path = Path(path)
     if input_path.is_dir():
@@ -479,6 +633,14 @@ def _prepare_backtest_input(fact_curtailment_opportunity_hourly: pd.DataFrame) -
         "internal_transfer_evidence_tier",
         pd.Series("gb_topology_transfer_gate_proxy", index=frame.index),
     ).fillna("gb_topology_transfer_gate_proxy")
+    frame["internal_transfer_source_family"] = frame.get(
+        "internal_transfer_source_family",
+        pd.Series(pd.NA, index=frame.index),
+    )
+    frame["internal_transfer_source_key"] = frame.get(
+        "internal_transfer_source_key",
+        pd.Series(pd.NA, index=frame.index),
+    )
     frame["internal_transfer_gate_state"] = frame.get(
         "internal_transfer_gate_state",
         pd.Series("capacity_unknown_reachable", index=frame.index),
@@ -487,10 +649,19 @@ def _prepare_backtest_input(fact_curtailment_opportunity_hourly: pd.DataFrame) -
         "connector_itl_state",
         pd.Series("no_public_itl_restriction", index=frame.index),
     ).fillna("no_public_itl_restriction")
+    frame["connector_itl_source_key"] = frame.get(
+        "connector_itl_source_key",
+        pd.Series(pd.NA, index=frame.index),
+    )
     frame["connector_notice_market_state"] = frame["connector_notice_market_state"].fillna(
         "no_public_connector_restriction"
     )
     frame["curtailment_source_tier"] = frame["curtailment_source_tier"].fillna("unknown")
+    frame["internal_transfer_boundary_family"] = _derive_internal_transfer_boundary_family(
+        frame["internal_transfer_source_family"],
+        frame["internal_transfer_source_key"],
+        frame["internal_transfer_evidence_tier"],
+    )
     internal_gate_state = frame["internal_transfer_gate_state"].astype(str)
     frame["internal_transfer_gate_bucket"] = np.where(
         internal_gate_state.str.startswith("blocked_reviewed"),
@@ -685,7 +856,11 @@ def _build_horizon_example_frame(frame: pd.DataFrame, forecast_horizon_hours: in
             "route_delivery_tier",
             "connector_notice_market_state",
             "connector_itl_state",
+            "connector_itl_source_key",
             "internal_transfer_gate_state",
+            "internal_transfer_source_family",
+            "internal_transfer_source_key",
+            "internal_transfer_boundary_family",
             "internal_transfer_gate_bucket",
             "route_delivery_transition_state",
             "connector_itl_transition_state",
@@ -734,7 +909,11 @@ def _build_horizon_example_frame(frame: pd.DataFrame, forecast_horizon_hours: in
             "route_delivery_tier": "feature_route_delivery_tier_asof",
             "connector_notice_market_state": "feature_connector_notice_market_state_asof",
             "connector_itl_state": "feature_connector_itl_state_asof",
+            "connector_itl_source_key": "feature_connector_itl_source_key_asof",
             "internal_transfer_gate_state": "feature_internal_transfer_gate_state_asof",
+            "internal_transfer_source_family": "feature_internal_transfer_source_family_asof",
+            "internal_transfer_source_key": "feature_internal_transfer_source_key_asof",
+            "internal_transfer_boundary_family": "feature_internal_transfer_boundary_family_asof",
             "internal_transfer_gate_bucket": "feature_internal_transfer_gate_bucket_asof",
             "route_delivery_transition_state": "feature_route_delivery_transition_state_asof",
             "connector_itl_transition_state": "feature_connector_itl_transition_state_asof",
@@ -1324,6 +1503,97 @@ def _build_potential_ratio_backtest(frame: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def _build_gb_nl_reviewed_specialist_v3_backtest(frame: pd.DataFrame) -> pd.DataFrame:
+    scoped = frame[_specialist_scope_mask(frame)].copy()
+    if scoped.empty:
+        return _empty_backtest_prediction_frame()
+
+    scoped = scoped.sort_values(
+        ["forecast_origin_utc", "interval_start_utc", "cluster_key", "route_name", "hub_key"]
+    ).reset_index(drop=True)
+    proxy = pd.to_numeric(scoped["feature_deliverable_mw_proxy_asof"], errors="coerce").fillna(0.0).clip(lower=0.0)
+    scoped["specialist_open_target"] = scoped["actual_opportunity_deliverable_mwh"].gt(0.0).astype(int)
+    scoped["specialist_ratio_target"] = (
+        scoped["actual_opportunity_deliverable_mwh"]
+        / np.maximum(proxy, SPECIALIST_RATIO_EPSILON)
+    )
+    scoped["specialist_ratio_target"] = pd.to_numeric(
+        scoped["specialist_ratio_target"],
+        errors="coerce",
+    ).fillna(0.0).clip(lower=0.0, upper=1.0)
+    scoped["prediction_basis"] = pd.NA
+    scoped["training_sample_count"] = 0
+    scoped["predicted_open_probability"] = np.nan
+    scoped["predicted_ratio"] = np.nan
+    feature_frame = _prepare_specialist_feature_frame(scoped)
+
+    for forecast_origin_utc, origin_frame in scoped.groupby("forecast_origin_utc", sort=True, dropna=False):
+        train_mask = scoped["forecast_origin_utc"].lt(forecast_origin_utc)
+        train_frame = scoped.loc[train_mask].copy()
+        if train_frame.empty:
+            continue
+
+        train_count = int(len(train_frame))
+        target_frame = scoped.loc[origin_frame.index].copy()
+        x_train = feature_frame.loc[train_mask]
+        x_target = feature_frame.loc[origin_frame.index]
+        open_target = train_frame["specialist_open_target"].astype(int)
+        open_probability = np.full(len(target_frame), float(open_target.mean()), dtype=float)
+        basis_parts = ["specialist_v3"]
+
+        if open_target.nunique(dropna=False) >= 2:
+            classifier = _build_specialist_pipeline("classifier")
+            classifier.fit(x_train, open_target)
+            open_probability = classifier.predict_proba(x_target)[:, 1]
+            basis_parts.append("hybrid_open")
+        else:
+            basis_parts.append("constant_open")
+
+        positive_train_mask = train_frame["specialist_open_target"].eq(1)
+        positive_train = train_frame.loc[positive_train_mask].copy()
+        predicted_ratio = np.zeros(len(target_frame), dtype=float)
+        if not positive_train.empty:
+            positive_ratio = positive_train["specialist_ratio_target"]
+            x_positive = feature_frame.loc[positive_train.index]
+            predicted_ratio = np.full(len(target_frame), float(positive_ratio.mean()), dtype=float)
+            if len(positive_train) >= 2 and positive_ratio.nunique(dropna=False) >= 2:
+                regressor = _build_specialist_pipeline("regressor")
+                regressor.fit(x_positive, positive_ratio)
+                predicted_ratio = regressor.predict(x_target)
+                basis_parts.append("hybrid_ratio")
+            else:
+                basis_parts.append("constant_ratio")
+        else:
+            basis_parts.append("no_positive_history")
+
+        scoped.loc[origin_frame.index, "training_sample_count"] = train_count
+        scoped.loc[origin_frame.index, "prediction_basis"] = "_".join(basis_parts)
+        scoped.loc[origin_frame.index, "predicted_open_probability"] = open_probability
+        scoped.loc[origin_frame.index, "predicted_ratio"] = predicted_ratio
+
+    scoped["predicted_open_probability"] = pd.to_numeric(
+        scoped["predicted_open_probability"],
+        errors="coerce",
+    ).clip(lower=0.0, upper=1.0)
+    scoped["predicted_ratio"] = pd.to_numeric(scoped["predicted_ratio"], errors="coerce").clip(lower=0.0, upper=1.0)
+    scoped["predicted_opportunity_deliverable_mwh"] = (
+        scoped["predicted_open_probability"]
+        * scoped["predicted_ratio"]
+        * proxy
+    ).clip(lower=0.0)
+    scoped["predicted_opportunity_deliverable_mwh"] = np.minimum(
+        scoped["predicted_opportunity_deliverable_mwh"],
+        proxy,
+    )
+
+    return _finalize_prediction_frame(
+        scoped,
+        model_key=MODEL_GB_NL_REVIEWED_SPECIALIST_V3,
+        split_strategy=SPLIT_STRATEGY_GB_NL_REVIEWED_SPECIALIST,
+        source_lineage="fact_curtailment_opportunity_hourly|walk_forward_gb_nl_reviewed_specialist",
+    )
+
+
 def build_fact_backtest_prediction_hourly(
     fact_curtailment_opportunity_hourly: pd.DataFrame,
     model_key: str = DEFAULT_BACKTEST_MODEL_KEY,
@@ -1344,16 +1614,23 @@ def build_fact_backtest_prediction_hourly(
             horizon_frames.append(_build_group_mean_backtest(horizon_frame))
         elif model_key == MODEL_POTENTIAL_RATIO_V2:
             horizon_frames.append(_build_potential_ratio_backtest(horizon_frame))
+        elif model_key == MODEL_GB_NL_REVIEWED_SPECIALIST_V3:
+            horizon_frames.append(_build_gb_nl_reviewed_specialist_v3_backtest(horizon_frame))
         else:
             raise ValueError(f"unsupported backtest model '{model_key}'")
-    if not horizon_frames:
+    non_empty_horizon_frames = [horizon_frame for horizon_frame in horizon_frames if not horizon_frame.empty]
+    if not non_empty_horizon_frames:
         return _empty_backtest_prediction_frame()
-    return pd.concat(horizon_frames, ignore_index=True)
+    return pd.concat(non_empty_horizon_frames, ignore_index=True)
 
 
 def _model_selection_to_keys(model_key: str) -> list[str]:
     if model_key == "all":
-        return [MODEL_GROUP_MEAN_NOTICE_V1, MODEL_POTENTIAL_RATIO_V2]
+        return [
+            MODEL_GROUP_MEAN_NOTICE_V1,
+            MODEL_POTENTIAL_RATIO_V2,
+            MODEL_GB_NL_REVIEWED_SPECIALIST_V3,
+        ]
     if model_key in VALID_BACKTEST_MODEL_KEYS:
         return [model_key]
     raise ValueError(
@@ -1806,7 +2083,12 @@ def materialize_opportunity_backtest(
         )
         for selected_model_key in _model_selection_to_keys(model_key)
     ]
-    predictions = pd.concat(prediction_frames, ignore_index=True) if prediction_frames else _empty_backtest_prediction_frame()
+    non_empty_prediction_frames = [prediction_frame for prediction_frame in prediction_frames if not prediction_frame.empty]
+    predictions = (
+        pd.concat(non_empty_prediction_frames, ignore_index=True)
+        if non_empty_prediction_frames
+        else _empty_backtest_prediction_frame()
+    )
     summary_slice = build_fact_backtest_summary_slice(predictions)
     top_error = build_fact_backtest_top_error_hourly(predictions)
     drift_window = build_fact_drift_window(predictions)

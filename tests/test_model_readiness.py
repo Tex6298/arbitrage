@@ -5,9 +5,16 @@ from pathlib import Path
 import pandas as pd
 
 from model_readiness import (
+    DEFAULT_CANDIDATE_MODEL_KEY,
     DEFAULT_READINESS_MODEL_KEY,
     MODEL_BLOCKER_PRIORITY_TABLE,
+    MODEL_CANDIDATE_COMPARE_TABLE,
+    MODEL_CANDIDATE_COMPARE_SUITE_TABLE,
+    MODEL_CANDIDATE_COMPARE_WINDOW_TABLE,
     MODEL_READINESS_TABLE,
+    build_fact_model_candidate_compare_daily,
+    build_fact_model_candidate_compare_suite,
+    build_fact_model_candidate_compare_window,
     build_fact_model_blocker_priority,
     build_fact_model_readiness_daily,
     materialize_model_readiness_daily,
@@ -20,16 +27,21 @@ def _prediction_row(
     *,
     horizon_hours: int,
     deliverable_abs_error: float,
+    model_key: str = DEFAULT_READINESS_MODEL_KEY,
     route_name: str = "R1_netback_GB_FR_DE_PL",
     actual_deliverable_mwh: float = 10.0,
     internal_transfer_evidence_tier: str = "reviewed_internal_constraint_boundary",
+    cluster_key: str = "dogger_hornsea_offshore",
+    hub_key: str = "britned",
     route_delivery_tier: str = "reviewed",
 ) -> dict:
     return {
         "interval_start_utc": pd.Timestamp(interval_start_utc),
-        "model_key": DEFAULT_READINESS_MODEL_KEY,
+        "model_key": model_key,
         "forecast_horizon_hours": horizon_hours,
         "prediction_eligible_flag": True,
+        "cluster_key": cluster_key,
+        "hub_key": hub_key,
         "route_name": route_name,
         "actual_opportunity_deliverable_mwh": actual_deliverable_mwh,
         "opportunity_deliverable_abs_error_mwh": deliverable_abs_error,
@@ -320,6 +332,208 @@ class ModelReadinessTests(unittest.TestCase):
         self.assertGreater(float(gb_nl_row["blocker_priority_score"]), 0.0)
         self.assertIn("inspect GB-NL route slices", gb_nl_row["recommended_next_step"])
 
+    def test_build_fact_model_candidate_compare_daily_reports_shadow_deltas(self) -> None:
+        predictions = pd.DataFrame(
+            [
+                _prediction_row(
+                    "2024-10-01T01:00:00Z",
+                    model_key=DEFAULT_READINESS_MODEL_KEY,
+                    horizon_hours=1,
+                    deliverable_abs_error=8.0,
+                    route_name="R2_netback_GB_NL_DE_PL",
+                    actual_deliverable_mwh=40.0,
+                ),
+                _prediction_row(
+                    "2024-10-01T01:00:00Z",
+                    model_key=DEFAULT_CANDIDATE_MODEL_KEY,
+                    horizon_hours=1,
+                    deliverable_abs_error=2.0,
+                    route_name="R2_netback_GB_NL_DE_PL",
+                    actual_deliverable_mwh=40.0,
+                ),
+            ]
+        )
+
+        compare = build_fact_model_candidate_compare_daily(
+            fact_backtest_prediction_hourly=predictions,
+            fact_backtest_summary_slice=pd.DataFrame(),
+            fact_backtest_top_error_hourly=pd.DataFrame(),
+            fact_drift_window=pd.DataFrame(),
+        )
+
+        row = compare.iloc[0]
+        self.assertEqual(row["baseline_model_key"], DEFAULT_READINESS_MODEL_KEY)
+        self.assertEqual(row["candidate_model_key"], DEFAULT_CANDIDATE_MODEL_KEY)
+        self.assertEqual(int(row["candidate_scope_row_count"]), 1)
+        self.assertLess(float(row["overall_t_plus_1h_deliverable_mae_delta_mwh"]), 0.0)
+        self.assertLess(float(row["gb_nl_t_plus_1h_deliverable_mae_delta_mwh"]), 0.0)
+        self.assertLess(float(row["gb_nl_reviewed_internal_t_plus_1h_deliverable_mae_delta_mwh"]), 0.0)
+        self.assertEqual(row["promotion_state"], "candidate_beats_baseline")
+
+    def test_build_fact_model_candidate_compare_window_rolls_up_window_metrics(self) -> None:
+        predictions = pd.DataFrame(
+            [
+                _prediction_row(
+                    "2024-10-01T01:00:00Z",
+                    model_key=DEFAULT_READINESS_MODEL_KEY,
+                    horizon_hours=1,
+                    deliverable_abs_error=8.0,
+                    route_name="R2_netback_GB_NL_DE_PL",
+                    actual_deliverable_mwh=40.0,
+                ),
+                _prediction_row(
+                    "2024-10-01T01:00:00Z",
+                    model_key=DEFAULT_CANDIDATE_MODEL_KEY,
+                    horizon_hours=1,
+                    deliverable_abs_error=2.0,
+                    route_name="R2_netback_GB_NL_DE_PL",
+                    actual_deliverable_mwh=40.0,
+                ),
+                _prediction_row(
+                    "2024-10-02T01:00:00Z",
+                    model_key=DEFAULT_READINESS_MODEL_KEY,
+                    horizon_hours=1,
+                    deliverable_abs_error=6.0,
+                ),
+                _prediction_row(
+                    "2024-10-02T01:00:00Z",
+                    model_key=DEFAULT_CANDIDATE_MODEL_KEY,
+                    horizon_hours=1,
+                    deliverable_abs_error=4.0,
+                ),
+            ]
+        )
+
+        window_compare = build_fact_model_candidate_compare_window(
+            fact_backtest_prediction_hourly=predictions,
+            fact_backtest_summary_slice=pd.DataFrame(),
+            fact_backtest_top_error_hourly=pd.DataFrame(),
+            fact_drift_window=pd.DataFrame(),
+            benchmark_suite_name="suite_a",
+            benchmark_window_key="window_a",
+            benchmark_window_label="Window A",
+            benchmark_window_start_date="2024-10-01",
+            benchmark_window_end_date="2024-10-02",
+            benchmark_window_family="guardrail",
+            benchmark_role="guardrail",
+            promotion_window_flag=False,
+            display_order=1,
+        )
+
+        row = window_compare.iloc[0]
+        self.assertEqual(window_compare.columns.tolist(), build_fact_model_candidate_compare_window(
+            fact_backtest_prediction_hourly=pd.DataFrame(),
+            fact_backtest_summary_slice=pd.DataFrame(),
+            fact_backtest_top_error_hourly=pd.DataFrame(),
+            fact_drift_window=pd.DataFrame(),
+            benchmark_suite_name="suite_a",
+            benchmark_window_key="window_a",
+            benchmark_window_label="Window A",
+            benchmark_window_start_date="2024-10-01",
+            benchmark_window_end_date="2024-10-02",
+            benchmark_window_family="guardrail",
+            benchmark_role="guardrail",
+            promotion_window_flag=False,
+            display_order=1,
+        ).columns.tolist())
+        self.assertEqual(row["benchmark_window_key"], "window_a")
+        self.assertEqual(int(row["window_day_count"]), 2)
+        self.assertEqual(int(row["candidate_scope_row_count"]), 2)
+        self.assertAlmostEqual(float(row["overall_t_plus_1h_deliverable_mae_delta_mwh"]), -4.0)
+        self.assertAlmostEqual(float(row["gb_nl_t_plus_1h_deliverable_mae_delta_mwh"]), -6.0)
+        self.assertAlmostEqual(float(row["gb_nl_reviewed_internal_t_plus_1h_deliverable_mae_delta_mwh"]), -6.0)
+        self.assertEqual(row["promotion_state"], "candidate_beats_baseline")
+
+    def test_build_fact_model_candidate_compare_suite_separates_promotion_windows(self) -> None:
+        diagnostic_predictions = pd.DataFrame(
+            [
+                _prediction_row(
+                    "2024-10-01T01:00:00Z",
+                    model_key=DEFAULT_READINESS_MODEL_KEY,
+                    horizon_hours=1,
+                    deliverable_abs_error=6.0,
+                    route_name="R2_netback_GB_NL_DE_PL",
+                    actual_deliverable_mwh=40.0,
+                ),
+                _prediction_row(
+                    "2024-10-01T01:00:00Z",
+                    model_key=DEFAULT_CANDIDATE_MODEL_KEY,
+                    horizon_hours=1,
+                    deliverable_abs_error=1.0,
+                    route_name="R2_netback_GB_NL_DE_PL",
+                    actual_deliverable_mwh=40.0,
+                ),
+            ]
+        )
+        promotion_predictions = pd.DataFrame(
+            [
+                _prediction_row(
+                    "2024-10-08T01:00:00Z",
+                    model_key=DEFAULT_READINESS_MODEL_KEY,
+                    horizon_hours=1,
+                    deliverable_abs_error=2.0,
+                    route_name="R2_netback_GB_NL_DE_PL",
+                    actual_deliverable_mwh=40.0,
+                ),
+                _prediction_row(
+                    "2024-10-08T01:00:00Z",
+                    model_key=DEFAULT_CANDIDATE_MODEL_KEY,
+                    horizon_hours=1,
+                    deliverable_abs_error=7.0,
+                    route_name="R2_netback_GB_NL_DE_PL",
+                    actual_deliverable_mwh=40.0,
+                ),
+            ]
+        )
+        window_compare = pd.concat(
+            [
+                build_fact_model_candidate_compare_window(
+                    fact_backtest_prediction_hourly=diagnostic_predictions,
+                    fact_backtest_summary_slice=pd.DataFrame(),
+                    fact_backtest_top_error_hourly=pd.DataFrame(),
+                    fact_drift_window=pd.DataFrame(),
+                    benchmark_suite_name="suite_a",
+                    benchmark_window_key="diag",
+                    benchmark_window_label="Diagnostic",
+                    benchmark_window_start_date="2024-10-01",
+                    benchmark_window_end_date="2024-10-07",
+                    benchmark_window_family="diagnostic",
+                    benchmark_role="diagnostic",
+                    promotion_window_flag=False,
+                    display_order=1,
+                ),
+                build_fact_model_candidate_compare_window(
+                    fact_backtest_prediction_hourly=promotion_predictions,
+                    fact_backtest_summary_slice=pd.DataFrame(),
+                    fact_backtest_top_error_hourly=pd.DataFrame(),
+                    fact_drift_window=pd.DataFrame(),
+                    benchmark_suite_name="suite_a",
+                    benchmark_window_key="holdout",
+                    benchmark_window_label="Holdout",
+                    benchmark_window_start_date="2024-10-08",
+                    benchmark_window_end_date="2024-10-14",
+                    benchmark_window_family="acceptance",
+                    benchmark_role="acceptance",
+                    promotion_window_flag=True,
+                    display_order=2,
+                ),
+            ],
+            ignore_index=True,
+        )
+
+        suite_compare = build_fact_model_candidate_compare_suite(window_compare)
+
+        self.assertEqual(set(suite_compare["suite_scope"]), {"all_windows", "promotion_windows"})
+        all_windows = suite_compare[suite_compare["suite_scope"] == "all_windows"].iloc[0]
+        promotion_windows = suite_compare[suite_compare["suite_scope"] == "promotion_windows"].iloc[0]
+        self.assertEqual(int(all_windows["window_count"]), 2)
+        self.assertEqual(int(promotion_windows["window_count"]), 1)
+        self.assertEqual(int(all_windows["candidate_beats_window_count"]), 1)
+        self.assertEqual(int(all_windows["candidate_regresses_window_count"]), 1)
+        self.assertEqual(all_windows["promotion_state"], "candidate_mixed")
+        self.assertAlmostEqual(float(promotion_windows["overall_t_plus_1h_deliverable_mae_delta_mwh"]), 5.0)
+        self.assertEqual(promotion_windows["promotion_state"], "candidate_regresses_baseline")
+
     def test_materialize_model_readiness_review_writes_both_outputs(self) -> None:
         predictions = pd.DataFrame(
             [
@@ -444,6 +658,46 @@ class ModelReadinessTests(unittest.TestCase):
             self.assertEqual(set(frames), {MODEL_READINESS_TABLE, MODEL_BLOCKER_PRIORITY_TABLE})
             self.assertTrue((Path(tmp_dir) / f"{MODEL_READINESS_TABLE}.csv").exists())
             self.assertTrue((Path(tmp_dir) / f"{MODEL_BLOCKER_PRIORITY_TABLE}.csv").exists())
+
+    def test_materialize_model_readiness_review_writes_candidate_compare_when_v2_and_v3_exist(self) -> None:
+        predictions = pd.DataFrame(
+            [
+                _prediction_row(
+                    "2024-10-01T01:00:00Z",
+                    model_key=DEFAULT_READINESS_MODEL_KEY,
+                    horizon_hours=1,
+                    deliverable_abs_error=6.0,
+                    route_name="R2_netback_GB_NL_DE_PL",
+                    actual_deliverable_mwh=40.0,
+                ),
+                _prediction_row(
+                    "2024-10-01T01:00:00Z",
+                    model_key=DEFAULT_CANDIDATE_MODEL_KEY,
+                    horizon_hours=1,
+                    deliverable_abs_error=1.5,
+                    route_name="R2_netback_GB_NL_DE_PL",
+                    actual_deliverable_mwh=40.0,
+                ),
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            frames = materialize_model_readiness_review(
+                tmp_dir,
+                predictions,
+                pd.DataFrame(),
+                pd.DataFrame(),
+                pd.DataFrame(),
+            )
+            self.assertEqual(
+                set(frames),
+                {
+                    MODEL_READINESS_TABLE,
+                    MODEL_BLOCKER_PRIORITY_TABLE,
+                    MODEL_CANDIDATE_COMPARE_TABLE,
+                },
+            )
+            self.assertTrue((Path(tmp_dir) / f"{MODEL_CANDIDATE_COMPARE_TABLE}.csv").exists())
 
 
 if __name__ == "__main__":

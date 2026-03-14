@@ -832,6 +832,8 @@ Key behavior:
   - `python inline_arbitrage_live.py --materialize-opportunity-backtest --opportunity-input-path curtailment_opportunity_history --backtest-output-dir opportunity_backtest_history`
 - To turn an opportunity export plus its backtest into a hard product-readiness gate:
   - `python inline_arbitrage_live.py --materialize-model-readiness --opportunity-input-path curtailment_opportunity_history --readiness-start 2024-10-01 --readiness-end 2024-10-07 --readiness-output-dir model_readiness_history`
+- To materialize a multi-window shadow benchmark suite from a manifest:
+  - `python inline_arbitrage_live.py --materialize-benchmark-suite --benchmark-suite-manifest benchmark_suites/gb_nl_reviewed_shadow_acceptance_v1.csv --benchmark-suite-output-dir model_readiness_gb_nl_shadow_suite --backtest-model-key all --backtest-horizons 1,6,24,168`
 - The backtest CLI now accepts:
   - `--backtest-model-key all`
   - `--backtest-model-key opportunity_group_mean_notice_v1`
@@ -852,6 +854,17 @@ Key behavior:
   - `fact_backtest_summary_slice`
   - `fact_backtest_top_error_hourly`
   - `fact_drift_window`
+- `benchmark_suites/gb_nl_reviewed_shadow_acceptance_v1.csv` is the executable benchmark plan for the current
+  GB-NL specialist shadow phase. It keeps the October 1-7, 2024 blocker week as a diagnostic row, then adds
+  broader guardrail windows so the suite can grow into a real promotion gate instead of relying on one curated week.
+- `dim_model_benchmark_window` records the suite manifest that was actually run.
+- `fact_model_candidate_compare_window_daily` is the daily shadow compare annotated by benchmark window.
+- `fact_model_candidate_compare_window` is the one-row-per-window acceptance surface with audit columns for row counts
+  and absolute-error sums.
+- `fact_model_candidate_compare_suite` rolls those windows up twice:
+  - `all_windows`
+  - `promotion_windows`
+  so diagnostic windows can stay visible without automatically counting as promotion evidence.
 - Each blocker row is keyed by:
   - `window_date`
   - `blocker_type`

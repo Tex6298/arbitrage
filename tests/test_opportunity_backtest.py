@@ -9,6 +9,7 @@ from opportunity_backtest import (
     BACKTEST_SUMMARY_SLICE_TABLE,
     BACKTEST_TOP_ERROR_TABLE,
     DRIFT_WINDOW_TABLE,
+    MODEL_GB_NL_REVIEWED_SPECIALIST_V3,
     MODEL_GROUP_MEAN_NOTICE_V1,
     MODEL_POTENTIAL_RATIO_V2,
     build_fact_backtest_prediction_hourly,
@@ -35,7 +36,10 @@ def _opportunity_row(
     curtailment_source_tier: str = "regional_proxy",
     internal_transfer_evidence_tier: str = "gb_topology_transfer_gate_proxy",
     internal_transfer_gate_state: str = "capacity_unknown_reachable",
+    internal_transfer_source_family: str | None = None,
+    internal_transfer_source_key: str | None = None,
     connector_itl_state: str = "no_public_itl_restriction",
+    connector_itl_source_key: str | None = None,
     route_price_score_eur_per_mwh: float | None = None,
     route_price_feasible_flag: bool | None = None,
     route_price_bottleneck: str | None = None,
@@ -67,6 +71,20 @@ def _opportunity_row(
         route_price_feasible_flag = route_price_score_eur_per_mwh > 0.0
     if route_price_bottleneck is None:
         route_price_bottleneck = "GB->NL" if "GB_NL" in route_name else "GB->FR"
+    if internal_transfer_source_family is None:
+        internal_transfer_source_family = (
+            "day_ahead_constraint_boundary"
+            if internal_transfer_evidence_tier == "reviewed_internal_constraint_boundary"
+            else "gb_topology_transfer_gate_proxy"
+        )
+    if internal_transfer_source_key is None:
+        internal_transfer_source_key = (
+            "fact_day_ahead_constraint_boundary_half_hourly:SSE-SP2"
+            if internal_transfer_evidence_tier == "reviewed_internal_constraint_boundary"
+            else "gb_topology_transfer_gate_proxy"
+        )
+    if connector_itl_source_key is None:
+        connector_itl_source_key = "neso_interconnector_itl"
     return {
         "date": interval_start.date(),
         "interval_start_local": interval_start_local,
@@ -107,7 +125,10 @@ def _opportunity_row(
         "deliverable_route_score_eur_per_mwh": deliverable_route_score_eur_per_mwh,
         "internal_transfer_evidence_tier": internal_transfer_evidence_tier,
         "internal_transfer_gate_state": internal_transfer_gate_state,
+        "internal_transfer_source_family": internal_transfer_source_family,
+        "internal_transfer_source_key": internal_transfer_source_key,
         "connector_itl_state": connector_itl_state,
+        "connector_itl_source_key": connector_itl_source_key,
     }
 
 
@@ -503,6 +524,141 @@ class OpportunityBacktestTests(unittest.TestCase):
         self.assertEqual(target["feature_system_balance_margin_direction_bucket_asof"], "margin_tight")
         self.assertEqual(target["feature_system_balance_transition_state_asof"], "START->tight_margin")
         self.assertEqual(target["feature_system_balance_persistence_bucket_asof"], "system_balance_persist_1h")
+
+    def test_build_fact_backtest_prediction_hourly_scopes_specialist_v3_and_preserves_lineage(self) -> None:
+        fact = pd.DataFrame(
+            [
+                _opportunity_row(
+                    "2024-10-01T04:00:00Z",
+                    "dogger_hornsea_offshore",
+                    "R2_netback_GB_NL_DE_PL",
+                    "britned",
+                    "reviewed",
+                    "no_public_connector_restriction",
+                    0.0,
+                    0.0,
+                    curtailment_selected_mwh=150.0,
+                    deliverable_mw_proxy=170.0,
+                    internal_transfer_evidence_tier="reviewed_internal_constraint_boundary",
+                    internal_transfer_gate_state="reviewed_boundary_cap",
+                    internal_transfer_source_family="day_ahead_constraint_boundary",
+                    internal_transfer_source_key="fact_day_ahead_constraint_boundary_half_hourly:SSE-SP2",
+                    connector_itl_state="published_restriction",
+                    connector_itl_source_key="neso_interconnector_itl",
+                    route_price_score_eur_per_mwh=-5.0,
+                    route_price_feasible_flag=False,
+                    route_price_bottleneck="GB->NL",
+                ),
+                _opportunity_row(
+                    "2024-10-01T05:00:00Z",
+                    "dogger_hornsea_offshore",
+                    "R2_netback_GB_NL_DE_PL",
+                    "britned",
+                    "reviewed",
+                    "no_public_connector_restriction",
+                    90.0,
+                    60.0,
+                    curtailment_selected_mwh=150.0,
+                    deliverable_mw_proxy=170.0,
+                    internal_transfer_evidence_tier="reviewed_internal_constraint_boundary",
+                    internal_transfer_gate_state="reviewed_boundary_cap",
+                    internal_transfer_source_family="day_ahead_constraint_boundary",
+                    internal_transfer_source_key="fact_day_ahead_constraint_boundary_half_hourly:SSE-SP2",
+                    connector_itl_state="published_restriction",
+                    connector_itl_source_key="neso_interconnector_itl",
+                    route_price_score_eur_per_mwh=60.0,
+                    route_price_feasible_flag=True,
+                    route_price_bottleneck="GB->NL",
+                ),
+                _opportunity_row(
+                    "2024-10-02T04:00:00Z",
+                    "dogger_hornsea_offshore",
+                    "R2_netback_GB_NL_DE_PL",
+                    "britned",
+                    "reviewed",
+                    "no_public_connector_restriction",
+                    80.0,
+                    62.0,
+                    curtailment_selected_mwh=180.0,
+                    deliverable_mw_proxy=170.0,
+                    internal_transfer_evidence_tier="reviewed_internal_constraint_boundary",
+                    internal_transfer_gate_state="reviewed_boundary_cap",
+                    internal_transfer_source_family="day_ahead_constraint_boundary",
+                    internal_transfer_source_key="fact_day_ahead_constraint_boundary_half_hourly:FLOWSTH",
+                    connector_itl_state="published_restriction",
+                    connector_itl_source_key="neso_interconnector_itl",
+                    route_price_score_eur_per_mwh=58.0,
+                    route_price_feasible_flag=True,
+                    route_price_bottleneck="GB->NL",
+                ),
+                _opportunity_row(
+                    "2024-10-02T05:00:00Z",
+                    "dogger_hornsea_offshore",
+                    "R2_netback_GB_NL_DE_PL",
+                    "britned",
+                    "reviewed",
+                    "no_public_connector_restriction",
+                    120.0,
+                    65.0,
+                    curtailment_selected_mwh=180.0,
+                    deliverable_mw_proxy=170.0,
+                    internal_transfer_evidence_tier="reviewed_internal_constraint_boundary",
+                    internal_transfer_gate_state="reviewed_boundary_cap",
+                    internal_transfer_source_family="day_ahead_constraint_boundary",
+                    internal_transfer_source_key="fact_day_ahead_constraint_boundary_half_hourly:FLOWSTH",
+                    connector_itl_state="published_restriction",
+                    connector_itl_source_key="neso_interconnector_itl",
+                    route_price_score_eur_per_mwh=65.0,
+                    route_price_feasible_flag=True,
+                    route_price_bottleneck="GB->NL",
+                ),
+                _opportunity_row(
+                    "2024-10-02T05:00:00Z",
+                    "east_anglia_offshore",
+                    "R1_netback_GB_FR_DE_PL",
+                    "ifa",
+                    "reviewed",
+                    "no_public_connector_restriction",
+                    70.0,
+                    50.0,
+                ),
+            ]
+        )
+
+        backtest = build_fact_backtest_prediction_hourly(
+            fact,
+            model_key=MODEL_GB_NL_REVIEWED_SPECIALIST_V3,
+            forecast_horizons=(1, 24),
+        )
+
+        self.assertTrue(backtest["forecast_horizon_hours"].eq(1).all())
+        self.assertTrue(backtest["route_name"].eq("R2_netback_GB_NL_DE_PL").all())
+        self.assertTrue(backtest["hub_key"].eq("britned").all())
+        self.assertTrue(
+            backtest["internal_transfer_evidence_tier"].eq("reviewed_internal_constraint_boundary").all()
+        )
+        target = backtest[backtest["interval_start_utc"] == pd.Timestamp("2024-10-02T05:00:00+00:00")].iloc[0]
+        self.assertTrue(bool(target["prediction_eligible_flag"]))
+        self.assertGreater(int(target["training_sample_count"]), 0)
+        self.assertEqual(target["internal_transfer_source_family"], "day_ahead_constraint_boundary")
+        self.assertEqual(
+            target["feature_internal_transfer_source_family_asof"],
+            "day_ahead_constraint_boundary",
+        )
+        self.assertEqual(
+            target["feature_internal_transfer_source_key_asof"],
+            "fact_day_ahead_constraint_boundary_half_hourly:FLOWSTH",
+        )
+        self.assertEqual(
+            target["feature_internal_transfer_boundary_family_asof"],
+            "day_ahead_constraint_boundary",
+        )
+        self.assertEqual(target["feature_connector_itl_source_key_asof"], "neso_interconnector_itl")
+        self.assertGreaterEqual(float(target["predicted_opportunity_deliverable_mwh"]), 0.0)
+        self.assertLessEqual(
+            float(target["predicted_opportunity_deliverable_mwh"]),
+            float(target["feature_deliverable_mw_proxy_asof"]),
+        )
 
     def test_build_fact_backtest_summary_slice_includes_multiple_dimensions(self) -> None:
         backtest = pd.concat(
