@@ -24,6 +24,7 @@ TARGET_CAPACITY_UNKNOWN_SHARE_MAX = 0.25
 SEVERE_ROUTE_VOLUME_MWH = 25.0
 SEVERE_ROUTE_MAE_MWH = 1.50
 READINESS_HORIZON_HOURS = 1
+INFORMATIVE_WINDOW_SIGNAL_EPSILON_MWH = 1e-9
 
 BLOCKER_WEIGHTS = {
     "gb_nl_t_plus_1h_mae_above_target": 1.60,
@@ -153,7 +154,10 @@ def _empty_model_candidate_compare_window_frame() -> pd.DataFrame:
             "gb_nl_reviewed_internal_joined_row_count",
             "baseline_gb_nl_reviewed_internal_deliverable_abs_error_mwh_sum",
             "candidate_gb_nl_reviewed_internal_deliverable_abs_error_mwh_sum",
+            "gb_nl_reviewed_internal_actual_opportunity_deliverable_mwh_sum",
             "gb_nl_reviewed_internal_t_plus_1h_deliverable_mae_delta_mwh",
+            "informative_window_flag",
+            "informative_signal_basis",
             "baseline_blocker_row_count",
             "candidate_blocker_row_count",
             "blocker_row_delta",
@@ -174,6 +178,8 @@ def _empty_model_candidate_compare_suite_frame() -> pd.DataFrame:
             "baseline_model_key",
             "candidate_model_key",
             "window_count",
+            "informative_window_count",
+            "noninformative_window_count",
             "benchmark_day_count",
             "candidate_scope_row_count",
             "overall_joined_row_count",
@@ -364,6 +370,7 @@ def _candidate_compare_join(
         "cluster_key",
         "route_name",
         "hub_key",
+        "actual_opportunity_deliverable_mwh",
         "baseline_window_date",
         "baseline_prediction_eligible_flag",
         "baseline_deliverable_abs_error_mwh",
@@ -397,6 +404,7 @@ def _candidate_compare_join(
     baseline = baseline[
         [
             *join_keys,
+            "actual_opportunity_deliverable_mwh",
             "window_date",
             "prediction_eligible_flag",
             "opportunity_deliverable_abs_error_mwh",
@@ -404,6 +412,7 @@ def _candidate_compare_join(
         ]
     ].rename(
         columns={
+            "actual_opportunity_deliverable_mwh": "baseline_actual_opportunity_deliverable_mwh",
             "window_date": "baseline_window_date",
             "prediction_eligible_flag": "baseline_prediction_eligible_flag",
             "opportunity_deliverable_abs_error_mwh": "baseline_deliverable_abs_error_mwh",
@@ -413,6 +422,7 @@ def _candidate_compare_join(
     candidate = candidate[
         [
             *join_keys,
+            "actual_opportunity_deliverable_mwh",
             "window_date",
             "prediction_eligible_flag",
             "opportunity_deliverable_abs_error_mwh",
@@ -420,6 +430,7 @@ def _candidate_compare_join(
         ]
     ].rename(
         columns={
+            "actual_opportunity_deliverable_mwh": "candidate_actual_opportunity_deliverable_mwh",
             "window_date": "candidate_window_date",
             "prediction_eligible_flag": "candidate_prediction_eligible_flag",
             "opportunity_deliverable_abs_error_mwh": "candidate_deliverable_abs_error_mwh",
@@ -427,6 +438,14 @@ def _candidate_compare_join(
         }
     )
     joined = baseline.merge(candidate, on=join_keys, how="inner")
+    joined["actual_opportunity_deliverable_mwh"] = pd.to_numeric(
+        joined.get("candidate_actual_opportunity_deliverable_mwh"),
+        errors="coerce",
+    )
+    joined["actual_opportunity_deliverable_mwh"] = joined["actual_opportunity_deliverable_mwh"].where(
+        joined["actual_opportunity_deliverable_mwh"].notna(),
+        pd.to_numeric(joined.get("baseline_actual_opportunity_deliverable_mwh"), errors="coerce"),
+    )
     joined["window_date"] = joined["candidate_window_date"].where(
         joined["candidate_window_date"].notna(),
         joined["baseline_window_date"],
@@ -465,11 +484,25 @@ def _promotion_state_from_deltas(
     return "candidate_mixed"
 
 
+def _forecast_promotion_state(
+    *,
+    candidate_scope_row_count: int,
+    overall_delta: float,
+    gb_nl_delta: float,
+    reviewed_delta: float,
+) -> str:
+    return _promotion_state_from_deltas(
+        candidate_scope_row_count=candidate_scope_row_count,
+        deltas=[overall_delta, gb_nl_delta, reviewed_delta],
+    )
+
+
 def _candidate_compare_slice_stats(frame: pd.DataFrame) -> dict[str, float | int]:
     empty = {
         "row_count": 0,
         "baseline_abs_error_sum": 0.0,
         "candidate_abs_error_sum": 0.0,
+        "actual_deliverable_sum": 0.0,
         "mae_delta_mwh": np.nan,
     }
     if frame.empty:
@@ -481,6 +514,7 @@ def _candidate_compare_slice_stats(frame: pd.DataFrame) -> dict[str, float | int
         return empty
     baseline_valid = pd.to_numeric(valid["baseline_deliverable_abs_error_mwh"], errors="coerce")
     candidate_valid = pd.to_numeric(valid["candidate_deliverable_abs_error_mwh"], errors="coerce")
+    actual_valid = pd.to_numeric(valid.get("actual_opportunity_deliverable_mwh"), errors="coerce").fillna(0.0)
     row_count = int(len(valid))
     baseline_sum = float(baseline_valid.sum())
     candidate_sum = float(candidate_valid.sum())
@@ -488,8 +522,31 @@ def _candidate_compare_slice_stats(frame: pd.DataFrame) -> dict[str, float | int
         "row_count": row_count,
         "baseline_abs_error_sum": baseline_sum,
         "candidate_abs_error_sum": candidate_sum,
+        "actual_deliverable_sum": float(actual_valid.sum()),
         "mae_delta_mwh": float((candidate_sum / row_count) - (baseline_sum / row_count)),
     }
+
+
+def _has_informative_signal(value: object) -> bool:
+    numeric = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
+    return pd.notna(numeric) and abs(float(numeric)) > INFORMATIVE_WINDOW_SIGNAL_EPSILON_MWH
+
+
+def _informative_window_status(
+    reviewed_stats: dict[str, float | int],
+) -> tuple[bool, str]:
+    if int(reviewed_stats.get("row_count", 0)) <= 0:
+        return False, "no_reviewed_joined_rows"
+
+    signal_checks = [
+        ("reviewed_actual_deliverable_mwh_sum", reviewed_stats.get("actual_deliverable_sum")),
+        ("reviewed_baseline_abs_error_mwh_sum", reviewed_stats.get("baseline_abs_error_sum")),
+        ("reviewed_candidate_abs_error_mwh_sum", reviewed_stats.get("candidate_abs_error_sum")),
+    ]
+    for basis, value in signal_checks:
+        if _has_informative_signal(value):
+            return True, basis
+    return False, "reviewed_perfect_zero_window"
 
 
 def _safe_numeric_sum(frame: pd.DataFrame, column: str) -> float:
@@ -1124,9 +1181,11 @@ def build_fact_model_candidate_compare_daily(
                 if pd.notna(baseline_severe) and pd.notna(candidate_severe):
                     severe_delta = float(candidate_severe - baseline_severe)
 
-        promotion_state = _promotion_state_from_deltas(
+        promotion_state = _forecast_promotion_state(
             candidate_scope_row_count=candidate_scope_row_count,
-            deltas=[overall_delta, gb_nl_delta, reviewed_delta, blocker_delta, severe_delta],
+            overall_delta=overall_delta,
+            gb_nl_delta=gb_nl_delta,
+            reviewed_delta=reviewed_delta,
         )
         rows.append(
             {
@@ -1224,16 +1283,16 @@ def build_fact_model_candidate_compare_window(
     blocker_row_delta = float(candidate_blocker_row_count - baseline_blocker_row_count)
     severe_focus_area_delta = float(candidate_severe_focus_area_count - baseline_severe_focus_area_count)
     candidate_scope_row_count = int(overall_stats["row_count"])
-    promotion_state = _promotion_state_from_deltas(
-        candidate_scope_row_count=candidate_scope_row_count,
-        deltas=[
-            float(overall_stats["mae_delta_mwh"]) if pd.notna(overall_stats["mae_delta_mwh"]) else np.nan,
-            float(gb_nl_stats["mae_delta_mwh"]) if pd.notna(gb_nl_stats["mae_delta_mwh"]) else np.nan,
-            float(reviewed_stats["mae_delta_mwh"]) if pd.notna(reviewed_stats["mae_delta_mwh"]) else np.nan,
-            blocker_row_delta,
-            severe_focus_area_delta,
-        ],
-    )
+    informative_window_flag, informative_signal_basis = _informative_window_status(reviewed_stats)
+    if informative_window_flag:
+        promotion_state = _forecast_promotion_state(
+            candidate_scope_row_count=candidate_scope_row_count,
+            overall_delta=float(overall_stats["mae_delta_mwh"]) if pd.notna(overall_stats["mae_delta_mwh"]) else np.nan,
+            gb_nl_delta=float(gb_nl_stats["mae_delta_mwh"]) if pd.notna(gb_nl_stats["mae_delta_mwh"]) else np.nan,
+            reviewed_delta=float(reviewed_stats["mae_delta_mwh"]) if pd.notna(reviewed_stats["mae_delta_mwh"]) else np.nan,
+        )
+    else:
+        promotion_state = "candidate_insufficient_coverage"
 
     row = {
         "benchmark_suite_name": benchmark_suite_name,
@@ -1264,7 +1323,12 @@ def build_fact_model_candidate_compare_window(
         "candidate_gb_nl_reviewed_internal_deliverable_abs_error_mwh_sum": float(
             reviewed_stats["candidate_abs_error_sum"]
         ),
+        "gb_nl_reviewed_internal_actual_opportunity_deliverable_mwh_sum": float(
+            reviewed_stats["actual_deliverable_sum"]
+        ),
         "gb_nl_reviewed_internal_t_plus_1h_deliverable_mae_delta_mwh": reviewed_stats["mae_delta_mwh"],
+        "informative_window_flag": informative_window_flag,
+        "informative_signal_basis": informative_signal_basis,
         "baseline_blocker_row_count": baseline_blocker_row_count,
         "candidate_blocker_row_count": candidate_blocker_row_count,
         "blocker_row_delta": blocker_row_delta,
@@ -1288,32 +1352,38 @@ def build_fact_model_candidate_compare_suite(
 
     window_compare = fact_model_candidate_compare_window.copy()
     window_compare["promotion_window_flag"] = window_compare["promotion_window_flag"].fillna(False).astype(bool)
+    if "informative_window_flag" not in window_compare.columns:
+        window_compare["informative_window_flag"] = True
+    window_compare["informative_window_flag"] = window_compare["informative_window_flag"].fillna(False).astype(bool)
     rows: list[dict[str, object]] = []
     group_keys = ["benchmark_suite_name", "baseline_model_key", "candidate_model_key"]
 
     for (suite_name, baseline_model_key, candidate_model_key), suite_frame in window_compare.groupby(group_keys, dropna=False):
-        for suite_scope, subset in (
+        for suite_scope, configured_subset in (
             ("all_windows", suite_frame.copy()),
             ("promotion_windows", suite_frame[suite_frame["promotion_window_flag"]].copy()),
         ):
-            window_count = int(len(subset))
-            benchmark_day_count = int(pd.to_numeric(subset.get("window_day_count"), errors="coerce").fillna(0).sum()) if window_count > 0 else 0
+            window_count = int(len(configured_subset))
+            informative_window_count = int(configured_subset["informative_window_flag"].sum()) if window_count > 0 else 0
+            noninformative_window_count = window_count - informative_window_count
+            subset = configured_subset[configured_subset["informative_window_flag"]].copy()
+            benchmark_day_count = int(pd.to_numeric(subset.get("window_day_count"), errors="coerce").fillna(0).sum()) if informative_window_count > 0 else 0
             candidate_scope_row_count = int(
                 pd.to_numeric(subset.get("candidate_scope_row_count"), errors="coerce").fillna(0).sum()
-            ) if window_count > 0 else 0
+            ) if informative_window_count > 0 else 0
             overall_joined_row_count = int(
                 pd.to_numeric(subset.get("overall_joined_row_count"), errors="coerce").fillna(0).sum()
-            ) if window_count > 0 else 0
+            ) if informative_window_count > 0 else 0
             baseline_overall_sum = _safe_numeric_sum(subset, "baseline_overall_deliverable_abs_error_mwh_sum")
             candidate_overall_sum = _safe_numeric_sum(subset, "candidate_overall_deliverable_abs_error_mwh_sum")
             gb_nl_joined_row_count = int(
                 pd.to_numeric(subset.get("gb_nl_joined_row_count"), errors="coerce").fillna(0).sum()
-            ) if window_count > 0 else 0
+            ) if informative_window_count > 0 else 0
             baseline_gb_nl_sum = _safe_numeric_sum(subset, "baseline_gb_nl_deliverable_abs_error_mwh_sum")
             candidate_gb_nl_sum = _safe_numeric_sum(subset, "candidate_gb_nl_deliverable_abs_error_mwh_sum")
             reviewed_joined_row_count = int(
                 pd.to_numeric(subset.get("gb_nl_reviewed_internal_joined_row_count"), errors="coerce").fillna(0).sum()
-            ) if window_count > 0 else 0
+            ) if informative_window_count > 0 else 0
             baseline_reviewed_sum = _safe_numeric_sum(
                 subset,
                 "baseline_gb_nl_reviewed_internal_deliverable_abs_error_mwh_sum",
@@ -1352,17 +1422,21 @@ def build_fact_model_candidate_compare_suite(
             )
             blocker_row_delta = float(candidate_blocker_row_count - baseline_blocker_row_count)
             severe_focus_area_delta = float(candidate_severe_focus_area_count - baseline_severe_focus_area_count)
-            aggregate_promotion_state = _promotion_state_from_deltas(
+            aggregate_promotion_state = _forecast_promotion_state(
                 candidate_scope_row_count=candidate_scope_row_count,
-                deltas=[overall_delta, gb_nl_delta, reviewed_delta, blocker_row_delta, severe_focus_area_delta],
+                overall_delta=overall_delta,
+                gb_nl_delta=gb_nl_delta,
+                reviewed_delta=reviewed_delta,
             )
-            candidate_beats_window_count = int(subset["promotion_state"].fillna("").eq("candidate_beats_baseline").sum())
-            candidate_mixed_window_count = int(subset["promotion_state"].fillna("").eq("candidate_mixed").sum())
+            candidate_beats_window_count = int(
+                configured_subset["promotion_state"].fillna("").eq("candidate_beats_baseline").sum()
+            )
+            candidate_mixed_window_count = int(configured_subset["promotion_state"].fillna("").eq("candidate_mixed").sum())
             candidate_regresses_window_count = int(
-                subset["promotion_state"].fillna("").eq("candidate_regresses_baseline").sum()
+                configured_subset["promotion_state"].fillna("").eq("candidate_regresses_baseline").sum()
             )
             candidate_insufficient_coverage_window_count = int(
-                subset["promotion_state"].fillna("").eq("candidate_insufficient_coverage").sum()
+                configured_subset["promotion_state"].fillna("").eq("candidate_insufficient_coverage").sum()
             )
             promotion_state = aggregate_promotion_state
             if aggregate_promotion_state == "candidate_beats_baseline" and (
@@ -1381,6 +1455,8 @@ def build_fact_model_candidate_compare_suite(
                     "baseline_model_key": baseline_model_key,
                     "candidate_model_key": candidate_model_key,
                     "window_count": window_count,
+                    "informative_window_count": informative_window_count,
+                    "noninformative_window_count": noninformative_window_count,
                     "benchmark_day_count": benchmark_day_count,
                     "candidate_scope_row_count": candidate_scope_row_count,
                     "overall_joined_row_count": overall_joined_row_count,

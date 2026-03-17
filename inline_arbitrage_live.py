@@ -1153,7 +1153,8 @@ def main() -> int:
         choices=sorted(VALID_BACKTEST_MODEL_SELECTIONS),
         help=(
             "Backtest model selection: all, opportunity_group_mean_notice_v1, "
-            "opportunity_potential_ratio_v2, or opportunity_gb_nl_reviewed_specialist_v3"
+            "opportunity_potential_ratio_v2, or opportunity_gb_nl_reviewed_specialist_v3 "
+            "(retired shadow candidate kept for archived comparisons)"
         ),
     )
     parser.add_argument(
@@ -3038,6 +3039,8 @@ def main() -> int:
                             "benchmark_window_key",
                             "benchmark_role",
                             "promotion_window_flag",
+                            "informative_window_flag",
+                            "informative_signal_basis",
                             "candidate_scope_row_count",
                             "overall_t_plus_1h_deliverable_mae_delta_mwh",
                             "gb_nl_t_plus_1h_deliverable_mae_delta_mwh",

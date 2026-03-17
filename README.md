@@ -857,14 +857,20 @@ Key behavior:
 - `benchmark_suites/gb_nl_reviewed_shadow_acceptance_v1.csv` is the executable benchmark plan for the current
   GB-NL specialist shadow phase. It keeps the October 1-7, 2024 blocker week as a diagnostic row, then adds
   broader guardrail windows so the suite can grow into a real promotion gate instead of relying on one curated week.
+  That suite now retires `opportunity_gb_nl_reviewed_specialist_v3` on informative later holdouts, so the model
+  remains in the repo for archived comparison only rather than as an active promotion candidate.
 - `dim_model_benchmark_window` records the suite manifest that was actually run.
 - `fact_model_candidate_compare_window_daily` is the daily shadow compare annotated by benchmark window.
 - `fact_model_candidate_compare_window` is the one-row-per-window acceptance surface with audit columns for row counts
-  and absolute-error sums.
+  and absolute-error sums. It now also marks `informative_window_flag` so perfect-zero reviewed windows are visible
+  but do not masquerade as promotion wins.
 - `fact_model_candidate_compare_suite` rolls those windows up twice:
   - `all_windows`
   - `promotion_windows`
-  so diagnostic windows can stay visible without automatically counting as promotion evidence.
+  so diagnostic windows can stay visible without automatically counting as promotion evidence. Both rollups now carry
+  `informative_window_count` and `noninformative_window_count`, and compute suite MAE only from informative windows.
+- `promotion_state` is now forecast-only. `blocker_row_delta` and `severe_focus_area_delta` remain in the compare
+  tables as audit context, but they no longer decide whether a candidate beat or regressed on forecasting.
 - Each blocker row is keyed by:
   - `window_date`
   - `blocker_type`

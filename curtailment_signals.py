@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import datetime as dt
+import http.client
 import io
 import json
 import re
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -52,18 +54,23 @@ def _normalize_column_name(value: str) -> str:
 
 def _fetch_bytes(url: str) -> bytes:
     request = urllib.request.Request(url, headers={"Accept": "application/json,text/csv;q=0.9,*/*;q=0.8"})
-    try:
-        with urllib.request.urlopen(request, timeout=180) as response:
-            return response.read()
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", "ignore").strip()
-        detail = f": {body}" if body else ""
-        raise RuntimeError(f"NESO request failed with HTTP {exc.code}{detail}") from exc
-    except urllib.error.URLError as exc:
-        reason = getattr(exc, "reason", exc)
-        raise RuntimeError(f"NESO request failed: {reason}") from exc
-    except TimeoutError as exc:
-        raise RuntimeError("NESO request timed out") from exc
+    attempts = 3
+    for attempt in range(1, attempts + 1):
+        try:
+            with urllib.request.urlopen(request, timeout=180) as response:
+                return response.read()
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", "ignore").strip()
+            detail = f": {body}" if body else ""
+            raise RuntimeError(f"NESO request failed with HTTP {exc.code}{detail}") from exc
+        except (urllib.error.URLError, TimeoutError, http.client.RemoteDisconnected) as exc:
+            if attempt >= attempts:
+                reason = getattr(exc, "reason", exc)
+                if isinstance(exc, TimeoutError):
+                    raise RuntimeError("NESO request timed out") from exc
+                raise RuntimeError(f"NESO request failed: {reason}") from exc
+            time.sleep(float(attempt))
+    raise RuntimeError("NESO request failed after retries")
 
 
 def _fetch_json(url: str) -> dict:
