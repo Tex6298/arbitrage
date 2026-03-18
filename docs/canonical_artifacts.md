@@ -128,8 +128,9 @@ Map outputs are still exploratory unless explicitly promoted later.
     than treating an old map directory as canonical
 
 The current posture decision is recorded in
-`docs/map_operational_posture.md`. The map is now acceptable for internal
-operational use, but not yet for broad external product claims.
+`docs/map_operational_posture.md`. After the broader supported-range sweep, the
+map should remain exploratory until the repeated 2025 `R2` regime failures are
+closed.
 
 ## Practical starting points
 

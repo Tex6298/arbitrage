@@ -865,6 +865,8 @@ If you need the repo story rather than just the commands:
   - `python inline_arbitrage_live.py --scout-benchmark-window --opportunity-input-path curtailment_opportunity_live_britned_reviewed_2024-12-07_2024-12-09 --readiness-start 2024-12-07 --readiness-end 2024-12-09 --scout-output-dir benchmark_window_scout_dec_2024`
 - To batch-evaluate the current baseline across every local reviewed BritNed bundle without hand-picking windows:
   - `python inline_arbitrage_live.py --materialize-reviewed-bundle-batch-eval --reviewed-bundle-batch-root . --reviewed-bundle-batch-output-dir model_readiness_reviewed_bundle_batch --backtest-model-key opportunity_potential_ratio_v2 --baseline-model-key opportunity_potential_ratio_v2 --backtest-horizons 1,6,24,168`
+- To acquire a broader monthly reviewed-window stock into `_local_runs/` before rerunning the same batch evaluation:
+  - `python scripts/materialize_reviewed_volume_backfill.py --repo-root . --bundle-root _local_runs/reviewed_volume_supported_range_v1/bundles --start-month 2025-02 --end-month 2026-02 --anchor-day 15 --window-days 3 --copy-existing-bundles --skip-existing`
 - The backtest CLI now accepts:
   - `--backtest-model-key all`
   - `--backtest-model-key opportunity_group_mean_notice_v1`
