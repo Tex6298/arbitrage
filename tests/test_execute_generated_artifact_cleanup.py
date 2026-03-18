@@ -87,7 +87,7 @@ class ExecuteGeneratedArtifactCleanupTests(unittest.TestCase):
                 ],
             )
             with patch(
-                "cleanup.dry_run_generated_artifact_cleanup.get_git_tracked_status",
+                "cleanup.execute_generated_artifact_cleanup.get_git_tracked_status",
                 return_value=True,
             ):
                 result = build_execution_plan(root, manifest_path, action="archive")
@@ -127,7 +127,7 @@ class ExecuteGeneratedArtifactCleanupTests(unittest.TestCase):
                 ],
             )
             with patch(
-                "cleanup.dry_run_generated_artifact_cleanup.get_git_tracked_status",
+                "cleanup.execute_generated_artifact_cleanup.get_git_tracked_status",
                 return_value=True,
             ):
                 result = build_execution_plan(root, manifest_path, action="archive")
@@ -159,7 +159,7 @@ class ExecuteGeneratedArtifactCleanupTests(unittest.TestCase):
                 ],
             )
             with patch(
-                "cleanup.dry_run_generated_artifact_cleanup.get_git_tracked_status",
+                "cleanup.execute_generated_artifact_cleanup.get_git_tracked_status",
                 return_value=False,
             ):
                 result = build_execution_plan(root, manifest_path, action="delete")
@@ -195,7 +195,7 @@ class ExecuteGeneratedArtifactCleanupTests(unittest.TestCase):
                 ],
             )
             with patch(
-                "cleanup.dry_run_generated_artifact_cleanup.get_git_tracked_status",
+                "cleanup.execute_generated_artifact_cleanup.get_git_tracked_status",
                 return_value=True,
             ):
                 result = build_execution_plan(root, manifest_path, action="archive")
@@ -224,7 +224,7 @@ class ExecuteGeneratedArtifactCleanupTests(unittest.TestCase):
                 ],
             )
             with patch(
-                "cleanup.dry_run_generated_artifact_cleanup.get_git_tracked_status",
+                "cleanup.execute_generated_artifact_cleanup.get_git_tracked_status",
                 return_value=False,
             ):
                 exit_code = main(
@@ -261,7 +261,7 @@ class ExecuteGeneratedArtifactCleanupTests(unittest.TestCase):
                 ],
             )
             with patch(
-                "cleanup.dry_run_generated_artifact_cleanup.get_git_tracked_status",
+                "cleanup.execute_generated_artifact_cleanup.get_git_tracked_status",
                 return_value=False,
             ):
                 exit_code = main(
