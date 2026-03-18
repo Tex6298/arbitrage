@@ -127,6 +127,10 @@ Map outputs are still exploratory unless explicitly promoted later.
   - regenerate them from the current opportunity and readiness artifacts rather
     than treating an old map directory as canonical
 
+The current posture decision is recorded in
+`docs/map_operational_posture.md`. The map is now acceptable for internal
+operational use, but not yet for broad external product claims.
+
 ## Practical starting points
 
 If you need the current state quickly:

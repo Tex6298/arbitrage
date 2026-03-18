@@ -10,6 +10,8 @@ This is closer to an ADR-style design history than a traditional changelog:
   changed, and what superseded it
 - [Canonical Artifacts](canonical_artifacts.md): which code paths and generated
   outputs are authoritative today
+- [Map Operational Posture](map_operational_posture.md): current decision on
+  exploratory versus internal operational map use
 - [../cleanup/README.md](../cleanup/README.md): how generated outputs are now
   classified for keep, archive, and delete
 
@@ -17,5 +19,6 @@ If you are starting work from scratch, read:
 
 1. [GB Curtailment Lineage](gb_curtailment_lineage.md)
 2. [Canonical Artifacts](canonical_artifacts.md)
-3. [../cleanup/README.md](../cleanup/README.md)
-4. [../README.md](../README.md)
+3. [Map Operational Posture](map_operational_posture.md)
+4. [../cleanup/README.md](../cleanup/README.md)
+5. [../README.md](../README.md)
