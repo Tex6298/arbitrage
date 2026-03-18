@@ -15,6 +15,8 @@ The operating model is:
 
 - `curtailment_generated_artifacts_manifest_v1.csv`
   - tracked inventory for current curtailment-generated top-level directories
+- `bmu_generated_artifacts_manifest_v1.csv`
+  - tracked inventory for BMU truth-history and BMU example outputs
 - `dry_run_generated_artifact_cleanup.py`
   - non-mutating validator and report generator
 - `execute_generated_artifact_cleanup.py`
@@ -62,6 +64,17 @@ python cleanup/dry_run_generated_artifact_cleanup.py ^
   --format table
 ```
 
+For the BMU truth-history family, pass an explicit scope prefix:
+
+```bash
+python cleanup/dry_run_generated_artifact_cleanup.py ^
+  --repo-root . ^
+  --manifest-path cleanup/bmu_generated_artifacts_manifest_v1.csv ^
+  --scope-prefix bmu_ ^
+  --show all ^
+  --format table
+```
+
 The script fails if:
 
 - a manifest row points at a missing path
@@ -87,3 +100,6 @@ python cleanup/execute_generated_artifact_cleanup.py ^
 
 Use `--action archive` and `--action delete` as separate runs. Without
 `--execute`, the executor prints the validated action plan only.
+
+For non-curtailment families, add the same `--scope-prefix` values used during
+the dry-run.

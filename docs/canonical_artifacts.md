@@ -48,6 +48,15 @@ repo.
   - batch autodiscovery now prefers `rerun` bundles over base bundles, and base
     bundles over `refresh` bundles for the same date range
 
+### BMU truth snapshots
+
+- `bmu_truth_history_phase6_remit_fix`
+  - current authoritative BMU truth snapshot in local stock
+- `bmu_truth_history_phase4_family_day`
+  - retained single-directory reference snapshot for store-backfill examples
+- `bmu_truth_history_phase4_family_day_daily`
+  - retained daily-tree reference snapshot for store-backfill examples
+
 ### Archived benchmark compare
 
 - `model_readiness_gb_nl_shadow_suite_v1`
@@ -94,6 +103,8 @@ Generated outputs now have an explicit retention policy:
 
 - `cleanup/curtailment_generated_artifacts_manifest_v1.csv`
   - operational inventory for `keep`, `archive`, and `delete`
+- `cleanup/bmu_generated_artifacts_manifest_v1.csv`
+  - the same retention inventory pattern for BMU truth-history artifacts
 - `_local_runs/`
   - future home for transient exploratory, smoke, scout, and stepping-stone
     outputs

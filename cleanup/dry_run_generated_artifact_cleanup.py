@@ -8,7 +8,7 @@ import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-SCOPE_PREFIXES = (
+DEFAULT_SCOPE_PREFIXES = (
     "curtailment_opportunity",
     "model_readiness",
     "exploratory_cluster_map",
@@ -85,8 +85,24 @@ class CleanupDryRunReport:
     rows: tuple[CleanupReportRow, ...]
 
 
-def is_scoped_generated_artifact(name: str) -> bool:
-    return any(name.startswith(prefix) for prefix in SCOPE_PREFIXES)
+def normalize_scope_prefixes(
+    scope_prefixes: tuple[str, ...] | list[str] | None,
+) -> tuple[str, ...]:
+    if scope_prefixes is None:
+        return DEFAULT_SCOPE_PREFIXES
+    normalized = tuple(prefix for prefix in scope_prefixes if prefix)
+    if not normalized:
+        raise ManifestValidationError("scope_prefixes may not be empty")
+    return normalized
+
+
+def is_scoped_generated_artifact(
+    name: str,
+    *,
+    scope_prefixes: tuple[str, ...] | list[str] | None = None,
+) -> bool:
+    prefixes = normalize_scope_prefixes(scope_prefixes)
+    return any(name.startswith(prefix) for prefix in prefixes)
 
 
 def parse_manifest_bool(value: str, *, column: str, row_path: str) -> bool:
@@ -136,11 +152,19 @@ def load_cleanup_manifest(manifest_path: Path) -> tuple[CleanupManifestRow, ...]
     return tuple(rows)
 
 
-def discover_scoped_directories(repo_root: Path) -> tuple[str, ...]:
+def discover_scoped_directories(
+    repo_root: Path,
+    *,
+    scope_prefixes: tuple[str, ...] | list[str] | None = None,
+) -> tuple[str, ...]:
     names = sorted(
         entry.name
         for entry in repo_root.iterdir()
-        if entry.is_dir() and is_scoped_generated_artifact(entry.name)
+        if entry.is_dir()
+        and is_scoped_generated_artifact(
+            entry.name,
+            scope_prefixes=scope_prefixes,
+        )
     )
     return tuple(names)
 
@@ -171,13 +195,21 @@ def validate_archive_destination(row: CleanupManifestRow) -> None:
         )
 
 
-def validate_manifest_row(repo_root: Path, row: CleanupManifestRow) -> None:
+def validate_manifest_row(
+    repo_root: Path,
+    row: CleanupManifestRow,
+    *,
+    scope_prefixes: tuple[str, ...] | list[str] | None = None,
+) -> None:
     path = Path(row.path)
     if path.is_absolute() or len(path.parts) != 1:
         raise ManifestValidationError(
             f"{row.path}: path must point to a single top-level directory"
         )
-    if not is_scoped_generated_artifact(row.path):
+    if not is_scoped_generated_artifact(
+        row.path,
+        scope_prefixes=scope_prefixes,
+    ):
         raise ManifestValidationError(
             f"{row.path}: path is outside the generated-artifact cleanup scope"
         )
@@ -233,7 +265,10 @@ def get_directory_size_bytes(path: Path) -> int:
 def build_cleanup_dry_run_report(
     repo_root: Path,
     manifest_path: Path,
+    *,
+    scope_prefixes: tuple[str, ...] | list[str] | None = None,
 ) -> CleanupDryRunReport:
+    normalized_scope_prefixes = normalize_scope_prefixes(scope_prefixes)
     rows = load_cleanup_manifest(manifest_path)
     if not rows:
         raise ManifestValidationError("Manifest is empty")
@@ -246,8 +281,17 @@ def build_cleanup_dry_run_report(
             "Manifest contains duplicate rows: " + ", ".join(duplicates)
         )
     for row in rows:
-        validate_manifest_row(repo_root, row)
-    scoped_dirs = set(discover_scoped_directories(repo_root))
+        validate_manifest_row(
+            repo_root,
+            row,
+            scope_prefixes=normalized_scope_prefixes,
+        )
+    scoped_dirs = set(
+        discover_scoped_directories(
+            repo_root,
+            scope_prefixes=normalized_scope_prefixes,
+        )
+    )
     manifest_dirs = {row.path for row in rows}
     unclassified = sorted(scoped_dirs - manifest_dirs)
     if unclassified:
@@ -381,6 +425,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Repo root to scan for scoped generated artifact directories.",
     )
     parser.add_argument(
+        "--scope-prefix",
+        action="append",
+        default=[],
+        help=(
+            "Optional top-level directory prefix to define cleanup scope. "
+            "Repeat for multiple families. Defaults to the curtailment scope."
+        ),
+    )
+    parser.add_argument(
         "--show",
         choices=VALID_SHOW,
         default="all",
@@ -406,8 +459,13 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     repo_root = Path(args.repo_root).resolve()
     manifest_path = resolve_repo_path(repo_root, args.manifest_path)
+    scope_prefixes = tuple(args.scope_prefix) if args.scope_prefix else None
     try:
-        report = build_cleanup_dry_run_report(repo_root, manifest_path)
+        report = build_cleanup_dry_run_report(
+            repo_root,
+            manifest_path,
+            scope_prefixes=scope_prefixes,
+        )
     except ManifestValidationError as exc:
         print(str(exc), file=sys.stderr)
         return 1

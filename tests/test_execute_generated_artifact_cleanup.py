@@ -62,6 +62,51 @@ def _row(
 
 
 class ExecuteGeneratedArtifactCleanupTests(unittest.TestCase):
+    def test_build_execution_plan_accepts_custom_scope_prefix(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            keep_dir = root / "bmu_truth_history_phase6_remit_fix"
+            archive_dir = root / "bmu_truth_history_phase5_targeted_rerun"
+            keep_dir.mkdir()
+            archive_dir.mkdir()
+            manifest_path = root / "manifest.csv"
+            _write_manifest(
+                manifest_path,
+                [
+                    _row(
+                        keep_dir.name,
+                        action="keep",
+                        artifact_family="bmu_truth",
+                        artifact_kind="truth_phase_authoritative",
+                        authority_state="authoritative_truth_snapshot",
+                    ),
+                    _row(
+                        archive_dir.name,
+                        action="archive",
+                        artifact_family="bmu_truth",
+                        artifact_kind="truth_phase_snapshot",
+                        authority_state="superseded_truth_phase",
+                        replacement_path=keep_dir.name,
+                        archive_destination=(
+                            "_local_archive/generated_outputs/"
+                            "bmu_truth_history_phase5_targeted_rerun"
+                        ),
+                    ),
+                ],
+            )
+            with patch(
+                "cleanup.execute_generated_artifact_cleanup.get_git_tracked_status",
+                return_value=True,
+            ):
+                result = build_execution_plan(
+                    root,
+                    manifest_path,
+                    action="archive",
+                    scope_prefixes=("bmu_",),
+                )
+            self.assertEqual(len(result.rows), 1)
+            self.assertEqual(result.rows[0].path, archive_dir.name)
+
     def test_build_execution_plan_filters_archive_rows(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

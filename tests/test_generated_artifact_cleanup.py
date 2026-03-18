@@ -60,6 +60,37 @@ def _row(
 
 
 class GeneratedArtifactCleanupTests(unittest.TestCase):
+    def test_build_cleanup_dry_run_report_accepts_custom_scope_prefix(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            keep_dir = root / "bmu_truth_history_phase6_remit_fix"
+            keep_dir.mkdir()
+            (keep_dir / "fact.csv").write_text("x\n", encoding="utf-8")
+            manifest_path = root / "manifest.csv"
+            _write_manifest(
+                manifest_path,
+                [
+                    _row(
+                        keep_dir.name,
+                        action="keep",
+                        artifact_family="bmu_truth",
+                        artifact_kind="truth_phase_authoritative",
+                        authority_state="authoritative_truth_snapshot",
+                    )
+                ],
+            )
+            with patch(
+                "cleanup.dry_run_generated_artifact_cleanup.get_git_tracked_status",
+                return_value=True,
+            ):
+                report = build_cleanup_dry_run_report(
+                    root,
+                    manifest_path,
+                    scope_prefixes=("bmu_",),
+                )
+            self.assertEqual(len(report.rows), 1)
+            self.assertEqual(report.rows[0].path, keep_dir.name)
+
     def test_build_cleanup_dry_run_report_with_mixed_actions(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

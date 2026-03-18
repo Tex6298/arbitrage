@@ -14,6 +14,7 @@ try:
         get_directory_size_bytes,
         get_git_tracked_status,
         load_cleanup_manifest,
+        normalize_scope_prefixes,
         resolve_repo_path,
         validate_manifest_row,
     )
@@ -24,6 +25,7 @@ except ModuleNotFoundError:
         get_directory_size_bytes,
         get_git_tracked_status,
         load_cleanup_manifest,
+        normalize_scope_prefixes,
         resolve_repo_path,
         validate_manifest_row,
     )
@@ -79,11 +81,13 @@ def build_execution_plan(
     manifest_path: Path,
     *,
     action: str,
+    scope_prefixes: tuple[str, ...] | list[str] | None = None,
 ) -> CleanupExecutionResult:
     if action not in VALID_ACTIONS:
         raise ManifestValidationError(
             f"action must be one of {', '.join(VALID_ACTIONS)}"
         )
+    normalized_scope_prefixes = normalize_scope_prefixes(scope_prefixes)
     manifest_rows = load_cleanup_manifest(manifest_path)
     path_counts: dict[str, int] = {}
     for row in manifest_rows:
@@ -96,7 +100,11 @@ def build_execution_plan(
     selected_rows = tuple(row for row in manifest_rows if row.action == action)
     rows: list[CleanupExecutionRow] = []
     for row in selected_rows:
-        validate_manifest_row(repo_root, row)
+        validate_manifest_row(
+            repo_root,
+            row,
+            scope_prefixes=normalized_scope_prefixes,
+        )
         tracked_actual = get_git_tracked_status(repo_root, row.path)
         destination = _destination_for_row(repo_root, row)
         rows.append(
@@ -237,6 +245,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Repo root to scan and mutate.",
     )
     parser.add_argument(
+        "--scope-prefix",
+        action="append",
+        default=[],
+        help=(
+            "Optional top-level directory prefix to define cleanup scope. "
+            "Repeat for multiple families. Defaults to the curtailment scope."
+        ),
+    )
+    parser.add_argument(
         "--action",
         choices=VALID_ACTIONS,
         required=True,
@@ -274,11 +291,13 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     repo_root = Path(args.repo_root).resolve()
     manifest_path = resolve_repo_path(repo_root, args.manifest_path)
+    scope_prefixes = tuple(args.scope_prefix) if args.scope_prefix else None
     try:
         result = build_execution_plan(
             repo_root,
             manifest_path,
             action=args.action,
+            scope_prefixes=scope_prefixes,
         )
         if args.execute:
             if args.confirm_final_review != FINAL_REVIEW_TOKEN:
