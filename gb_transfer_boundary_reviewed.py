@@ -53,12 +53,18 @@ BOUNDARY_SCOPE_RULES: tuple[BoundaryScopeRule, ...] = (
     ),
     BoundaryScopeRule(
         boundary_key="FLOWSTH",
-        rule_key="england_east_to_britned_reviewed_pass",
+        rule_key="england_east_to_south_reviewed_pass",
         cluster_keys=("east_anglia_offshore", "humber_offshore", "dogger_hornsea_offshore"),
-        hub_keys=("britned",),
-        transfer_requirements=("east_coast_bias", "east_coast_transfer", "south_east_bias"),
+        hub_keys=("britned", "ifa", "ifa2", "eleclink"),
+        transfer_requirements=(
+            "east_coast_bias",
+            "east_coast_transfer",
+            "south_east_bias",
+            "east_to_south_transfer",
+            "south_to_south_coast_transfer",
+        ),
         include_non_tightening_pass=True,
-        note="NESO FLOWSTH day-ahead boundary used as reviewed internal pass-through evidence for east-facing England into BritNed when the corridor is publicly available.",
+        note="NESO FLOWSTH day-ahead boundary used as reviewed internal pass-through evidence for east-facing England into BritNed and the France-facing hubs when the corridor is publicly available.",
     ),
     BoundaryScopeRule(
         boundary_key="SCOTEX",
@@ -70,12 +76,12 @@ BOUNDARY_SCOPE_RULES: tuple[BoundaryScopeRule, ...] = (
     ),
     BoundaryScopeRule(
         boundary_key="SCOTEX",
-        rule_key="scotland_to_britned_reviewed_pass",
+        rule_key="scotland_to_south_reviewed_pass",
         parent_regions=("Scotland",),
-        hub_keys=("britned",),
+        hub_keys=("britned", "ifa", "ifa2", "eleclink"),
         transfer_requirements=("north_to_south_transfer",),
         include_non_tightening_pass=True,
-        note="NESO SCOTEX day-ahead boundary used as reviewed internal pass-through evidence for Scotland-to-BritNed export when the corridor is publicly available.",
+        note="NESO SCOTEX day-ahead boundary used as reviewed internal pass-through evidence for Scotland-to-south export when the corridor is publicly available.",
     ),
     BoundaryScopeRule(
         boundary_key="NKILGRMO",
@@ -87,12 +93,12 @@ BOUNDARY_SCOPE_RULES: tuple[BoundaryScopeRule, ...] = (
     ),
     BoundaryScopeRule(
         boundary_key="NKILGRMO",
-        rule_key="scotland_to_britned_reviewed_pass",
+        rule_key="scotland_to_south_reviewed_pass",
         parent_regions=("Scotland",),
-        hub_keys=("britned",),
+        hub_keys=("britned", "ifa", "ifa2", "eleclink"),
         transfer_requirements=("north_to_south_transfer",),
         include_non_tightening_pass=True,
-        note="NESO NKILGRMO day-ahead boundary used as reviewed internal pass-through evidence for Scotland-to-BritNed export when the corridor is publicly available.",
+        note="NESO NKILGRMO day-ahead boundary used as reviewed internal pass-through evidence for Scotland-to-south export when the corridor is publicly available.",
     ),
     BoundaryScopeRule(
         boundary_key="HARSPNBLY",
@@ -104,12 +110,12 @@ BOUNDARY_SCOPE_RULES: tuple[BoundaryScopeRule, ...] = (
     ),
     BoundaryScopeRule(
         boundary_key="HARSPNBLY",
-        rule_key="scotland_to_britned_reviewed_pass",
+        rule_key="scotland_to_south_reviewed_pass",
         parent_regions=("Scotland",),
-        hub_keys=("britned",),
+        hub_keys=("britned", "ifa", "ifa2", "eleclink"),
         transfer_requirements=("north_to_south_transfer",),
         include_non_tightening_pass=True,
-        note="NESO HARSPNBLY day-ahead boundary used as reviewed internal pass-through evidence for Scotland-to-BritNed export when the corridor is publicly available.",
+        note="NESO HARSPNBLY day-ahead boundary used as reviewed internal pass-through evidence for Scotland-to-south export when the corridor is publicly available.",
     ),
     BoundaryScopeRule(
         boundary_key="SSE-SP2",
@@ -121,12 +127,12 @@ BOUNDARY_SCOPE_RULES: tuple[BoundaryScopeRule, ...] = (
     ),
     BoundaryScopeRule(
         boundary_key="SSE-SP2",
-        rule_key="scotland_to_britned_reviewed_pass",
+        rule_key="scotland_to_south_reviewed_pass",
         parent_regions=("Scotland",),
-        hub_keys=("britned",),
+        hub_keys=("britned", "ifa", "ifa2", "eleclink"),
         transfer_requirements=("north_to_south_transfer",),
         include_non_tightening_pass=True,
-        note="NESO SSE-SP2 day-ahead boundary used as reviewed internal pass-through evidence for Scotland-to-BritNed export when the corridor is publicly available.",
+        note="NESO SSE-SP2 day-ahead boundary used as reviewed internal pass-through evidence for Scotland-to-south export when the corridor is publicly available.",
     ),
     BoundaryScopeRule(
         boundary_key="SSEN-S",
@@ -138,12 +144,12 @@ BOUNDARY_SCOPE_RULES: tuple[BoundaryScopeRule, ...] = (
     ),
     BoundaryScopeRule(
         boundary_key="SSEN-S",
-        rule_key="scotland_to_britned_reviewed_pass",
+        rule_key="scotland_to_south_reviewed_pass",
         parent_regions=("Scotland",),
-        hub_keys=("britned",),
+        hub_keys=("britned", "ifa", "ifa2", "eleclink"),
         transfer_requirements=("north_to_south_transfer",),
         include_non_tightening_pass=True,
-        note="NESO SSEN-S day-ahead boundary used as reviewed internal pass-through evidence for Scotland-to-BritNed export when the corridor is publicly available.",
+        note="NESO SSEN-S day-ahead boundary used as reviewed internal pass-through evidence for Scotland-to-south export when the corridor is publicly available.",
     ),
     BoundaryScopeRule(
         boundary_key="SSHARN3",
@@ -155,12 +161,12 @@ BOUNDARY_SCOPE_RULES: tuple[BoundaryScopeRule, ...] = (
     ),
     BoundaryScopeRule(
         boundary_key="SSHARN3",
-        rule_key="scotland_to_britned_reviewed_pass",
+        rule_key="scotland_to_south_reviewed_pass",
         parent_regions=("Scotland",),
-        hub_keys=("britned",),
+        hub_keys=("britned", "ifa", "ifa2", "eleclink"),
         transfer_requirements=("north_to_south_transfer",),
         include_non_tightening_pass=True,
-        note="NESO SSHARN3 day-ahead boundary used as reviewed internal pass-through evidence for Scotland-to-BritNed export when the corridor is publicly available.",
+        note="NESO SSHARN3 day-ahead boundary used as reviewed internal pass-through evidence for Scotland-to-south export when the corridor is publicly available.",
     ),
     BoundaryScopeRule(
         boundary_key="SEIMPPR23",
@@ -178,12 +184,18 @@ BOUNDARY_SCOPE_RULES: tuple[BoundaryScopeRule, ...] = (
     ),
     BoundaryScopeRule(
         boundary_key="SEIMPPR23",
-        rule_key="south_east_england_britned_reviewed_pass",
+        rule_key="south_east_england_reviewed_pass",
         cluster_keys=("east_anglia_offshore", "humber_offshore", "dogger_hornsea_offshore"),
-        hub_keys=("britned",),
-        transfer_requirements=("east_coast_bias", "east_coast_transfer", "south_east_bias"),
+        hub_keys=("britned", "ifa", "ifa2", "eleclink"),
+        transfer_requirements=(
+            "east_coast_bias",
+            "east_coast_transfer",
+            "south_east_bias",
+            "east_to_south_transfer",
+            "south_to_south_coast_transfer",
+        ),
         include_non_tightening_pass=True,
-        note="NESO SEIMPPR23 day-ahead boundary used as reviewed internal pass-through evidence for east-facing England into BritNed when south-east export headroom is publicly available.",
+        note="NESO SEIMPPR23 day-ahead boundary used as reviewed internal pass-through evidence for east-facing England into BritNed and the France-facing hubs when south-east export headroom is publicly available.",
     ),
     BoundaryScopeRule(
         boundary_key="GM+SNOW5A",
@@ -195,12 +207,12 @@ BOUNDARY_SCOPE_RULES: tuple[BoundaryScopeRule, ...] = (
     ),
     BoundaryScopeRule(
         boundary_key="GM+SNOW5A",
-        rule_key="scotland_to_britned_reviewed_pass",
+        rule_key="scotland_to_south_reviewed_pass",
         parent_regions=("Scotland",),
-        hub_keys=("britned",),
+        hub_keys=("britned", "ifa", "ifa2", "eleclink"),
         transfer_requirements=("north_to_south_transfer",),
         include_non_tightening_pass=True,
-        note="NESO GM+SNOW5A acts as complementary reviewed internal pass-through evidence for Scotland-to-BritNed export when the corridor is publicly available.",
+        note="NESO GM+SNOW5A acts as complementary reviewed internal pass-through evidence for Scotland-to-south export when the corridor is publicly available.",
     ),
 )
 
@@ -431,7 +443,10 @@ def build_fact_gb_transfer_boundary_reviewed_hourly(
                 pd.to_numeric(expanded["structural_gate_mw_proxy"], errors="coerce")
             )
         )
-        expanded = expanded[tightening_mask | rule.include_non_tightening_pass].copy()
+        if rule.include_non_tightening_pass:
+            expanded = expanded[~tightening_mask].copy()
+        else:
+            expanded = expanded[tightening_mask].copy()
         if expanded.empty:
             continue
         expanded["source_provider"] = GB_TRANSFER_BOUNDARY_SOURCE_PROVIDER

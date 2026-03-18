@@ -3,6 +3,7 @@ import unittest
 
 import pandas as pd
 
+from gb_transfer_reviewed import SHETLAND_DEPENDENCY_SOURCE_FAMILY
 from route_score_history import ROUTE_SCORE_TABLE, build_fact_route_score_hourly
 
 
@@ -389,6 +390,95 @@ class RouteScoreHistoryTests(unittest.TestCase):
         self.assertAlmostEqual(float(row["internal_transfer_capacity_limit_mw"]), 500.0)
         self.assertAlmostEqual(float(row["deliverable_mw_proxy"]), 500.0)
 
+    def test_build_fact_route_score_hourly_uses_boundary_reviewed_pass_for_france_east_england(self) -> None:
+        prices = pd.DataFrame(
+            {
+                "GB": [50.0],
+                "FR": [120.0],
+                "NL": [78.0],
+                "DE": [130.0],
+                "PL": [160.0],
+                "CZ": [85.0],
+            },
+            index=pd.DatetimeIndex(["2024-09-30T23:00:00Z"]),
+        )
+        gb_transfer_gate = pd.DataFrame(
+            [
+                {
+                    "date": "2024-10-01",
+                    "interval_start_local": pd.Timestamp("2024-10-01T00:00:00+01:00"),
+                    "interval_end_local": pd.Timestamp("2024-10-01T01:00:00+01:00"),
+                    "interval_start_utc": pd.Timestamp("2024-09-30T23:00:00Z"),
+                    "interval_end_utc": pd.Timestamp("2024-10-01T00:00:00Z"),
+                    "cluster_key": "east_anglia_offshore",
+                    "cluster_label": "East Anglia Offshore",
+                    "parent_region": "England/Wales",
+                    "hub_key": "ifa2",
+                    "hub_label": "IFA2",
+                    "hub_target_zone": "FR",
+                    "hub_neighbor_domain_key": "FR",
+                    "hub_current_route_fit": "current",
+                    "transfer_gate_mw_proxy": 500.0,
+                    "transfer_gate_utilization_proxy": 0.5,
+                    "gate_state": "capacity_unknown_conditional",
+                    "gate_reason": "Proxy leaves the route reachable.",
+                }
+            ]
+        )
+        reviewed_internal = pd.DataFrame(
+            [
+                {
+                    "interval_start_utc": "2024-09-30T23:00:00Z",
+                    "interval_end_utc": "2024-10-01T00:00:00Z",
+                    "cluster_key": "east_anglia_offshore",
+                    "hub_key": "ifa2",
+                    "review_state": "accepted_reviewed_tier",
+                    "reviewed_evidence_tier": "reviewed_internal_constraint_boundary",
+                    "reviewed_tier_accepted_flag": True,
+                    "capacity_policy_action": "allow_boundary_day_ahead_gate",
+                    "reviewed_gate_state": "reviewed_boundary_cap",
+                    "reviewed_capacity_limit_mw": 500.0,
+                    "source_provider": "neso",
+                    "source_family": "day_ahead_constraint_boundary",
+                    "source_key": "fact_day_ahead_constraint_boundary_half_hourly:SEIMPPR23",
+                }
+            ]
+        )
+        france_connector = pd.DataFrame(
+            [
+                {
+                    "interval_start_utc": "2024-09-30T23:00:00Z",
+                    "connector_key": "ifa2",
+                    "connector_label": "IFA2",
+                    "operator_name": "National Grid IFA2 Limited / RTE",
+                    "nominal_capacity_mw": 1000.0,
+                    "nominal_capacity_share_of_border": 0.25,
+                    "connector_capacity_evidence_tier": "nominal_static",
+                    "connector_headroom_proxy_mw": 350.0,
+                    "connector_gate_state": "nominal_headroom_proxy",
+                    "connector_gate_reason": "Nominal-share proxy only.",
+                }
+            ]
+        )
+
+        fact = build_fact_route_score_hourly(
+            prices=prices,
+            gb_transfer_gate=gb_transfer_gate,
+            interconnector_flow=None,
+            interconnector_capacity=None,
+            interconnector_capacity_reviewed=None,
+            interconnector_capacity_review_policy=None,
+            gb_transfer_reviewed_hourly=reviewed_internal,
+            france_connector=france_connector,
+        )
+
+        row = fact.iloc[0]
+        self.assertEqual(row["internal_transfer_evidence_tier"], "reviewed_internal_constraint_boundary")
+        self.assertEqual(row["internal_transfer_gate_state"], "reviewed_boundary_cap")
+        self.assertEqual(row["internal_transfer_source_provider"], "neso")
+        self.assertAlmostEqual(float(row["internal_transfer_capacity_limit_mw"]), 500.0)
+        self.assertAlmostEqual(float(row["deliverable_mw_proxy"]), 350.0)
+
     def test_build_fact_route_score_hourly_uses_connector_itl_reviewed_tier(self) -> None:
         prices = _sample_prices()
         gb_transfer_gate = pd.DataFrame(
@@ -556,6 +646,69 @@ class RouteScoreHistoryTests(unittest.TestCase):
         self.assertEqual(row["internal_transfer_gate_state"], "blocked_upstream_dependency")
         self.assertEqual(row["internal_transfer_source_provider"], "proxy")
         self.assertEqual(row["route_delivery_tier"], "blocked_internal_transfer")
+
+    def test_build_fact_route_score_hourly_allows_shetland_dependency_review_to_override_upstream_block(self) -> None:
+        prices = _sample_prices()
+        gb_transfer_gate = pd.DataFrame(
+            [
+                {
+                    "date": "2024-10-01",
+                    "interval_start_local": pd.Timestamp("2024-10-01T00:00:00+01:00"),
+                    "interval_end_local": pd.Timestamp("2024-10-01T01:00:00+01:00"),
+                    "interval_start_utc": pd.Timestamp("2024-09-30T23:00:00Z"),
+                    "interval_end_utc": pd.Timestamp("2024-10-01T00:00:00Z"),
+                    "cluster_key": "shetland_wind",
+                    "cluster_label": "Shetland Wind",
+                    "parent_region": "Scotland",
+                    "hub_key": "britned",
+                    "hub_label": "BritNed",
+                    "hub_target_zone": "NL",
+                    "hub_neighbor_domain_key": "NL",
+                    "hub_current_route_fit": "current",
+                    "transfer_gate_mw_proxy": 0.0,
+                    "transfer_gate_utilization_proxy": 0.0,
+                    "gate_state": "blocked_upstream_dependency",
+                    "gate_reason": "Upstream dependency blocks the route.",
+                }
+            ]
+        )
+        reviewed_internal = pd.DataFrame(
+            [
+                {
+                    "interval_start_utc": "2024-09-30T23:00:00Z",
+                    "interval_end_utc": "2024-10-01T00:00:00Z",
+                    "cluster_key": "shetland_wind",
+                    "hub_key": "britned",
+                    "review_state": "accepted_reviewed_tier",
+                    "reviewed_evidence_tier": "reviewed_internal_transfer_period",
+                    "reviewed_tier_accepted_flag": True,
+                    "capacity_policy_action": "allow_reviewed_internal_period",
+                    "reviewed_gate_state": "reviewed_pass_restricted",
+                    "reviewed_capacity_limit_mw": 120.0,
+                    "source_provider": "public_reviewed_doc",
+                    "source_family": SHETLAND_DEPENDENCY_SOURCE_FAMILY,
+                    "source_key": "shetland_island_link_dependency_review",
+                }
+            ]
+        )
+
+        fact = build_fact_route_score_hourly(
+            prices=prices,
+            gb_transfer_gate=gb_transfer_gate,
+            interconnector_flow=None,
+            interconnector_capacity=None,
+            interconnector_capacity_reviewed=None,
+            interconnector_capacity_review_policy=None,
+            gb_transfer_reviewed_hourly=reviewed_internal,
+        )
+
+        self.assertEqual(len(fact), 1)
+        row = fact.iloc[0]
+        self.assertEqual(row["internal_transfer_evidence_tier"], "reviewed_internal_transfer_period")
+        self.assertEqual(row["internal_transfer_gate_state"], "reviewed_pass_restricted")
+        self.assertEqual(row["internal_transfer_source_family"], SHETLAND_DEPENDENCY_SOURCE_FAMILY)
+        self.assertEqual(row["route_delivery_tier"], "capacity_unknown")
+        self.assertAlmostEqual(float(row["deliverable_mw_proxy"]), 120.0)
 
     def test_build_fact_route_score_hourly_caps_france_unknown_delivery_with_connector_proxy(self) -> None:
         prices = pd.DataFrame(

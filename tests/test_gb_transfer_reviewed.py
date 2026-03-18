@@ -8,10 +8,13 @@ import pandas as pd
 from gb_transfer_reviewed import (
     GB_TRANSFER_REVIEWED_HOURLY_TABLE,
     GB_TRANSFER_REVIEWED_PERIOD_TABLE,
+    SCOTLAND_NORTH_TO_SOUTH_SOURCE_FAMILY,
+    SHETLAND_DEPENDENCY_SOURCE_FAMILY,
     build_fact_gb_transfer_review_policy,
     build_fact_gb_transfer_reviewed_hourly,
     build_fact_gb_transfer_reviewed_period,
     materialize_gb_transfer_reviewed_history,
+    normalize_gb_transfer_reviewed_input,
     write_normalized_gb_transfer_reviewed_input,
 )
 
@@ -247,6 +250,46 @@ class GbTransferReviewedTests(unittest.TestCase):
             self.assertIn(GB_TRANSFER_REVIEWED_HOURLY_TABLE, frames)
             self.assertTrue((Path(tmp_dir) / f"{GB_TRANSFER_REVIEWED_PERIOD_TABLE}.csv").exists())
             self.assertTrue((Path(tmp_dir) / f"{GB_TRANSFER_REVIEWED_HOURLY_TABLE}.csv").exists())
+
+    def test_normalize_gb_transfer_reviewed_input_maps_b6_rows_to_scotland_family(self) -> None:
+        normalized = normalize_gb_transfer_reviewed_input(
+            pd.DataFrame(
+                [
+                    {
+                        "source_key": "etys_2023_b6_capability",
+                        "parent_region": "Scotland",
+                        "hub_key": "britned",
+                        "period_start_utc": "2024-10-02T05:00:00Z",
+                        "period_end_utc": "2024-10-02T07:00:00Z",
+                        "capacity_limit_mw": 6300.0,
+                    }
+                ]
+            )
+        )
+
+        row = normalized.iloc[0]
+        self.assertEqual(row["source_family"], SCOTLAND_NORTH_TO_SOUTH_SOURCE_FAMILY)
+        self.assertEqual(row["source_label"], "ETYS 2023 B6 north-to-south capability")
+
+    def test_normalize_gb_transfer_reviewed_input_maps_shetland_dependency_source_family(self) -> None:
+        normalized = normalize_gb_transfer_reviewed_input(
+            pd.DataFrame(
+                [
+                    {
+                        "source_key": "shetland_island_link_dependency_review",
+                        "cluster_key": "shetland_wind",
+                        "hub_key": "britned",
+                        "period_start_utc": "2024-10-02T05:00:00Z",
+                        "period_end_utc": "2024-10-02T07:00:00Z",
+                        "capacity_limit_mw": 400.0,
+                    }
+                ]
+            )
+        )
+
+        row = normalized.iloc[0]
+        self.assertEqual(row["source_family"], SHETLAND_DEPENDENCY_SOURCE_FAMILY)
+        self.assertEqual(row["source_label"], "Shetland island-link dependency review")
 
 
 if __name__ == "__main__":

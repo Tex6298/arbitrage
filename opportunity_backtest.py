@@ -25,6 +25,12 @@ VALID_BACKTEST_MODEL_KEYS = {
 }
 VALID_BACKTEST_MODEL_SELECTIONS = {"all", *VALID_BACKTEST_MODEL_KEYS}
 TARGETED_TRANSITION_ROUTE_NAMES = {"R2_netback_GB_NL_DE_PL"}
+TARGETED_OPENING_GUARDRAIL_ROUTE_NAMES = {
+    "R1_netback_GB_FR_DE_PL",
+    "R2_netback_GB_NL_DE_PL",
+}
+EVENT_PHASE_CALIBRATION_ROUTE_NAME = "R1_netback_GB_FR_DE_PL"
+EVENT_PHASE_CALIBRATION_SOURCE_FAMILY = "day_ahead_constraint_boundary"
 
 DEFAULT_BACKTEST_MODEL_KEY = MODEL_GROUP_MEAN_NOTICE_V1
 DEFAULT_BACKTEST_MODEL_SELECTION = "all"
@@ -54,6 +60,45 @@ RATIO_GLOBAL_MIN_HISTORY = 24
 FEATURE_DRIFT_WARN_THRESHOLD = 0.15
 TARGET_DRIFT_WARN_THRESHOLD = 0.50
 RESIDUAL_DRIFT_WARN_THRESHOLD = 0.50
+ZERO_ACTIVITY_DRIFT_EPSILON = 1e-6
+OPENING_GUARDRAIL_PREDICTION_EPSILON = 1e-6
+OPENING_GUARDRAIL_PREOPEN_ORIGIN_HOUR_MAX = 3
+OPENING_GUARDRAIL_EXTREME_UPSTREAM_STATES = {
+    "day_ahead_much_weaker_than_forward",
+    "day_ahead_much_stronger_than_forward",
+}
+R2_REVIEWED_EVENT_ROUTE_NAME = "R2_netback_GB_NL_DE_PL"
+R2_REVIEWED_EVENT_SOURCE_FAMILY = "day_ahead_constraint_boundary"
+R2_REVIEWED_EVENT_PREOPEN_ORIGIN_HOUR = 4.0
+R2_REVIEWED_EVENT_OPEN_ORIGIN_HOUR = 5.0
+R2_REVIEWED_EVENT_CLOSE_ORIGIN_HOUR = 6.0
+R2_REVIEWED_EVENT_LATE_REOPEN_ORIGIN_HOUR = 14.0
+R2_REVIEWED_EVENT_PREOPEN_UPSTREAM_STATES = {"day_ahead_near_forward"}
+R2_REVIEWED_EVENT_LATE_REOPEN_UPSTREAM_STATES = {"day_ahead_weaker_than_forward"}
+R2_REVIEWED_EVENT_LATE_REOPEN_CLUSTERS = {
+    "dogger_hornsea_offshore",
+    "east_anglia_offshore",
+    "humber_offshore",
+}
+R2_REVIEWED_EVENT_LATE_REOPEN_CURTAILMENT_RATIO = 1.05
+R2_REVIEWED_EVENT_LATE_REOPEN_CLUSTER_CAP_MWH = {
+    "dogger_hornsea_offshore": 170.0,
+}
+EVENT_PHASE_CALIBRATION_RATIO_EPSILON = 1e-6
+EVENT_PHASE_CALIBRATION_MIN_HISTORY = 3
+EVENT_PHASE_CALIBRATION_RATIO_MIN = 0.0
+EVENT_PHASE_CALIBRATION_RATIO_MAX = 1.10
+PERSIST_CLOSE_SUPPRESSOR_POSITIVE_EPSILON = 1e-6
+PERSIST_CLOSE_SUPPRESSOR_CLUSTER_HOUR_MIN_HISTORY = 2
+PERSIST_CLOSE_SUPPRESSOR_ROUTE_HOUR_MIN_HISTORY = 3
+PERSIST_CLOSE_SUPPRESSOR_CLUSTER_MIN_HISTORY = 3
+PERSIST_CLOSE_SUPPRESSOR_MAX_POSITIVE_SHARE = 0.10
+REVIEWED_EVENT_TARGET_SHIFT_MIN_REVIEWED_INTERNAL_SHARE = 0.80
+REVIEWED_EVENT_TARGET_SHIFT_MAX_PROXY_SHARE = 0.20
+REVIEWED_EVENT_TARGET_SHIFT_MAX_CAPACITY_UNKNOWN_SHARE = 0.15
+REVIEWED_EVENT_TARGET_SHIFT_MAX_RESIDUAL_MAE_MWH = 1.0
+REVIEWED_EVENT_TARGET_SHIFT_MAX_RESIDUAL_RATIO = 0.15
+REVIEWED_EVENT_TARGET_SHIFT_ACTIVITY_SCALE_FLOOR_MWH = 5.0
 
 ROUTE_PRICE_LOW_POSITIVE_MAX_EUR_PER_MWH = 25.0
 ROUTE_PRICE_HIGH_POSITIVE_MIN_EUR_PER_MWH = 75.0
@@ -65,10 +110,48 @@ SPECIALIST_SCOPE_ROUTE_NAME = "R2_netback_GB_NL_DE_PL"
 SPECIALIST_SCOPE_HUB_KEY = "britned"
 SPECIALIST_SCOPE_INTERNAL_TIER = "reviewed_internal_constraint_boundary"
 SPECIALIST_RATIO_EPSILON = 1e-6
+SPECIALIST_CLASSIFIER_POSITIVE_WEIGHT_CAP = 12.0
+SPECIALIST_FLIP_CLASSIFIER_POSITIVE_WEIGHT_CAP = 64.0
+SPECIALIST_FLIP_OPENING_GUARDRAIL_PREDICTION_MAX_MWH = 1.0
+SPECIALIST_FLIP_OPENING_GUARDRAIL_ORIGIN_HOURS = {4.0, 5.0}
+SPECIALIST_FLIP_OPENING_GUARDRAIL_UPSTREAM_STATES = {
+    "day_ahead_near_forward",
+    "day_ahead_stronger_than_forward",
+}
+SPECIALIST_FLIP_OPENING_GUARDRAIL_ROUTE_TIERS = {"no_price_signal", "reviewed"}
+SPECIALIST_FLIP_OPENING_GUARDRAIL_ROUTE_TRANSITIONS = {
+    "price_non_positive->price_non_positive",
+    "price_non_positive->price_mid_positive",
+}
 
 SPECIALIST_NUMERIC_FEATURE_COLUMNS = (
+    "feature_specialist_openable_potential_mwh_asof",
+    "feature_specialist_zero_proxy_flag_asof",
+    "feature_curtailment_selected_mwh_asof",
     "feature_deliverable_mw_proxy_asof",
+    "feature_route_price_score_eur_per_mwh_asof",
+    "feature_upstream_forward_price_eur_per_mwh_asof",
+    "feature_upstream_day_ahead_price_eur_per_mwh_asof",
+    "feature_upstream_intraday_price_eur_per_mwh_asof",
+    "feature_route_price_feasible_flag_asof",
+    "feature_upstream_market_state_feed_available_flag_asof",
+    "feature_system_balance_feed_available_flag_asof",
+    "feature_system_balance_known_flag_asof",
+    "feature_system_balance_active_flag_asof",
+    "feature_connector_capacity_tight_now_flag_asof",
+    "feature_market_knew_connector_restriction_flag_asof",
 )
+
+SPECIALIST_BOOLEAN_NUMERIC_FEATURE_COLUMNS = {
+    "feature_specialist_zero_proxy_flag_asof",
+    "feature_route_price_feasible_flag_asof",
+    "feature_upstream_market_state_feed_available_flag_asof",
+    "feature_system_balance_feed_available_flag_asof",
+    "feature_system_balance_known_flag_asof",
+    "feature_system_balance_active_flag_asof",
+    "feature_connector_capacity_tight_now_flag_asof",
+    "feature_market_knew_connector_restriction_flag_asof",
+}
 
 SPECIALIST_CATEGORICAL_FEATURE_COLUMNS = (
     "cluster_key",
@@ -190,6 +273,8 @@ def _empty_backtest_prediction_frame() -> pd.DataFrame:
             "feature_internal_transfer_gate_state_path_asof",
             "feature_curtailment_selected_mwh_asof",
             "feature_deliverable_mw_proxy_asof",
+            "feature_specialist_openable_potential_mwh_asof",
+            "feature_specialist_zero_proxy_flag_asof",
             "feature_route_score_eur_per_mwh_asof",
             "feature_connector_capacity_tight_now_flag_asof",
             "feature_market_knew_connector_restriction_flag_asof",
@@ -326,12 +411,52 @@ def _empty_drift_window_frame() -> pd.DataFrame:
 
 
 def _prior_mean_by_group(frame: pd.DataFrame, keys: list[str], target_col: str, prefix: str) -> pd.DataFrame:
-    grouped = frame.groupby(keys, dropna=False)
-    prior_count = grouped.cumcount()
-    prior_sum = grouped[target_col].cumsum() - frame[target_col].fillna(0.0)
+    working = frame.loc[:, [*keys, "forecast_origin_utc"]].copy()
+    merge_keys = [*keys, "forecast_origin_utc"]
+    if not keys:
+        working["__all_group"] = "__all__"
+        merge_keys = ["__all_group", "forecast_origin_utc"]
+    working["__target_value"] = pd.to_numeric(frame[target_col], errors="coerce").fillna(0.0)
+
+    origin_stats = (
+        working.groupby(merge_keys, dropna=False)["__target_value"]
+        .agg(origin_row_count="size", origin_target_sum="sum")
+        .reset_index()
+        .sort_values(merge_keys, kind="mergesort")
+        .reset_index(drop=True)
+    )
+    grouped = origin_stats.groupby(merge_keys[:-1], dropna=False) if len(merge_keys) > 1 else None
+    if grouped is not None:
+        origin_stats[f"{prefix}_prior_count"] = grouped["origin_row_count"].cumsum() - origin_stats["origin_row_count"]
+        origin_stats["_prior_target_sum"] = grouped["origin_target_sum"].cumsum() - origin_stats["origin_target_sum"]
+    else:
+        origin_stats[f"{prefix}_prior_count"] = 0
+        origin_stats["_prior_target_sum"] = 0.0
+    origin_stats[f"{prefix}_prior_mean"] = np.where(
+        origin_stats[f"{prefix}_prior_count"] > 0,
+        origin_stats["_prior_target_sum"] / origin_stats[f"{prefix}_prior_count"],
+        np.nan,
+    )
+
+    base = frame.loc[:, [*keys, "forecast_origin_utc"]].copy()
+    if not keys:
+        base["__all_group"] = "__all__"
+    base["__row_index"] = frame.index
+    merged = (
+        base.merge(
+            origin_stats[[*merge_keys, f"{prefix}_prior_count", f"{prefix}_prior_mean"]],
+            on=merge_keys,
+            how="left",
+            sort=False,
+        )
+        .set_index("__row_index")
+        .reindex(frame.index)
+    )
     result = pd.DataFrame(index=frame.index)
-    result[f"{prefix}_prior_count"] = prior_count
-    result[f"{prefix}_prior_mean"] = np.where(prior_count > 0, prior_sum / prior_count, np.nan)
+    result[f"{prefix}_prior_count"] = pd.to_numeric(
+        merged[f"{prefix}_prior_count"], errors="coerce"
+    ).fillna(0).astype(int)
+    result[f"{prefix}_prior_mean"] = pd.to_numeric(merged[f"{prefix}_prior_mean"], errors="coerce")
     return result
 
 
@@ -364,6 +489,100 @@ def _coerce_bool_series(values: pd.Series | object, default: bool = False) -> pd
     return series.where(series.notna(), default).astype(bool)
 
 
+def _append_prediction_basis_suffix(basis: pd.Series, suffix: str) -> pd.Series:
+    basis_text = basis.astype("string").fillna("")
+    return pd.Series(
+        np.where(basis_text.eq(""), suffix, basis_text + "_" + suffix),
+        index=basis.index,
+        dtype="string",
+    )
+
+
+def _build_prior_group_key(frame: pd.DataFrame, keys: list[str]) -> pd.Series:
+    if not keys:
+        return pd.Series("__all__", index=frame.index, dtype="string")
+    key_parts = frame.loc[:, keys].astype("string").fillna("<NA>")
+    return key_parts.agg("|".join, axis=1).astype("string")
+
+
+def _prior_mean_from_history_by_group(
+    target_frame: pd.DataFrame,
+    history_frame: pd.DataFrame,
+    keys: list[str],
+    target_col: str,
+    prefix: str,
+) -> pd.DataFrame:
+    result = pd.DataFrame(index=target_frame.index)
+    result[f"{prefix}_prior_count"] = 0
+    result[f"{prefix}_prior_mean"] = np.nan
+    if target_frame.empty:
+        return result
+    if history_frame is None or history_frame.empty:
+        return result
+
+    history = history_frame.loc[:, [*keys, "forecast_origin_utc", target_col]].copy()
+    history["forecast_origin_utc"] = pd.to_datetime(history["forecast_origin_utc"], utc=True, errors="coerce")
+    history[target_col] = pd.to_numeric(history[target_col], errors="coerce")
+    history = history[history["forecast_origin_utc"].notna() & history[target_col].notna()].copy()
+    if history.empty:
+        return result
+
+    history["__group_key"] = _build_prior_group_key(history, keys)
+    origin_stats = (
+        history.groupby(["__group_key", "forecast_origin_utc"], dropna=False)[target_col]
+        .agg(origin_row_count="size", origin_target_sum="sum")
+        .reset_index()
+        .sort_values(["__group_key", "forecast_origin_utc"], kind="mergesort")
+        .reset_index(drop=True)
+    )
+    origin_stats[f"{prefix}_prior_count"] = origin_stats.groupby("__group_key", dropna=False)["origin_row_count"].cumsum()
+    origin_stats["_prior_target_sum"] = origin_stats.groupby("__group_key", dropna=False)["origin_target_sum"].cumsum()
+
+    target = target_frame.loc[:, [*keys, "forecast_origin_utc"]].copy()
+    target["forecast_origin_utc"] = pd.to_datetime(target["forecast_origin_utc"], utc=True, errors="coerce")
+    target["__group_key"] = _build_prior_group_key(target, keys)
+    target["__row_index"] = target_frame.index
+    valid_target = target[target["forecast_origin_utc"].notna()].copy()
+    if valid_target.empty:
+        return result
+
+    merged_groups = []
+    merge_columns = [
+        "__group_key",
+        "forecast_origin_utc",
+        f"{prefix}_prior_count",
+        "_prior_target_sum",
+    ]
+    for group_key, target_group in valid_target.groupby("__group_key", dropna=False, sort=False):
+        sorted_target_group = target_group.sort_values("forecast_origin_utc", kind="mergesort")
+        history_group = origin_stats[origin_stats["__group_key"].eq(group_key)].copy()
+        if history_group.empty:
+            sorted_target_group[f"{prefix}_prior_count"] = 0
+            sorted_target_group["_prior_target_sum"] = np.nan
+            merged_groups.append(sorted_target_group)
+            continue
+        history_group = history_group.loc[:, merge_columns].sort_values("forecast_origin_utc", kind="mergesort")
+        merged_group = pd.merge_asof(
+            sorted_target_group,
+            history_group,
+            on="forecast_origin_utc",
+            direction="backward",
+            allow_exact_matches=False,
+        )
+        merged_groups.append(merged_group)
+    merged = pd.concat(merged_groups, ignore_index=False).set_index("__row_index").reindex(target_frame.index)
+    prior_count = pd.to_numeric(merged[f"{prefix}_prior_count"], errors="coerce").fillna(0).astype(int)
+    prior_target_sum = pd.to_numeric(merged["_prior_target_sum"], errors="coerce")
+
+    result[f"{prefix}_prior_count"] = prior_count
+    result[f"{prefix}_prior_mean"] = np.where(
+        prior_count > 0,
+        prior_target_sum / prior_count,
+        np.nan,
+    )
+    return result
+
+
 def _derive_internal_transfer_boundary_family(
     internal_transfer_source_family: pd.Series,
     internal_transfer_source_key: pd.Series,
@@ -394,6 +613,136 @@ def _specialist_scope_mask(frame: pd.DataFrame) -> pd.Series:
         & frame["hub_key"].eq(SPECIALIST_SCOPE_HUB_KEY)
         & frame["internal_transfer_evidence_tier"].eq(SPECIALIST_SCOPE_INTERNAL_TIER)
     )
+
+
+def _compute_specialist_openable_potential(
+    curtailment_selected_mwh: pd.Series,
+    deliverable_mw_proxy: pd.Series,
+) -> pd.Series:
+    curtailment_selected = pd.to_numeric(curtailment_selected_mwh, errors="coerce").fillna(0.0).clip(lower=0.0)
+    deliverable_proxy = pd.to_numeric(deliverable_mw_proxy, errors="coerce").fillna(0.0).clip(lower=0.0)
+    return pd.Series(
+        np.where(
+            deliverable_proxy.gt(SPECIALIST_RATIO_EPSILON),
+            np.minimum(curtailment_selected, deliverable_proxy),
+            curtailment_selected,
+        ),
+        index=curtailment_selected.index,
+        dtype=float,
+    )
+
+
+def _specialist_flip_focus_mask(frame: pd.DataFrame) -> pd.Series:
+    route_delivery_tier = frame.get(
+        "feature_route_delivery_tier_asof",
+        pd.Series(pd.NA, index=frame.index),
+    ).astype("string")
+    gate_state = frame.get(
+        "feature_internal_transfer_gate_state_asof",
+        pd.Series(pd.NA, index=frame.index),
+    ).fillna("").astype(str)
+    connector_notice = frame.get(
+        "feature_connector_notice_market_state_asof",
+        pd.Series(pd.NA, index=frame.index),
+    ).astype("string")
+    connector_itl_state = frame.get(
+        "feature_connector_itl_state_asof",
+        pd.Series(pd.NA, index=frame.index),
+    ).astype("string")
+    openable_potential = pd.to_numeric(
+        frame.get("feature_specialist_openable_potential_mwh_asof", pd.Series(np.nan, index=frame.index)),
+        errors="coerce",
+    ).fillna(0.0)
+    return (
+        route_delivery_tier.isin(["no_price_signal", "reviewed"])
+        & ~gate_state.str.startswith("blocked_")
+        & connector_notice.eq("no_public_connector_restriction")
+        & connector_itl_state.isin(["published_restriction", "blocked_zero_or_negative_itl"])
+        & openable_potential.gt(0.0)
+    )
+
+
+def _specialist_flip_suppressed_mask(frame: pd.DataFrame) -> pd.Series:
+    connector_itl_state = frame.get(
+        "feature_connector_itl_state_asof",
+        pd.Series(pd.NA, index=frame.index),
+    ).astype("string")
+    upstream_market_state = frame.get(
+        "feature_upstream_market_state_asof",
+        pd.Series(pd.NA, index=frame.index),
+    ).astype("string")
+    route_delivery_tier = frame.get(
+        "feature_route_delivery_tier_asof",
+        pd.Series(pd.NA, index=frame.index),
+    ).astype("string")
+    gate_state = frame.get(
+        "feature_internal_transfer_gate_state_asof",
+        pd.Series(pd.NA, index=frame.index),
+    ).fillna("").astype(str)
+    return (
+        connector_itl_state.eq("blocked_zero_or_negative_itl")
+        & upstream_market_state.eq("day_ahead_weaker_than_forward")
+        & route_delivery_tier.eq("no_price_signal")
+        & ~gate_state.str.startswith("blocked_")
+    )
+
+
+def _apply_gb_nl_specialist_flip_opening_guardrail(frame: pd.DataFrame) -> pd.DataFrame:
+    adjusted = frame.copy()
+    prediction_basis = adjusted.get(
+        "prediction_basis",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    predicted = pd.to_numeric(
+        adjusted.get("predicted_opportunity_deliverable_mwh"),
+        errors="coerce",
+    ).fillna(0.0)
+    openable_potential = pd.to_numeric(
+        adjusted.get("feature_specialist_openable_potential_mwh_asof"),
+        errors="coerce",
+    ).fillna(0.0).clip(lower=0.0)
+    origin_hour = pd.to_numeric(
+        adjusted.get("feature_origin_hour_of_day"),
+        errors="coerce",
+    )
+    connector_itl_state = adjusted.get(
+        "feature_connector_itl_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).astype("string")
+    upstream_market_state = adjusted.get(
+        "feature_upstream_market_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).astype("string")
+    route_delivery_tier = adjusted.get(
+        "feature_route_delivery_tier_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).astype("string")
+    route_price_transition = adjusted.get(
+        "feature_route_price_transition_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).astype("string")
+    gate_state = adjusted.get(
+        "feature_internal_transfer_gate_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    mask = (
+        prediction_basis.str.contains("flip_open_specialist", regex=False)
+        & predicted.le(SPECIALIST_FLIP_OPENING_GUARDRAIL_PREDICTION_MAX_MWH)
+        & openable_potential.gt(0.0)
+        & origin_hour.isin(SPECIALIST_FLIP_OPENING_GUARDRAIL_ORIGIN_HOURS)
+        & connector_itl_state.eq("published_restriction")
+        & upstream_market_state.isin(SPECIALIST_FLIP_OPENING_GUARDRAIL_UPSTREAM_STATES)
+        & route_delivery_tier.isin(SPECIALIST_FLIP_OPENING_GUARDRAIL_ROUTE_TIERS)
+        & route_price_transition.isin(SPECIALIST_FLIP_OPENING_GUARDRAIL_ROUTE_TRANSITIONS)
+        & ~gate_state.str.startswith("blocked_")
+    )
+    if mask.any():
+        adjusted.loc[mask, "predicted_opportunity_deliverable_mwh"] = openable_potential.loc[mask]
+        adjusted.loc[mask, "prediction_basis"] = _append_prediction_basis_suffix(
+            adjusted.loc[mask, "prediction_basis"],
+            "flip_opening_guardrail",
+        ).values
+    return adjusted
 
 
 def _make_one_hot_encoder():
@@ -459,10 +808,17 @@ def _build_specialist_pipeline(kind: str):
 def _prepare_specialist_feature_frame(frame: pd.DataFrame) -> pd.DataFrame:
     features = frame.copy()
     for column in SPECIALIST_NUMERIC_FEATURE_COLUMNS:
-        features[column] = pd.to_numeric(features.get(column, pd.Series(np.nan, index=features.index)), errors="coerce")
+        values = features.get(column, pd.Series(np.nan, index=features.index))
+        if column in SPECIALIST_BOOLEAN_NUMERIC_FEATURE_COLUMNS:
+            features[column] = _coerce_bool_series(values, default=False).astype(float)
+        else:
+            numeric = pd.to_numeric(values, errors="coerce")
+            if not numeric.notna().any():
+                numeric = pd.Series(0.0, index=features.index, dtype=float)
+            features[column] = numeric
     for column in SPECIALIST_CATEGORICAL_FEATURE_COLUMNS:
         values = features.get(column, pd.Series(pd.NA, index=features.index))
-        categorical = pd.Series(np.nan, index=features.index, dtype=object)
+        categorical = pd.Series("missing", index=features.index, dtype=object)
         non_missing = values.notna()
         categorical.loc[non_missing] = values.loc[non_missing].astype(str)
         features[column] = categorical
@@ -657,10 +1013,17 @@ def _prepare_backtest_input(fact_curtailment_opportunity_hourly: pd.DataFrame) -
         "no_public_connector_restriction"
     )
     frame["curtailment_source_tier"] = frame["curtailment_source_tier"].fillna("unknown")
+    source_family = frame["internal_transfer_source_family"].astype("string")
+    source_family = source_family.where(source_family.fillna("").str.strip().ne(""), pd.NA)
+    frame["internal_transfer_source_family"] = source_family
     frame["internal_transfer_boundary_family"] = _derive_internal_transfer_boundary_family(
         frame["internal_transfer_source_family"],
         frame["internal_transfer_source_key"],
         frame["internal_transfer_evidence_tier"],
+    )
+    frame["internal_transfer_source_family"] = frame["internal_transfer_source_family"].where(
+        frame["internal_transfer_source_family"].notna(),
+        frame["internal_transfer_boundary_family"],
     )
     internal_gate_state = frame["internal_transfer_gate_state"].astype(str)
     frame["internal_transfer_gate_bucket"] = np.where(
@@ -933,6 +1296,15 @@ def _build_horizon_example_frame(frame: pd.DataFrame, forecast_horizon_hours: in
         on=["cluster_key", "route_name", "hub_key", "feature_asof_utc"],
         how="left",
     )
+    joined["feature_specialist_openable_potential_mwh_asof"] = _compute_specialist_openable_potential(
+        joined.get("feature_curtailment_selected_mwh_asof", pd.Series(np.nan, index=joined.index)),
+        joined.get("feature_deliverable_mw_proxy_asof", pd.Series(np.nan, index=joined.index)),
+    )
+    deliverable_proxy = pd.to_numeric(
+        joined.get("feature_deliverable_mw_proxy_asof", pd.Series(np.nan, index=joined.index)),
+        errors="coerce",
+    ).fillna(0.0)
+    joined["feature_specialist_zero_proxy_flag_asof"] = deliverable_proxy.le(SPECIALIST_RATIO_EPSILON)
     return joined.sort_values(
         ["forecast_origin_utc", "interval_start_utc", "cluster_key", "route_name", "hub_key"]
     ).reset_index(drop=True)
@@ -997,11 +1369,14 @@ def _build_group_mean_backtest(frame: pd.DataFrame) -> pd.DataFrame:
         "actual_opportunity_deliverable_mwh",
         "route_state",
     )
-    global_count = pd.Series(np.arange(len(frame)), index=frame.index)
-    global_sum = frame["actual_opportunity_deliverable_mwh"].cumsum() - frame["actual_opportunity_deliverable_mwh"]
-    global_mean = np.where(global_count > 0, global_sum / global_count, np.nan)
+    global_prior = _prior_mean_by_group(
+        frame,
+        [],
+        "actual_opportunity_deliverable_mwh",
+        "global",
+    )
 
-    result = pd.concat([frame.copy(), exact, cluster_route, route_state], axis=1)
+    result = pd.concat([frame.copy(), exact, cluster_route, route_state, global_prior], axis=1)
     result["prediction_basis"] = pd.NA
     result["training_sample_count"] = 0
     result["predicted_opportunity_deliverable_mwh"] = np.nan
@@ -1015,7 +1390,13 @@ def _build_group_mean_backtest(frame: pd.DataFrame) -> pd.DataFrame:
         & ~cluster_route_mask
         & (result["route_state_prior_count"] >= ROUTE_STATE_MIN_HISTORY)
     )
-    global_mask = origin_available & ~exact_mask & ~cluster_route_mask & ~route_state_mask & (global_count >= GLOBAL_MIN_HISTORY)
+    global_mask = (
+        origin_available
+        & ~exact_mask
+        & ~cluster_route_mask
+        & ~route_state_mask
+        & (result["global_prior_count"] >= GLOBAL_MIN_HISTORY)
+    )
 
     result.loc[exact_mask, "prediction_basis"] = "exact_notice_hour"
     result.loc[exact_mask, "training_sample_count"] = result.loc[exact_mask, "exact_prior_count"]
@@ -1034,8 +1415,8 @@ def _build_group_mean_backtest(frame: pd.DataFrame) -> pd.DataFrame:
     ]
 
     result.loc[global_mask, "prediction_basis"] = "global"
-    result.loc[global_mask, "training_sample_count"] = global_count[global_mask]
-    result.loc[global_mask, "predicted_opportunity_deliverable_mwh"] = global_mean[global_mask]
+    result.loc[global_mask, "training_sample_count"] = result.loc[global_mask, "global_prior_count"]
+    result.loc[global_mask, "predicted_opportunity_deliverable_mwh"] = result.loc[global_mask, "global_prior_mean"]
 
     return _finalize_prediction_frame(
         result,
@@ -1216,9 +1597,12 @@ def _build_potential_ratio_backtest(frame: pd.DataFrame) -> pd.DataFrame:
         "realized_origin_potential_ratio",
         "ratio_route_tier",
     )
-    global_count = pd.Series(np.arange(len(frame)), index=frame.index)
-    global_sum = frame["realized_origin_potential_ratio"].cumsum() - frame["realized_origin_potential_ratio"]
-    global_mean = np.where(global_count > 0, global_sum / global_count, np.nan)
+    global_prior = _prior_mean_by_group(
+        frame,
+        [],
+        "realized_origin_potential_ratio",
+        "global",
+    )
 
     result = pd.concat(
         [
@@ -1237,6 +1621,7 @@ def _build_potential_ratio_backtest(frame: pd.DataFrame) -> pd.DataFrame:
             exact,
             route_notice,
             route_tier,
+            global_prior,
         ],
         axis=1,
     )
@@ -1377,7 +1762,7 @@ def _build_potential_ratio_backtest(frame: pd.DataFrame) -> pd.DataFrame:
         result["ratio_route_tier_prior_count"] >= RATIO_ROUTE_TIER_MIN_HISTORY
     )
     global_mask = origin_available & ~cluster_upstream_market_state_mask & ~route_upstream_market_state_mask & ~cluster_system_balance_mask & ~route_system_balance_mask & ~cluster_market_state_mask & ~route_market_state_mask & ~route_market_path_mask & ~cluster_transition_regime_mask & ~transition_regime_mask & ~transition_hour_mask & ~transition_path_mask & ~exact_mask & ~route_notice_mask & ~route_tier_mask & (
-        global_count >= RATIO_GLOBAL_MIN_HISTORY
+        result["global_prior_count"] >= RATIO_GLOBAL_MIN_HISTORY
     )
 
     result.loc[cluster_upstream_market_state_mask, "prediction_basis"] = "ratio_cluster_route_upstream_market_state"
@@ -1489,11 +1874,15 @@ def _build_potential_ratio_backtest(frame: pd.DataFrame) -> pd.DataFrame:
     ]
 
     result.loc[global_mask, "prediction_basis"] = "ratio_global"
-    result.loc[global_mask, "training_sample_count"] = global_count[global_mask]
-    result.loc[global_mask, "predicted_ratio"] = global_mean[global_mask]
+    result.loc[global_mask, "training_sample_count"] = result.loc[global_mask, "global_prior_count"]
+    result.loc[global_mask, "predicted_ratio"] = result.loc[global_mask, "global_prior_mean"]
 
     result["predicted_ratio"] = pd.to_numeric(result["predicted_ratio"], errors="coerce").clip(lower=0.0, upper=10.0)
     result["predicted_opportunity_deliverable_mwh"] = result["origin_potential_opportunity_mwh"] * result["predicted_ratio"]
+    result = _apply_potential_ratio_opening_guardrail(result)
+    result = _apply_potential_ratio_r2_reviewed_event_lifecycle(result)
+    result = _apply_potential_ratio_event_phase_calibration(result)
+    result = _apply_potential_ratio_persist_close_suppressor(result)
 
     return _finalize_prediction_frame(
         result,
@@ -1501,6 +1890,541 @@ def _build_potential_ratio_backtest(frame: pd.DataFrame) -> pd.DataFrame:
         split_strategy=SPLIT_STRATEGY_POTENTIAL_RATIO,
         source_lineage="fact_curtailment_opportunity_hourly|walk_forward_potential_ratio",
     )
+
+
+def _apply_potential_ratio_opening_guardrail(result: pd.DataFrame) -> pd.DataFrame:
+    adjusted = result.copy()
+    forecast_horizon = pd.to_numeric(adjusted.get("forecast_horizon_hours"), errors="coerce")
+    route_name = adjusted.get("route_name", pd.Series(pd.NA, index=adjusted.index)).astype("string")
+    predicted = pd.to_numeric(adjusted.get("predicted_opportunity_deliverable_mwh"), errors="coerce")
+    curtailment_selected = pd.to_numeric(
+        adjusted.get("feature_curtailment_selected_mwh_asof"),
+        errors="coerce",
+    ).fillna(0.0).clip(lower=0.0)
+    route_score = pd.to_numeric(
+        adjusted.get("feature_route_price_score_eur_per_mwh_asof"),
+        errors="coerce",
+    ).fillna(-np.inf)
+    route_price_feasible = _coerce_bool_series(
+        adjusted.get("feature_route_price_feasible_flag_asof", pd.Series(False, index=adjusted.index)),
+        default=False,
+    )
+    transition_state = adjusted.get(
+        "feature_route_price_transition_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    source_family = adjusted.get(
+        "feature_internal_transfer_source_family_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    gate_state = adjusted.get(
+        "feature_internal_transfer_gate_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    connector_notice_state = adjusted.get(
+        "feature_connector_notice_market_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    connector_itl_state = adjusted.get(
+        "feature_connector_itl_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    upstream_state = adjusted.get(
+        "feature_upstream_market_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    origin_hour = pd.to_numeric(
+        adjusted.get("feature_origin_hour_of_day"),
+        errors="coerce",
+    )
+    base_mask = (
+        forecast_horizon.eq(1)
+        & route_name.isin(TARGETED_OPENING_GUARDRAIL_ROUTE_NAMES)
+        & (predicted.isna() | predicted.le(OPENING_GUARDRAIL_PREDICTION_EPSILON))
+        & curtailment_selected.gt(0.0)
+        & source_family.eq("day_ahead_constraint_boundary")
+        & ~gate_state.str.startswith("blocked_")
+        & connector_notice_state.eq("no_public_connector_restriction")
+    )
+    jump_mask = (
+        base_mask
+        & transition_state.eq("price_non_positive->price_high_positive")
+        & route_price_feasible
+    )
+    preopen_mask = (
+        base_mask
+        & ~(
+            route_name.eq(R2_REVIEWED_EVENT_ROUTE_NAME)
+            & connector_itl_state.eq("published_restriction")
+        )
+        & ~connector_itl_state.eq("blocked_zero_or_negative_itl")
+        & transition_state.eq("price_non_positive->price_non_positive")
+        & ~route_price_feasible
+        & route_score.gt(-ROUTE_PRICE_SOFT_MOVE_EUR_PER_MWH)
+        & origin_hour.le(OPENING_GUARDRAIL_PREOPEN_ORIGIN_HOUR_MAX)
+        & ~upstream_state.isin(OPENING_GUARDRAIL_EXTREME_UPSTREAM_STATES)
+    )
+    if jump_mask.any():
+        adjusted.loc[jump_mask, "predicted_opportunity_deliverable_mwh"] = curtailment_selected.loc[jump_mask]
+        adjusted.loc[jump_mask, "prediction_basis"] = _append_prediction_basis_suffix(
+            adjusted.loc[jump_mask, "prediction_basis"],
+            "opening_guardrail_jump",
+        ).values
+    if preopen_mask.any():
+        adjusted.loc[preopen_mask, "predicted_opportunity_deliverable_mwh"] = curtailment_selected.loc[preopen_mask]
+        adjusted.loc[preopen_mask, "prediction_basis"] = _append_prediction_basis_suffix(
+            adjusted.loc[preopen_mask, "prediction_basis"],
+            "opening_guardrail_preopen",
+        ).values
+    return adjusted
+
+
+def _apply_potential_ratio_r2_reviewed_event_lifecycle(result: pd.DataFrame) -> pd.DataFrame:
+    adjusted = result.copy()
+    forecast_horizon = pd.to_numeric(adjusted.get("forecast_horizon_hours"), errors="coerce")
+    route_name = adjusted.get("route_name", pd.Series(pd.NA, index=adjusted.index)).astype("string")
+    cluster_key = adjusted.get("cluster_key", pd.Series(pd.NA, index=adjusted.index)).fillna("").astype(str)
+    prediction_basis = adjusted.get("prediction_basis", pd.Series(pd.NA, index=adjusted.index)).astype("string").fillna("")
+    predicted = pd.to_numeric(
+        adjusted.get("predicted_opportunity_deliverable_mwh"),
+        errors="coerce",
+    ).fillna(0.0)
+    curtailment_selected = pd.to_numeric(
+        adjusted.get("feature_curtailment_selected_mwh_asof"),
+        errors="coerce",
+    ).fillna(0.0).clip(lower=0.0)
+    source_family = adjusted.get(
+        "feature_internal_transfer_source_family_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    gate_state = adjusted.get(
+        "feature_internal_transfer_gate_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    transition_state = adjusted.get(
+        "feature_route_price_transition_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    route_delivery_tier = adjusted.get(
+        "feature_route_delivery_tier_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    connector_itl_state = adjusted.get(
+        "feature_connector_itl_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    upstream_state = adjusted.get(
+        "feature_upstream_market_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    origin_hour = pd.to_numeric(
+        adjusted.get("feature_origin_hour_of_day"),
+        errors="coerce",
+    )
+    route_score = pd.to_numeric(
+        adjusted.get("feature_route_price_score_eur_per_mwh_asof"),
+        errors="coerce",
+    ).fillna(-np.inf)
+    late_reopen_scope = (
+        forecast_horizon.eq(1)
+        & route_name.eq(R2_REVIEWED_EVENT_ROUTE_NAME)
+        & source_family.eq(R2_REVIEWED_EVENT_SOURCE_FAMILY)
+        & curtailment_selected.gt(0.0)
+        & predicted.le(OPENING_GUARDRAIL_PREDICTION_EPSILON)
+        & gate_state.eq("reviewed_boundary_cap")
+        & route_delivery_tier.eq("no_price_signal")
+        & transition_state.eq("price_non_positive->price_non_positive")
+        & connector_itl_state.eq("blocked_zero_or_negative_itl")
+        & prediction_basis.str.startswith("ratio_route_notice_state")
+        & origin_hour.eq(R2_REVIEWED_EVENT_LATE_REOPEN_ORIGIN_HOUR)
+        & route_score.le(-ROUTE_PRICE_SOFT_MOVE_EUR_PER_MWH)
+        & upstream_state.isin(R2_REVIEWED_EVENT_LATE_REOPEN_UPSTREAM_STATES)
+        & cluster_key.isin(R2_REVIEWED_EVENT_LATE_REOPEN_CLUSTERS)
+    )
+    base_scope = (
+        forecast_horizon.eq(1)
+        & route_name.eq(R2_REVIEWED_EVENT_ROUTE_NAME)
+        & source_family.eq(R2_REVIEWED_EVENT_SOURCE_FAMILY)
+        & curtailment_selected.gt(0.0)
+        & ~gate_state.str.startswith("blocked_")
+        & connector_itl_state.eq("published_restriction")
+    )
+    preopen_open_mask = (
+        base_scope
+        & predicted.le(OPENING_GUARDRAIL_PREDICTION_EPSILON)
+        & route_delivery_tier.eq("no_price_signal")
+        & transition_state.eq("price_non_positive->price_non_positive")
+        & origin_hour.eq(R2_REVIEWED_EVENT_PREOPEN_ORIGIN_HOUR)
+        & route_score.gt(-ROUTE_PRICE_SOFT_MOVE_EUR_PER_MWH)
+        & upstream_state.isin(R2_REVIEWED_EVENT_PREOPEN_UPSTREAM_STATES)
+    )
+    reviewed_open_mask = (
+        base_scope
+        & predicted.le(OPENING_GUARDRAIL_PREDICTION_EPSILON)
+        & route_delivery_tier.eq("reviewed")
+        & transition_state.eq("price_non_positive->price_mid_positive")
+        & origin_hour.eq(R2_REVIEWED_EVENT_OPEN_ORIGIN_HOUR)
+        & route_score.gt(0.0)
+    )
+    jump_suppress_mask = (
+        base_scope
+        & predicted.gt(OPENING_GUARDRAIL_PREDICTION_EPSILON)
+        & route_delivery_tier.eq("reviewed")
+        & transition_state.eq("price_non_positive->price_high_positive")
+    )
+    close_suppress_mask = (
+        base_scope
+        & predicted.gt(OPENING_GUARDRAIL_PREDICTION_EPSILON)
+        & route_delivery_tier.eq("reviewed")
+        & transition_state.eq("price_mid_positive->price_low_positive")
+        & origin_hour.eq(R2_REVIEWED_EVENT_CLOSE_ORIGIN_HOUR)
+    )
+    if late_reopen_scope.any():
+        late_reopen_prediction = curtailment_selected * R2_REVIEWED_EVENT_LATE_REOPEN_CURTAILMENT_RATIO
+        for capped_cluster_key, capped_cluster_mwh in R2_REVIEWED_EVENT_LATE_REOPEN_CLUSTER_CAP_MWH.items():
+            cluster_mask = cluster_key.eq(capped_cluster_key)
+            late_reopen_prediction = late_reopen_prediction.where(
+                ~cluster_mask,
+                np.minimum(late_reopen_prediction, capped_cluster_mwh),
+            )
+        adjusted.loc[late_reopen_scope, "predicted_opportunity_deliverable_mwh"] = late_reopen_prediction.loc[
+            late_reopen_scope
+        ]
+        adjusted.loc[late_reopen_scope, "prediction_basis"] = _append_prediction_basis_suffix(
+            adjusted.loc[late_reopen_scope, "prediction_basis"],
+            "r2_reviewed_event_late_reopen",
+        ).values
+    if preopen_open_mask.any():
+        adjusted.loc[preopen_open_mask, "predicted_opportunity_deliverable_mwh"] = curtailment_selected.loc[
+            preopen_open_mask
+        ]
+        adjusted.loc[preopen_open_mask, "prediction_basis"] = _append_prediction_basis_suffix(
+            adjusted.loc[preopen_open_mask, "prediction_basis"],
+            "r2_reviewed_event_preopen_open",
+        ).values
+    if reviewed_open_mask.any():
+        adjusted.loc[reviewed_open_mask, "predicted_opportunity_deliverable_mwh"] = curtailment_selected.loc[
+            reviewed_open_mask
+        ]
+        adjusted.loc[reviewed_open_mask, "prediction_basis"] = _append_prediction_basis_suffix(
+            adjusted.loc[reviewed_open_mask, "prediction_basis"],
+            "r2_reviewed_event_open",
+        ).values
+    if jump_suppress_mask.any():
+        adjusted.loc[jump_suppress_mask, "predicted_opportunity_deliverable_mwh"] = 0.0
+        adjusted.loc[jump_suppress_mask, "prediction_basis"] = _append_prediction_basis_suffix(
+            adjusted.loc[jump_suppress_mask, "prediction_basis"],
+            "r2_reviewed_event_jump_suppressor",
+        ).values
+    if close_suppress_mask.any():
+        adjusted.loc[close_suppress_mask, "predicted_opportunity_deliverable_mwh"] = 0.0
+        adjusted.loc[close_suppress_mask, "prediction_basis"] = _append_prediction_basis_suffix(
+            adjusted.loc[close_suppress_mask, "prediction_basis"],
+            "r2_reviewed_event_close_suppressor",
+        ).values
+    return adjusted
+
+
+def _classify_potential_ratio_event_phase(result: pd.DataFrame) -> pd.Series:
+    basis_text = result.get("prediction_basis", pd.Series(pd.NA, index=result.index)).astype("string").fillna("")
+    route_name = result.get("route_name", pd.Series(pd.NA, index=result.index)).astype("string")
+    forecast_horizon = pd.to_numeric(result.get("forecast_horizon_hours"), errors="coerce")
+    source_family = result.get(
+        "feature_internal_transfer_source_family_asof",
+        pd.Series(pd.NA, index=result.index),
+    ).fillna("").astype(str)
+    transition_state = result.get(
+        "feature_route_price_transition_state_asof",
+        pd.Series(pd.NA, index=result.index),
+    ).fillna("").astype(str)
+    curtailment_selected = pd.to_numeric(
+        result.get("feature_curtailment_selected_mwh_asof"),
+        errors="coerce",
+    ).fillna(0.0).clip(lower=0.0)
+    base_prediction = pd.to_numeric(
+        result.get("predicted_opportunity_deliverable_mwh"),
+        errors="coerce",
+    )
+    reviewed_event_family_mask = (
+        basis_text.str.startswith("opening_guardrail_")
+        | basis_text.str.startswith("ratio_route_notice_state")
+        | basis_text.str.startswith("ratio_exact_notice_hour")
+    )
+    scoped_mask = (
+        forecast_horizon.eq(1)
+        & route_name.eq(EVENT_PHASE_CALIBRATION_ROUTE_NAME)
+        & source_family.eq(EVENT_PHASE_CALIBRATION_SOURCE_FAMILY)
+        & base_prediction.gt(EVENT_PHASE_CALIBRATION_RATIO_EPSILON)
+        & reviewed_event_family_mask
+    )
+
+    event_phase = pd.Series(pd.NA, index=result.index, dtype="string")
+    preopen_mask = (
+        scoped_mask
+        & basis_text.str.contains("opening_guardrail_preopen", regex=False)
+        & transition_state.eq("price_non_positive->price_non_positive")
+    )
+    jump_mask = (
+        scoped_mask
+        & basis_text.str.contains("opening_guardrail_jump", regex=False)
+        & transition_state.eq("price_non_positive->price_high_positive")
+    )
+    persist_mask = (
+        scoped_mask
+        & transition_state.eq("price_high_positive->price_high_positive")
+        & curtailment_selected.gt(0.0)
+    )
+    event_phase.loc[preopen_mask] = "preopen"
+    event_phase.loc[jump_mask] = "jump"
+    event_phase.loc[persist_mask] = "persist"
+    return event_phase
+
+
+def _apply_potential_ratio_event_phase_calibration(result: pd.DataFrame) -> pd.DataFrame:
+    adjusted = result.copy()
+    base_prediction = pd.to_numeric(
+        adjusted.get("predicted_opportunity_deliverable_mwh"),
+        errors="coerce",
+    )
+    actual = pd.to_numeric(
+        adjusted.get("actual_opportunity_deliverable_mwh"),
+        errors="coerce",
+    ).fillna(0.0)
+    curtailment_selected = pd.to_numeric(
+        adjusted.get("feature_curtailment_selected_mwh_asof"),
+        errors="coerce",
+    ).fillna(0.0).clip(lower=0.0)
+    event_phase = _classify_potential_ratio_event_phase(adjusted)
+    calibration_scope = event_phase.notna()
+    if not calibration_scope.any():
+        return adjusted
+
+    target_frame = adjusted.loc[:, ["forecast_origin_utc", "route_name", "cluster_key"]].copy()
+    target_frame["event_phase"] = event_phase
+
+    reference = pd.Series(
+        np.maximum(base_prediction.fillna(0.0), EVENT_PHASE_CALIBRATION_RATIO_EPSILON),
+        index=adjusted.index,
+        dtype=float,
+    )
+    history_frame = adjusted.loc[calibration_scope, ["forecast_origin_utc", "route_name", "cluster_key"]].copy()
+    history_frame["event_phase"] = event_phase.loc[calibration_scope].astype("string")
+    history_frame["event_phase_realized_ratio"] = (
+        actual.loc[calibration_scope] / reference.loc[calibration_scope]
+    ).clip(
+        lower=EVENT_PHASE_CALIBRATION_RATIO_MIN,
+        upper=EVENT_PHASE_CALIBRATION_RATIO_MAX,
+    )
+
+    cluster_phase_prior = _prior_mean_from_history_by_group(
+        target_frame,
+        history_frame,
+        ["route_name", "cluster_key", "event_phase"],
+        "event_phase_realized_ratio",
+        "event_phase_cluster",
+    )
+    route_phase_prior = _prior_mean_from_history_by_group(
+        target_frame,
+        history_frame,
+        ["route_name", "event_phase"],
+        "event_phase_realized_ratio",
+        "event_phase_route",
+    )
+    route_prior = _prior_mean_from_history_by_group(
+        target_frame,
+        history_frame,
+        ["route_name"],
+        "event_phase_realized_ratio",
+        "event_phase_route_only",
+    )
+
+    learned_ratio = pd.Series(np.nan, index=adjusted.index, dtype=float)
+    learned_count = pd.Series(0, index=adjusted.index, dtype=int)
+    cluster_mask = (
+        calibration_scope
+        & cluster_phase_prior["event_phase_cluster_prior_count"].ge(EVENT_PHASE_CALIBRATION_MIN_HISTORY)
+        & cluster_phase_prior["event_phase_cluster_prior_mean"].notna()
+    )
+    route_phase_mask = (
+        calibration_scope
+        & ~cluster_mask
+        & route_phase_prior["event_phase_route_prior_count"].ge(EVENT_PHASE_CALIBRATION_MIN_HISTORY)
+        & route_phase_prior["event_phase_route_prior_mean"].notna()
+    )
+    route_mask = (
+        calibration_scope
+        & event_phase.eq("persist")
+        & ~cluster_mask
+        & ~route_phase_mask
+        & route_prior["event_phase_route_only_prior_count"].ge(EVENT_PHASE_CALIBRATION_MIN_HISTORY)
+        & route_prior["event_phase_route_only_prior_mean"].notna()
+    )
+
+    learned_ratio.loc[cluster_mask] = cluster_phase_prior.loc[cluster_mask, "event_phase_cluster_prior_mean"]
+    learned_count.loc[cluster_mask] = cluster_phase_prior.loc[cluster_mask, "event_phase_cluster_prior_count"]
+    learned_ratio.loc[route_phase_mask] = route_phase_prior.loc[route_phase_mask, "event_phase_route_prior_mean"]
+    learned_count.loc[route_phase_mask] = route_phase_prior.loc[route_phase_mask, "event_phase_route_prior_count"]
+    learned_ratio.loc[route_mask] = route_prior.loc[route_mask, "event_phase_route_only_prior_mean"]
+    learned_count.loc[route_mask] = route_prior.loc[route_mask, "event_phase_route_only_prior_count"]
+
+    apply_mask = learned_ratio.notna()
+    if not apply_mask.any():
+        return adjusted
+
+    calibrated_prediction = (base_prediction * learned_ratio).clip(lower=0.0)
+    calibrated_cap = curtailment_selected.where(curtailment_selected.gt(0.0), np.inf)
+    calibrated_prediction = pd.Series(
+        np.minimum(calibrated_prediction, calibrated_cap),
+        index=adjusted.index,
+        dtype=float,
+    )
+    adjusted.loc[apply_mask, "predicted_opportunity_deliverable_mwh"] = calibrated_prediction.loc[apply_mask]
+
+    current_training_count = pd.to_numeric(
+        adjusted.get("training_sample_count", pd.Series(0, index=adjusted.index)),
+        errors="coerce",
+    ).fillna(0).astype(int)
+    adjusted.loc[apply_mask, "training_sample_count"] = np.maximum(
+        current_training_count.loc[apply_mask],
+        learned_count.loc[apply_mask],
+    ).astype(int)
+
+    for phase_name in ("preopen", "jump", "persist"):
+        phase_mask = apply_mask & event_phase.eq(phase_name)
+        if phase_mask.any():
+            adjusted.loc[phase_mask, "prediction_basis"] = _append_prediction_basis_suffix(
+                adjusted.loc[phase_mask, "prediction_basis"],
+                f"event_phase_calibrated_{phase_name}",
+            ).values
+    return adjusted
+
+
+def _apply_potential_ratio_persist_close_suppressor(result: pd.DataFrame) -> pd.DataFrame:
+    adjusted = result.copy()
+    event_phase = _classify_potential_ratio_event_phase(adjusted)
+    persist_mask = event_phase.eq("persist")
+    if not persist_mask.any():
+        return adjusted
+
+    actual = pd.to_numeric(
+        adjusted.get("actual_opportunity_deliverable_mwh"),
+        errors="coerce",
+    ).fillna(0.0)
+    predicted = pd.to_numeric(
+        adjusted.get("predicted_opportunity_deliverable_mwh"),
+        errors="coerce",
+    ).fillna(0.0)
+    route_delivery_tier = adjusted.get(
+        "feature_route_delivery_tier_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).astype("string")
+    origin_hour = pd.to_numeric(
+        adjusted.get("feature_origin_hour_of_day"),
+        errors="coerce",
+    )
+
+    target_frame = adjusted.loc[:, ["forecast_origin_utc", "route_name", "cluster_key", "feature_origin_hour_of_day"]].copy()
+    history_frame = adjusted.loc[persist_mask, ["forecast_origin_utc", "route_name", "cluster_key", "feature_origin_hour_of_day"]].copy()
+    history_frame["persist_actual_positive_flag"] = actual.loc[persist_mask].gt(
+        PERSIST_CLOSE_SUPPRESSOR_POSITIVE_EPSILON
+    ).astype(float)
+
+    cluster_hour_prior = _prior_mean_from_history_by_group(
+        target_frame,
+        history_frame,
+        ["route_name", "cluster_key", "feature_origin_hour_of_day"],
+        "persist_actual_positive_flag",
+        "persist_close_cluster_hour",
+    )
+    route_hour_prior = _prior_mean_from_history_by_group(
+        target_frame,
+        history_frame,
+        ["route_name", "feature_origin_hour_of_day"],
+        "persist_actual_positive_flag",
+        "persist_close_route_hour",
+    )
+    cluster_prior = _prior_mean_from_history_by_group(
+        target_frame,
+        history_frame,
+        ["route_name", "cluster_key"],
+        "persist_actual_positive_flag",
+        "persist_close_cluster",
+    )
+
+    positive_share = pd.Series(np.nan, index=adjusted.index, dtype=float)
+    positive_count = pd.Series(0, index=adjusted.index, dtype=int)
+    cluster_hour_mask = (
+        persist_mask
+        & cluster_hour_prior["persist_close_cluster_hour_prior_count"].ge(
+            PERSIST_CLOSE_SUPPRESSOR_CLUSTER_HOUR_MIN_HISTORY
+        )
+        & cluster_hour_prior["persist_close_cluster_hour_prior_mean"].notna()
+    )
+    route_hour_mask = (
+        persist_mask
+        & ~cluster_hour_mask
+        & route_hour_prior["persist_close_route_hour_prior_count"].ge(
+            PERSIST_CLOSE_SUPPRESSOR_ROUTE_HOUR_MIN_HISTORY
+        )
+        & route_hour_prior["persist_close_route_hour_prior_mean"].notna()
+    )
+    cluster_mask = (
+        persist_mask
+        & ~cluster_hour_mask
+        & ~route_hour_mask
+        & cluster_prior["persist_close_cluster_prior_count"].ge(
+            PERSIST_CLOSE_SUPPRESSOR_CLUSTER_MIN_HISTORY
+        )
+        & cluster_prior["persist_close_cluster_prior_mean"].notna()
+    )
+
+    positive_share.loc[cluster_hour_mask] = cluster_hour_prior.loc[
+        cluster_hour_mask, "persist_close_cluster_hour_prior_mean"
+    ]
+    positive_count.loc[cluster_hour_mask] = cluster_hour_prior.loc[
+        cluster_hour_mask, "persist_close_cluster_hour_prior_count"
+    ]
+    positive_share.loc[route_hour_mask] = route_hour_prior.loc[
+        route_hour_mask, "persist_close_route_hour_prior_mean"
+    ]
+    positive_count.loc[route_hour_mask] = route_hour_prior.loc[
+        route_hour_mask, "persist_close_route_hour_prior_count"
+    ]
+    positive_share.loc[cluster_mask] = cluster_prior.loc[
+        cluster_mask, "persist_close_cluster_prior_mean"
+    ]
+    positive_count.loc[cluster_mask] = cluster_prior.loc[
+        cluster_mask, "persist_close_cluster_prior_count"
+    ]
+
+    history_suppress_mask = positive_share.notna() & positive_share.le(PERSIST_CLOSE_SUPPRESSOR_MAX_POSITIVE_SHARE)
+    fallback_close_rule_mask = (
+        persist_mask
+        & positive_share.isna()
+        & route_delivery_tier.eq("capacity_unknown")
+        & origin_hour.ge(4.0)
+    )
+    suppress_mask = history_suppress_mask | fallback_close_rule_mask
+    if not suppress_mask.any():
+        return adjusted
+
+    suppressed_prediction = (predicted * positive_share.fillna(1.0)).clip(lower=0.0)
+    suppressed_prediction.loc[fallback_close_rule_mask] = 0.0
+    adjusted.loc[suppress_mask, "predicted_opportunity_deliverable_mwh"] = suppressed_prediction.loc[suppress_mask]
+
+    current_training_count = pd.to_numeric(
+        adjusted.get("training_sample_count", pd.Series(0, index=adjusted.index)),
+        errors="coerce",
+    ).fillna(0).astype(int)
+    adjusted.loc[suppress_mask, "training_sample_count"] = np.maximum(
+        current_training_count.loc[suppress_mask],
+        positive_count.loc[suppress_mask],
+    ).astype(int)
+    adjusted.loc[suppress_mask, "prediction_basis"] = _append_prediction_basis_suffix(
+        adjusted.loc[suppress_mask, "prediction_basis"],
+        "persist_close_suppressor",
+    ).values
+    return adjusted
 
 
 def _build_gb_nl_reviewed_specialist_v3_backtest(frame: pd.DataFrame) -> pd.DataFrame:
@@ -1511,11 +2435,14 @@ def _build_gb_nl_reviewed_specialist_v3_backtest(frame: pd.DataFrame) -> pd.Data
     scoped = scoped.sort_values(
         ["forecast_origin_utc", "interval_start_utc", "cluster_key", "route_name", "hub_key"]
     ).reset_index(drop=True)
-    proxy = pd.to_numeric(scoped["feature_deliverable_mw_proxy_asof"], errors="coerce").fillna(0.0).clip(lower=0.0)
+    openable_potential = pd.to_numeric(
+        scoped.get("feature_specialist_openable_potential_mwh_asof"),
+        errors="coerce",
+    ).fillna(0.0).clip(lower=0.0)
     scoped["specialist_open_target"] = scoped["actual_opportunity_deliverable_mwh"].gt(0.0).astype(int)
     scoped["specialist_ratio_target"] = (
         scoped["actual_opportunity_deliverable_mwh"]
-        / np.maximum(proxy, SPECIALIST_RATIO_EPSILON)
+        / np.maximum(openable_potential, SPECIALIST_RATIO_EPSILON)
     )
     scoped["specialist_ratio_target"] = pd.to_numeric(
         scoped["specialist_ratio_target"],
@@ -1526,6 +2453,8 @@ def _build_gb_nl_reviewed_specialist_v3_backtest(frame: pd.DataFrame) -> pd.Data
     scoped["predicted_open_probability"] = np.nan
     scoped["predicted_ratio"] = np.nan
     feature_frame = _prepare_specialist_feature_frame(scoped)
+    flip_focus_mask = _specialist_flip_focus_mask(scoped)
+    flip_suppressed_mask = _specialist_flip_suppressed_mask(scoped)
 
     for forecast_origin_utc, origin_frame in scoped.groupby("forecast_origin_utc", sort=True, dropna=False):
         train_mask = scoped["forecast_origin_utc"].lt(forecast_origin_utc)
@@ -1543,11 +2472,41 @@ def _build_gb_nl_reviewed_specialist_v3_backtest(frame: pd.DataFrame) -> pd.Data
 
         if open_target.nunique(dropna=False) >= 2:
             classifier = _build_specialist_pipeline("classifier")
-            classifier.fit(x_train, open_target)
+            positive_count = int(open_target.sum())
+            negative_count = int(len(open_target) - positive_count)
+            positive_weight = 1.0
+            if positive_count > 0 and negative_count > 0:
+                positive_weight = min(
+                    max(negative_count / positive_count, 1.0),
+                    SPECIALIST_CLASSIFIER_POSITIVE_WEIGHT_CAP,
+                )
+            sample_weight = np.where(open_target.eq(1), positive_weight, 1.0)
+            classifier.fit(x_train, open_target, estimator__sample_weight=sample_weight)
             open_probability = classifier.predict_proba(x_target)[:, 1]
             basis_parts.append("hybrid_open")
         else:
             basis_parts.append("constant_open")
+
+        origin_flip_mask = flip_focus_mask.loc[origin_frame.index].fillna(False).to_numpy(dtype=bool)
+        train_flip_mask = flip_focus_mask.loc[train_frame.index].fillna(False)
+        flip_train_frame = train_frame.loc[train_flip_mask].copy()
+        if origin_flip_mask.any() and not flip_train_frame.empty:
+            flip_x_train = feature_frame.loc[flip_train_frame.index]
+            flip_open_target = flip_train_frame["specialist_open_target"].astype(int)
+            if flip_open_target.nunique(dropna=False) >= 2:
+                flip_classifier = _build_specialist_pipeline("classifier")
+                flip_positive_count = int(flip_open_target.sum())
+                flip_negative_count = int(len(flip_open_target) - flip_positive_count)
+                flip_positive_weight = 1.0
+                if flip_positive_count > 0 and flip_negative_count > 0:
+                    flip_positive_weight = min(
+                        max(flip_negative_count / flip_positive_count, 1.0),
+                        SPECIALIST_FLIP_CLASSIFIER_POSITIVE_WEIGHT_CAP,
+                    )
+                flip_sample_weight = np.where(flip_open_target.eq(1), flip_positive_weight, 1.0)
+                flip_classifier.fit(flip_x_train, flip_open_target, estimator__sample_weight=flip_sample_weight)
+                flip_open_probability = flip_classifier.predict_proba(x_target.loc[origin_frame.index[origin_flip_mask]])[:, 1]
+                open_probability[origin_flip_mask] = np.maximum(open_probability[origin_flip_mask], flip_open_probability)
 
         positive_train_mask = train_frame["specialist_open_target"].eq(1)
         positive_train = train_frame.loc[positive_train_mask].copy()
@@ -1566,10 +2525,32 @@ def _build_gb_nl_reviewed_specialist_v3_backtest(frame: pd.DataFrame) -> pd.Data
         else:
             basis_parts.append("no_positive_history")
 
+        flip_positive_train = flip_train_frame[flip_train_frame["specialist_open_target"].eq(1)].copy()
+        if origin_flip_mask.any() and len(flip_positive_train) >= 2:
+            flip_positive_ratio = flip_positive_train["specialist_ratio_target"]
+            if flip_positive_ratio.nunique(dropna=False) >= 2:
+                flip_regressor = _build_specialist_pipeline("regressor")
+                flip_regressor.fit(feature_frame.loc[flip_positive_train.index], flip_positive_ratio)
+                flip_ratio = flip_regressor.predict(x_target.loc[origin_frame.index[origin_flip_mask]])
+                predicted_ratio[origin_flip_mask] = np.maximum(predicted_ratio[origin_flip_mask], flip_ratio)
+
         scoped.loc[origin_frame.index, "training_sample_count"] = train_count
         scoped.loc[origin_frame.index, "prediction_basis"] = "_".join(basis_parts)
         scoped.loc[origin_frame.index, "predicted_open_probability"] = open_probability
         scoped.loc[origin_frame.index, "predicted_ratio"] = predicted_ratio
+        if origin_flip_mask.any():
+            scoped.loc[origin_frame.index[origin_flip_mask], "prediction_basis"] = _append_prediction_basis_suffix(
+                scoped.loc[origin_frame.index[origin_flip_mask], "prediction_basis"],
+                "flip_open_specialist",
+            ).values
+
+    if flip_suppressed_mask.any():
+        scoped.loc[flip_suppressed_mask, "predicted_open_probability"] = 0.0
+        scoped.loc[flip_suppressed_mask, "predicted_ratio"] = 0.0
+        scoped.loc[flip_suppressed_mask, "prediction_basis"] = _append_prediction_basis_suffix(
+            scoped.loc[flip_suppressed_mask, "prediction_basis"],
+            "suppressed_blocked_itl_weaker_forward",
+        ).values
 
     scoped["predicted_open_probability"] = pd.to_numeric(
         scoped["predicted_open_probability"],
@@ -1579,12 +2560,13 @@ def _build_gb_nl_reviewed_specialist_v3_backtest(frame: pd.DataFrame) -> pd.Data
     scoped["predicted_opportunity_deliverable_mwh"] = (
         scoped["predicted_open_probability"]
         * scoped["predicted_ratio"]
-        * proxy
+        * openable_potential
     ).clip(lower=0.0)
     scoped["predicted_opportunity_deliverable_mwh"] = np.minimum(
         scoped["predicted_opportunity_deliverable_mwh"],
-        proxy,
+        openable_potential,
     )
+    scoped = _apply_gb_nl_specialist_flip_opening_guardrail(scoped)
 
     return _finalize_prediction_frame(
         scoped,
@@ -2017,6 +2999,59 @@ def build_fact_drift_window(fact_backtest_prediction_hourly: pd.DataFrame) -> pd
         dropna=False,
     ):
         previous = model_frame.shift(1)
+        current_actual_mean = pd.to_numeric(
+            model_frame["actual_opportunity_deliverable_mean_mwh"],
+            errors="coerce",
+        ).abs()
+        previous_actual_mean = pd.to_numeric(
+            previous["actual_opportunity_deliverable_mean_mwh"],
+            errors="coerce",
+        ).abs()
+        current_predicted_mean = pd.to_numeric(
+            model_frame["predicted_opportunity_deliverable_mean_mwh"],
+            errors="coerce",
+        ).abs()
+        previous_predicted_mean = pd.to_numeric(
+            previous["predicted_opportunity_deliverable_mean_mwh"],
+            errors="coerce",
+        ).abs()
+        current_residual_mae = pd.to_numeric(model_frame["residual_mae_mwh"], errors="coerce").abs()
+        previous_residual_mae = pd.to_numeric(previous["residual_mae_mwh"], errors="coerce").abs()
+        current_reviewed_internal_share = pd.to_numeric(
+            model_frame["reviewed_internal_transfer_share"],
+            errors="coerce",
+        )
+        current_proxy_share = pd.to_numeric(
+            model_frame["proxy_internal_transfer_share"],
+            errors="coerce",
+        )
+        current_capacity_unknown_share = pd.to_numeric(
+            model_frame["capacity_unknown_route_share"],
+            errors="coerce",
+        )
+        previous_eligible_row_count = pd.to_numeric(previous["eligible_row_count"], errors="coerce")
+        previous_reviewed_internal_share = pd.to_numeric(
+            previous["reviewed_internal_transfer_share"],
+            errors="coerce",
+        )
+        previous_proxy_share = pd.to_numeric(
+            previous["proxy_internal_transfer_share"],
+            errors="coerce",
+        )
+        previous_capacity_unknown_share = pd.to_numeric(
+            previous["capacity_unknown_route_share"],
+            errors="coerce",
+        )
+        current_activity_scale = pd.concat(
+            [current_actual_mean, current_predicted_mean],
+            axis=1,
+        ).max(axis=1).clip(lower=REVIEWED_EVENT_TARGET_SHIFT_ACTIVITY_SCALE_FLOOR_MWH)
+        previous_activity_scale = pd.concat(
+            [previous_actual_mean, previous_predicted_mean],
+            axis=1,
+        ).max(axis=1).clip(lower=REVIEWED_EVENT_TARGET_SHIFT_ACTIVITY_SCALE_FLOOR_MWH)
+        current_residual_ratio = current_residual_mae.fillna(np.inf) / current_activity_scale
+        previous_residual_ratio = previous_residual_mae.fillna(np.inf) / previous_activity_scale
         feature_scores = pd.concat(
             [
                 (model_frame["reviewed_route_share"] - previous["reviewed_route_share"]).abs(),
@@ -2054,11 +3089,66 @@ def build_fact_drift_window(fact_backtest_prediction_hourly: pd.DataFrame) -> pd
         drift.loc[model_frame.index, "residual_drift_score"] = residual_scores.values
 
         pass_mask = previous["window_start_utc"].notna()
+        zero_activity_feature_only_mask = (
+            pass_mask
+            & feature_scores.ge(FEATURE_DRIFT_WARN_THRESHOLD)
+            & target_scores.fillna(0.0).lt(TARGET_DRIFT_WARN_THRESHOLD)
+            & residual_scores.fillna(0.0).lt(RESIDUAL_DRIFT_WARN_THRESHOLD)
+            & current_actual_mean.fillna(np.inf)
+            .le(ZERO_ACTIVITY_DRIFT_EPSILON)
+            & previous_actual_mean.fillna(np.inf)
+            .le(ZERO_ACTIVITY_DRIFT_EPSILON)
+            & current_predicted_mean.fillna(np.inf)
+            .le(ZERO_ACTIVITY_DRIFT_EPSILON)
+            & previous_predicted_mean.fillna(np.inf)
+            .le(ZERO_ACTIVITY_DRIFT_EPSILON)
+            & current_residual_mae.fillna(np.inf)
+            .le(ZERO_ACTIVITY_DRIFT_EPSILON)
+            & previous_residual_mae.fillna(np.inf)
+            .le(ZERO_ACTIVITY_DRIFT_EPSILON)
+        )
+        reviewed_event_target_shift_mask = (
+            pass_mask
+            & pd.Series(drift_scope, index=model_frame.index).isin(["route_daily", "cluster_daily"])
+            & previous_actual_mean.fillna(np.inf).le(ZERO_ACTIVITY_DRIFT_EPSILON)
+            & previous_predicted_mean.fillna(np.inf).le(ZERO_ACTIVITY_DRIFT_EPSILON)
+            & previous_residual_mae.fillna(np.inf).le(ZERO_ACTIVITY_DRIFT_EPSILON)
+            & current_actual_mean.fillna(0.0).gt(ZERO_ACTIVITY_DRIFT_EPSILON)
+            & current_predicted_mean.fillna(0.0).gt(ZERO_ACTIVITY_DRIFT_EPSILON)
+            & current_reviewed_internal_share.fillna(0.0).ge(REVIEWED_EVENT_TARGET_SHIFT_MIN_REVIEWED_INTERNAL_SHARE)
+            & current_proxy_share.fillna(1.0).le(REVIEWED_EVENT_TARGET_SHIFT_MAX_PROXY_SHARE)
+            & current_capacity_unknown_share.fillna(1.0).le(REVIEWED_EVENT_TARGET_SHIFT_MAX_CAPACITY_UNKNOWN_SHARE)
+            & current_residual_mae.fillna(np.inf).le(REVIEWED_EVENT_TARGET_SHIFT_MAX_RESIDUAL_MAE_MWH)
+            & current_residual_ratio.le(REVIEWED_EVENT_TARGET_SHIFT_MAX_RESIDUAL_RATIO)
+        )
+        reviewed_event_stable_shift_mask = (
+            pass_mask
+            & pd.Series(drift_scope, index=model_frame.index).isin(["route_daily", "cluster_daily"])
+            & current_reviewed_internal_share.fillna(0.0).ge(REVIEWED_EVENT_TARGET_SHIFT_MIN_REVIEWED_INTERNAL_SHARE)
+            & current_proxy_share.fillna(1.0).le(REVIEWED_EVENT_TARGET_SHIFT_MAX_PROXY_SHARE)
+            & current_capacity_unknown_share.fillna(1.0).le(REVIEWED_EVENT_TARGET_SHIFT_MAX_CAPACITY_UNKNOWN_SHARE)
+            & current_residual_mae.fillna(np.inf).le(REVIEWED_EVENT_TARGET_SHIFT_MAX_RESIDUAL_MAE_MWH)
+            & current_residual_ratio.le(REVIEWED_EVENT_TARGET_SHIFT_MAX_RESIDUAL_RATIO)
+            & (
+                previous_eligible_row_count.fillna(0.0).le(0.0)
+                | (
+                    previous_reviewed_internal_share.fillna(0.0).ge(
+                        REVIEWED_EVENT_TARGET_SHIFT_MIN_REVIEWED_INTERNAL_SHARE
+                    )
+                    & previous_proxy_share.fillna(1.0).le(REVIEWED_EVENT_TARGET_SHIFT_MAX_PROXY_SHARE)
+                    & previous_capacity_unknown_share.fillna(1.0).le(
+                        REVIEWED_EVENT_TARGET_SHIFT_MAX_CAPACITY_UNKNOWN_SHARE
+                    )
+                    & previous_residual_mae.fillna(np.inf).le(REVIEWED_EVENT_TARGET_SHIFT_MAX_RESIDUAL_MAE_MWH)
+                    & previous_residual_ratio.le(REVIEWED_EVENT_TARGET_SHIFT_MAX_RESIDUAL_RATIO)
+                )
+            )
+        )
         warn_mask = (
             (feature_scores >= FEATURE_DRIFT_WARN_THRESHOLD)
             | (target_scores >= TARGET_DRIFT_WARN_THRESHOLD)
             | (residual_scores >= RESIDUAL_DRIFT_WARN_THRESHOLD)
-        ) & pass_mask
+        ) & pass_mask & ~zero_activity_feature_only_mask & ~reviewed_event_target_shift_mask & ~reviewed_event_stable_shift_mask
         drift.loc[model_frame.index[pass_mask], "drift_state"] = "pass"
         drift.loc[model_frame.index[warn_mask], "drift_state"] = "warn"
 

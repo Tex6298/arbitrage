@@ -74,7 +74,17 @@ Key behavior:
    python inline_arbitrage_live.py --show-exploration-plan
    ```
 
-8. Materialize the first three historical tables:
+8. Build the exploratory cluster-point time slider from an existing opportunity bundle plus readiness output:
+
+   ```bash
+   python inline_arbitrage_live.py ^
+     --materialize-exploratory-cluster-map ^
+     --opportunity-input-path curtailment_opportunity_live_britned_reviewed_2024-12-07_2024-12-09 ^
+     --exploratory-map-readiness-path model_readiness_dec_2024_evidence_refresh ^
+     --exploratory-map-output-dir exploratory_cluster_map_dec_2024
+   ```
+
+9. Materialize the first three historical tables:
 
    ```bash
    python inline_arbitrage_live.py ^
@@ -369,6 +379,12 @@ Key behavior:
    ```text
    gb_transfer_reviewed_input.example.csv
    ```
+
+   The normalizer now recognizes explicit reviewed-source families for:
+   - `etys_2023_b6_capability` and `scotland_north_to_south_gap_review` as `scotland_north_to_south_review`
+   - `shetland_island_link_dependency_review` as `shetland_dependency_review`
+
+   Ordinary reviewed internal-transfer rows still do not override Shetland's topology upstream-dependency block. Only the dedicated `shetland_dependency_review` family does that, and only for `shetland_wind`.
 
    If your source is a messy CSV, TSV, TXT, or PDF-extracted table, normalize it first:
 
@@ -832,15 +848,23 @@ Key behavior:
   - `python inline_arbitrage_live.py --materialize-opportunity-backtest --opportunity-input-path curtailment_opportunity_history --backtest-output-dir opportunity_backtest_history`
 - To turn an opportunity export plus its backtest into a hard product-readiness gate:
   - `python inline_arbitrage_live.py --materialize-model-readiness --opportunity-input-path curtailment_opportunity_history --readiness-start 2024-10-01 --readiness-end 2024-10-07 --readiness-output-dir model_readiness_history`
-- To materialize a multi-window shadow benchmark suite from a manifest:
-  - `python inline_arbitrage_live.py --materialize-benchmark-suite --benchmark-suite-manifest benchmark_suites/gb_nl_reviewed_shadow_acceptance_v1.csv --benchmark-suite-output-dir model_readiness_gb_nl_shadow_suite --backtest-model-key all --backtest-horizons 1,6,24,168`
+- To materialize a multi-window shadow benchmark suite from a manifest for an archived candidate compare:
+  - `python inline_arbitrage_live.py --materialize-benchmark-suite --benchmark-suite-manifest benchmark_suites/gb_nl_reviewed_shadow_acceptance_v1.csv --benchmark-suite-output-dir model_readiness_gb_nl_shadow_suite --backtest-model-key all --baseline-model-key opportunity_potential_ratio_v2 --candidate-model-key opportunity_gb_nl_reviewed_specialist_v3 --backtest-horizons 1,6,24,168`
+- To scout whether an existing opportunity export is useful as a later holdout before editing the manifest:
+  - `python inline_arbitrage_live.py --scout-benchmark-window --opportunity-input-path curtailment_opportunity_live_britned_reviewed_2024-12-07_2024-12-09 --readiness-start 2024-12-07 --readiness-end 2024-12-09 --scout-output-dir benchmark_window_scout_dec_2024`
+- To batch-evaluate the current baseline across every local reviewed BritNed bundle without hand-picking windows:
+  - `python inline_arbitrage_live.py --materialize-reviewed-bundle-batch-eval --reviewed-bundle-batch-root . --reviewed-bundle-batch-output-dir model_readiness_reviewed_bundle_batch --backtest-model-key opportunity_potential_ratio_v2 --baseline-model-key opportunity_potential_ratio_v2 --backtest-horizons 1,6,24,168`
 - The backtest CLI now accepts:
   - `--backtest-model-key all`
   - `--backtest-model-key opportunity_group_mean_notice_v1`
   - `--backtest-model-key opportunity_potential_ratio_v2`
+- Readiness and benchmark compare now accept:
+  - `--baseline-model-key opportunity_potential_ratio_v2`
+  - `--candidate-model-key opportunity_gb_nl_reviewed_specialist_v3`
 - It also accepts:
   - `--backtest-horizons 1,6,24,168`
-- `all` is now the default so both baselines can be compared on the same CLI path and stored in the same backtest tables.
+- `all` is still the default backtest selection, but compare tables are now opt-in. If `--candidate-model-key` is omitted,
+  readiness and benchmark runs stay candidate-agnostic and do not emit shadow compare tables.
 - `fact_model_readiness_daily` is the formal gate for any future map or operational UI. It summarizes:
   - overall `t+1h` and `t+6h` deliverable MAE
   - `GB-NL` `t+1h` deliverable MAE
@@ -857,7 +881,9 @@ Key behavior:
 - `benchmark_suites/gb_nl_reviewed_shadow_acceptance_v1.csv` is the executable benchmark plan for the current
   GB-NL specialist shadow phase. It keeps the October 1-7, 2024 blocker week as a diagnostic row, then adds
   broader guardrail windows so the suite can grow into a real promotion gate instead of relying on one curated week.
-  That suite now retires `opportunity_gb_nl_reviewed_specialist_v3` on informative later holdouts, so the model
+  Only later windows that pass the scout informative-signal gate belong in `promotion_windows`; later perfect-zero
+  windows may still remain in the manifest as guardrails for audit visibility. That suite now retires
+  `opportunity_gb_nl_reviewed_specialist_v3` on informative later holdouts, so the model
   remains in the repo for archived comparison only rather than as an active promotion candidate.
 - `dim_model_benchmark_window` records the suite manifest that was actually run.
 - `fact_model_candidate_compare_window_daily` is the daily shadow compare annotated by benchmark window.
@@ -871,6 +897,21 @@ Key behavior:
   `informative_window_count` and `noninformative_window_count`, and compute suite MAE only from informative windows.
 - `promotion_state` is now forecast-only. `blocker_row_delta` and `severe_focus_area_delta` remain in the compare
   tables as audit context, but they no longer decide whether a candidate beat or regressed on forecasting.
+- `fact_model_benchmark_window_scout` is the pre-manifest screen for later holdouts. It uses an existing opportunity
+  export plus a baseline-only `t+1h` backtest to report whether the reviewed GB-NL specialist slice has real signal
+  before a new window is promoted into `promotion_windows`.
+- `--materialize-reviewed-bundle-batch-eval` is the no-more-manual-loop path for baseline validation. It autodiscovers
+  local reviewed BritNed opportunity bundles, reruns baseline readiness in per-window subdirectories, and emits root
+  rollups for bundle metadata, scout signal, daily readiness, per-window summary, and aggregated blocker counts.
+- The reviewed boundary pass-through now stays visible on the France-facing east-coast and Scotland-to-south corridors
+  when public day-ahead boundary evidence is available but non-tightening. That reduces proxy internal-transfer share
+  without pretending those rows are stronger than the published corridor evidence.
+- `exploratory_cluster_map.py` is the first exploratory map surface. It builds:
+  - `dim_exploratory_cluster_map_point`
+  - `fact_exploratory_cluster_map_hourly`
+  - `exploratory_cluster_map.html`
+  from an opportunity export plus `fact_model_readiness_daily`. It is intentionally a cluster-point time slider with
+  explicit mapping-confidence and daily-readiness badges, not an operational dispatch map.
 - Each blocker row is keyed by:
   - `window_date`
   - `blocker_type`

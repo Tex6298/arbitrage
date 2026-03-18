@@ -6,7 +6,6 @@ from unittest.mock import patch
 import pandas as pd
 
 from model_readiness import (
-    DEFAULT_CANDIDATE_MODEL_KEY,
     DEFAULT_READINESS_MODEL_KEY,
     MODEL_BLOCKER_PRIORITY_TABLE,
     MODEL_CANDIDATE_COMPARE_TABLE,
@@ -21,6 +20,10 @@ from model_readiness import (
     materialize_model_readiness_daily,
     materialize_model_readiness_review,
 )
+from opportunity_backtest import MODEL_GB_NL_REVIEWED_SPECIALIST_V3
+
+
+TEST_CANDIDATE_MODEL_KEY = MODEL_GB_NL_REVIEWED_SPECIALIST_V3
 
 
 def _prediction_row(
@@ -346,7 +349,46 @@ class ModelReadinessTests(unittest.TestCase):
                 ),
                 _prediction_row(
                     "2024-10-01T01:00:00Z",
-                    model_key=DEFAULT_CANDIDATE_MODEL_KEY,
+                    model_key=TEST_CANDIDATE_MODEL_KEY,
+                    horizon_hours=1,
+                    deliverable_abs_error=2.0,
+                    route_name="R2_netback_GB_NL_DE_PL",
+                    actual_deliverable_mwh=40.0,
+                ),
+            ]
+        )
+
+        compare = build_fact_model_candidate_compare_daily(
+            fact_backtest_prediction_hourly=predictions,
+            fact_backtest_summary_slice=pd.DataFrame(),
+            fact_backtest_top_error_hourly=pd.DataFrame(),
+            fact_drift_window=pd.DataFrame(),
+            candidate_model_key=TEST_CANDIDATE_MODEL_KEY,
+        )
+
+        row = compare.iloc[0]
+        self.assertEqual(row["baseline_model_key"], DEFAULT_READINESS_MODEL_KEY)
+        self.assertEqual(row["candidate_model_key"], TEST_CANDIDATE_MODEL_KEY)
+        self.assertEqual(int(row["candidate_scope_row_count"]), 1)
+        self.assertLess(float(row["overall_t_plus_1h_deliverable_mae_delta_mwh"]), 0.0)
+        self.assertLess(float(row["gb_nl_t_plus_1h_deliverable_mae_delta_mwh"]), 0.0)
+        self.assertLess(float(row["gb_nl_reviewed_internal_t_plus_1h_deliverable_mae_delta_mwh"]), 0.0)
+        self.assertEqual(row["promotion_state"], "candidate_beats_baseline")
+
+    def test_build_fact_model_candidate_compare_daily_requires_explicit_candidate(self) -> None:
+        predictions = pd.DataFrame(
+            [
+                _prediction_row(
+                    "2024-10-01T01:00:00Z",
+                    model_key=DEFAULT_READINESS_MODEL_KEY,
+                    horizon_hours=1,
+                    deliverable_abs_error=8.0,
+                    route_name="R2_netback_GB_NL_DE_PL",
+                    actual_deliverable_mwh=40.0,
+                ),
+                _prediction_row(
+                    "2024-10-01T01:00:00Z",
+                    model_key=TEST_CANDIDATE_MODEL_KEY,
                     horizon_hours=1,
                     deliverable_abs_error=2.0,
                     route_name="R2_netback_GB_NL_DE_PL",
@@ -362,14 +404,7 @@ class ModelReadinessTests(unittest.TestCase):
             fact_drift_window=pd.DataFrame(),
         )
 
-        row = compare.iloc[0]
-        self.assertEqual(row["baseline_model_key"], DEFAULT_READINESS_MODEL_KEY)
-        self.assertEqual(row["candidate_model_key"], DEFAULT_CANDIDATE_MODEL_KEY)
-        self.assertEqual(int(row["candidate_scope_row_count"]), 1)
-        self.assertLess(float(row["overall_t_plus_1h_deliverable_mae_delta_mwh"]), 0.0)
-        self.assertLess(float(row["gb_nl_t_plus_1h_deliverable_mae_delta_mwh"]), 0.0)
-        self.assertLess(float(row["gb_nl_reviewed_internal_t_plus_1h_deliverable_mae_delta_mwh"]), 0.0)
-        self.assertEqual(row["promotion_state"], "candidate_beats_baseline")
+        self.assertTrue(compare.empty)
 
     def test_build_fact_model_candidate_compare_window_rolls_up_window_metrics(self) -> None:
         predictions = pd.DataFrame(
@@ -384,7 +419,7 @@ class ModelReadinessTests(unittest.TestCase):
                 ),
                 _prediction_row(
                     "2024-10-01T01:00:00Z",
-                    model_key=DEFAULT_CANDIDATE_MODEL_KEY,
+                    model_key=TEST_CANDIDATE_MODEL_KEY,
                     horizon_hours=1,
                     deliverable_abs_error=2.0,
                     route_name="R2_netback_GB_NL_DE_PL",
@@ -398,7 +433,7 @@ class ModelReadinessTests(unittest.TestCase):
                 ),
                 _prediction_row(
                     "2024-10-02T01:00:00Z",
-                    model_key=DEFAULT_CANDIDATE_MODEL_KEY,
+                    model_key=TEST_CANDIDATE_MODEL_KEY,
                     horizon_hours=1,
                     deliverable_abs_error=4.0,
                 ),
@@ -419,6 +454,7 @@ class ModelReadinessTests(unittest.TestCase):
             benchmark_role="guardrail",
             promotion_window_flag=False,
             display_order=1,
+            candidate_model_key=TEST_CANDIDATE_MODEL_KEY,
         )
 
         row = window_compare.iloc[0]
@@ -436,6 +472,7 @@ class ModelReadinessTests(unittest.TestCase):
             benchmark_role="guardrail",
             promotion_window_flag=False,
             display_order=1,
+            candidate_model_key=TEST_CANDIDATE_MODEL_KEY,
         ).columns.tolist())
         self.assertEqual(row["benchmark_window_key"], "window_a")
         self.assertEqual(int(row["window_day_count"]), 2)
@@ -460,7 +497,7 @@ class ModelReadinessTests(unittest.TestCase):
                 ),
                 _prediction_row(
                     "2024-10-01T01:00:00Z",
-                    model_key=DEFAULT_CANDIDATE_MODEL_KEY,
+                    model_key=TEST_CANDIDATE_MODEL_KEY,
                     horizon_hours=1,
                     deliverable_abs_error=4.0,
                     route_name="R2_netback_GB_NL_DE_PL",
@@ -487,6 +524,7 @@ class ModelReadinessTests(unittest.TestCase):
                 benchmark_role="acceptance",
                 promotion_window_flag=True,
                 display_order=1,
+                candidate_model_key=TEST_CANDIDATE_MODEL_KEY,
             )
 
         row = window_compare.iloc[0]
@@ -507,7 +545,7 @@ class ModelReadinessTests(unittest.TestCase):
                 ),
                 _prediction_row(
                     "2024-10-08T01:00:00Z",
-                    model_key=DEFAULT_CANDIDATE_MODEL_KEY,
+                    model_key=TEST_CANDIDATE_MODEL_KEY,
                     horizon_hours=1,
                     deliverable_abs_error=0.0,
                     route_name="R2_netback_GB_NL_DE_PL",
@@ -530,6 +568,7 @@ class ModelReadinessTests(unittest.TestCase):
             benchmark_role="acceptance",
             promotion_window_flag=True,
             display_order=2,
+            candidate_model_key=TEST_CANDIDATE_MODEL_KEY,
         )
 
         row = window_compare.iloc[0]
@@ -551,7 +590,7 @@ class ModelReadinessTests(unittest.TestCase):
                 ),
                 _prediction_row(
                     "2024-10-01T01:00:00Z",
-                    model_key=DEFAULT_CANDIDATE_MODEL_KEY,
+                    model_key=TEST_CANDIDATE_MODEL_KEY,
                     horizon_hours=1,
                     deliverable_abs_error=1.0,
                     route_name="R2_netback_GB_NL_DE_PL",
@@ -571,7 +610,7 @@ class ModelReadinessTests(unittest.TestCase):
                 ),
                 _prediction_row(
                     "2024-10-08T01:00:00Z",
-                    model_key=DEFAULT_CANDIDATE_MODEL_KEY,
+                    model_key=TEST_CANDIDATE_MODEL_KEY,
                     horizon_hours=1,
                     deliverable_abs_error=0.0,
                     route_name="R2_netback_GB_NL_DE_PL",
@@ -595,6 +634,7 @@ class ModelReadinessTests(unittest.TestCase):
                     benchmark_role="diagnostic",
                     promotion_window_flag=False,
                     display_order=1,
+                    candidate_model_key=TEST_CANDIDATE_MODEL_KEY,
                 ),
                 build_fact_model_candidate_compare_window(
                     fact_backtest_prediction_hourly=promotion_predictions,
@@ -610,6 +650,7 @@ class ModelReadinessTests(unittest.TestCase):
                     benchmark_role="acceptance",
                     promotion_window_flag=True,
                     display_order=2,
+                    candidate_model_key=TEST_CANDIDATE_MODEL_KEY,
                 ),
             ],
             ignore_index=True,
@@ -771,7 +812,7 @@ class ModelReadinessTests(unittest.TestCase):
                 ),
                 _prediction_row(
                     "2024-10-01T01:00:00Z",
-                    model_key=DEFAULT_CANDIDATE_MODEL_KEY,
+                    model_key=TEST_CANDIDATE_MODEL_KEY,
                     horizon_hours=1,
                     deliverable_abs_error=1.5,
                     route_name="R2_netback_GB_NL_DE_PL",
@@ -787,6 +828,7 @@ class ModelReadinessTests(unittest.TestCase):
                 pd.DataFrame(),
                 pd.DataFrame(),
                 pd.DataFrame(),
+                candidate_model_key=TEST_CANDIDATE_MODEL_KEY,
             )
             self.assertEqual(
                 set(frames),

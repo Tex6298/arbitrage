@@ -25,6 +25,7 @@ import os
 import re
 import sys
 import tempfile
+from pathlib import Path
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -42,9 +43,19 @@ from bmu_dispatch import materialize_bmu_dispatch_history, parse_iso_date as par
 from bmu_generation import materialize_bmu_generation_history, parse_iso_date as parse_bmu_iso_date
 from benchmark_suite import (
     BENCHMARK_WINDOW_TABLE,
+    MODEL_BENCHMARK_WINDOW_SCOUT_TABLE,
     MODEL_CANDIDATE_COMPARE_WINDOW_DAILY_TABLE,
+    REVIEWED_BUNDLE_BATCH_BLOCKER_SUMMARY_TABLE,
+    REVIEWED_BUNDLE_BATCH_READINESS_DAILY_TABLE,
+    REVIEWED_BUNDLE_BATCH_SCOUT_TABLE,
+    REVIEWED_BUNDLE_BATCH_WINDOW_SUMMARY_TABLE,
+    REVIEWED_BUNDLE_BATCH_WINDOW_TABLE,
+    DEFAULT_REVIEWED_BUNDLE_BATCH_GLOB,
+    discover_reviewed_bundle_batch_windows,
     load_benchmark_suite_manifest,
+    materialize_model_benchmark_window_scout,
     materialize_model_benchmark_suite,
+    materialize_reviewed_bundle_batch_evaluation,
 )
 from curtailment_truth import materialize_bmu_curtailment_truth
 from curtailment_signals import materialize_curtailed_history, parse_iso_date
@@ -67,8 +78,8 @@ from opportunity_backtest import (
     DEFAULT_BACKTEST_MODEL_SELECTION,
     DEFAULT_FORECAST_HORIZON_HOURS,
     DRIFT_WINDOW_TABLE,
-    MODEL_GB_NL_REVIEWED_SPECIALIST_V3,
     MODEL_POTENTIAL_RATIO_V2,
+    VALID_BACKTEST_MODEL_KEYS,
     VALID_BACKTEST_MODEL_SELECTIONS,
     coerce_forecast_horizons,
     load_curtailment_opportunity_input,
@@ -76,6 +87,12 @@ from opportunity_backtest import (
     summarize_backtest_prediction_hourly,
 )
 from exploration_plan import backtest_plan_frame, dataset_plan_frame, drift_monitor_plan_frame, map_layer_plan_frame
+from exploratory_cluster_map import (
+    EXPLORATORY_CLUSTER_MAP_HOURLY_TABLE,
+    EXPLORATORY_CLUSTER_MAP_HTML,
+    EXPLORATORY_CLUSTER_MAP_POINT_TABLE,
+    materialize_exploratory_cluster_map,
+)
 from france_connector import (
     DIM_INTERCONNECTOR_CABLE_TABLE,
     FRANCE_CONNECTOR_TABLE,
@@ -267,6 +284,29 @@ def iter_market_days(start_day: dt.date, end_day: dt.date) -> Iterable[dt.date]:
     while day < end_day:
         yield day
         day += dt.timedelta(days=1)
+
+
+def load_system_balance_market_state_input(path: str | Path) -> pd.DataFrame:
+    input_path = Path(path)
+    frame = pd.read_csv(input_path)
+    if frame.empty:
+        return frame
+    if "date" in frame.columns:
+        frame["date"] = pd.to_datetime(frame["date"], errors="coerce")
+    for column_name in ("interval_start_local", "interval_end_local"):
+        if column_name in frame.columns:
+            frame[column_name] = pd.to_datetime(frame[column_name], errors="coerce")
+    for column_name in ("interval_start_utc", "interval_end_utc", "system_balance_source_published_utc"):
+        if column_name in frame.columns:
+            frame[column_name] = pd.to_datetime(frame[column_name], utc=True, errors="coerce")
+    for column_name in (
+        "system_balance_feed_available_flag",
+        "system_balance_known_flag",
+        "system_balance_active_flag",
+    ):
+        if column_name in frame.columns:
+            frame[column_name] = frame[column_name].where(frame[column_name].notna(), False).astype(bool)
+    return frame
 
 
 def resolve_market_days(args: argparse.Namespace) -> List[dt.date]:
@@ -1158,6 +1198,17 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        "--baseline-model-key",
+        default=MODEL_POTENTIAL_RATIO_V2,
+        choices=sorted(VALID_BACKTEST_MODEL_KEYS),
+        help="Baseline model key for readiness compare and scouting outputs",
+    )
+    parser.add_argument(
+        "--candidate-model-key",
+        choices=sorted(VALID_BACKTEST_MODEL_KEYS),
+        help="Optional candidate model key for shadow compare outputs; omitted means no candidate compare is materialized",
+    )
+    parser.add_argument(
         "--backtest-horizons",
         default=",".join(str(value) for value in DEFAULT_FORECAST_HORIZON_HOURS),
         help="Comma-separated forecast horizons in hours for the opportunity backtest, e.g. 1,6,24,168",
@@ -1192,6 +1243,58 @@ def main() -> int:
         "--benchmark-suite-output-dir",
         default="model_readiness_benchmark_suite",
         help="Output directory for suite-level candidate compare outputs",
+    )
+    parser.add_argument(
+        "--scout-benchmark-window",
+        action="store_true",
+        help="Score an existing opportunity export for later benchmark usefulness, then exit",
+    )
+    parser.add_argument(
+        "--materialize-reviewed-bundle-batch-eval",
+        action="store_true",
+        help="Autodiscover local reviewed opportunity bundles, run baseline readiness across them, and write one batch summary",
+    )
+    parser.add_argument(
+        "--reviewed-bundle-batch-root",
+        default=".",
+        help="Root directory to scan for reviewed opportunity bundles",
+    )
+    parser.add_argument(
+        "--reviewed-bundle-batch-pattern",
+        default=DEFAULT_REVIEWED_BUNDLE_BATCH_GLOB,
+        help="Glob pattern for reviewed opportunity bundle directories",
+    )
+    parser.add_argument(
+        "--reviewed-bundle-batch-output-dir",
+        default="model_readiness_reviewed_bundle_batch",
+        help="Output directory for the reviewed-bundle batch evaluation",
+    )
+    parser.add_argument(
+        "--scout-output-dir",
+        default="benchmark_window_scout",
+        help="Output directory for the benchmark-window scout summary",
+    )
+    parser.add_argument(
+        "--scout-window-key",
+        help="Optional window key override for benchmark scouting output",
+    )
+    parser.add_argument(
+        "--scout-window-label",
+        help="Optional human-readable label override for benchmark scouting output",
+    )
+    parser.add_argument(
+        "--materialize-exploratory-cluster-map",
+        action="store_true",
+        help="Build an exploratory cluster-point time-slider map from an existing opportunity export plus readiness output",
+    )
+    parser.add_argument(
+        "--exploratory-map-readiness-path",
+        help="Directory or CSV path containing fact_model_readiness_daily for the exploratory map",
+    )
+    parser.add_argument(
+        "--exploratory-map-output-dir",
+        default="exploratory_cluster_map",
+        help="Output directory for exploratory cluster-map CSVs and HTML",
     )
     parser.add_argument(
         "--capacity-audit-start",
@@ -2749,11 +2852,22 @@ def main() -> int:
                     prices=prices,
                     gb_source_provider=provider_used,
                 )
-            system_balance_market_state = build_fact_system_balance_market_state_hourly(
-                start_date=network_start,
-                end_date=network_end,
-                api_key=bmrs_api_key,
-            )
+            system_balance_cache_path = Path(args.opportunity_output_dir) / f"{SYSTEM_BALANCE_MARKET_STATE_TABLE}.csv"
+            try:
+                system_balance_market_state = build_fact_system_balance_market_state_hourly(
+                    start_date=network_start,
+                    end_date=network_end,
+                    api_key=bmrs_api_key,
+                )
+            except Exception as exc:
+                if system_balance_cache_path.exists():
+                    system_balance_market_state = load_system_balance_market_state_input(system_balance_cache_path)
+                    print(
+                        f"[warn] Reused existing {SYSTEM_BALANCE_MARKET_STATE_TABLE} from {system_balance_cache_path} "
+                        f"after live refresh failed: {exc}"
+                    )
+                else:
+                    raise
             cluster_curtailment_proxy = fetch_cluster_curtailment_proxy_hourly(
                 start_date=network_start,
                 end_date=network_end,
@@ -2935,8 +3049,8 @@ def main() -> int:
             )
             selected_model_keys = set(backtest_frames[BACKTEST_PREDICTION_TABLE]["model_key"].dropna())
             readiness_model_key = (
-                MODEL_POTENTIAL_RATIO_V2
-                if MODEL_POTENTIAL_RATIO_V2 in selected_model_keys
+                args.baseline_model_key
+                if args.baseline_model_key in selected_model_keys
                 else args.backtest_model_key
             )
             readiness_frames = materialize_model_readiness_review(
@@ -2946,8 +3060,8 @@ def main() -> int:
                 fact_backtest_top_error_hourly=backtest_frames[BACKTEST_TOP_ERROR_TABLE],
                 fact_drift_window=backtest_frames[DRIFT_WINDOW_TABLE],
                 model_key=readiness_model_key,
-                baseline_model_key=MODEL_POTENTIAL_RATIO_V2,
-                candidate_model_key=MODEL_GB_NL_REVIEWED_SPECIALIST_V3,
+                baseline_model_key=args.baseline_model_key,
+                candidate_model_key=args.candidate_model_key,
             )
             frames = {**backtest_frames, **readiness_frames}
             print(
@@ -2989,6 +3103,12 @@ def main() -> int:
                 print()
                 print("Model Candidate Compare Daily")
                 print(candidate_compare.to_string(index=False))
+            elif args.candidate_model_key:
+                print()
+                print(
+                    f"Model candidate compare skipped for candidate={args.candidate_model_key}; "
+                    "the requested model was not materialized with joined eligible coverage."
+                )
             if args.truth_store_db_path:
                 store_summary = upsert_truth_frames_to_sqlite(frames, args.truth_store_db_path)
                 print(f"[store=sqlite] Upserted model readiness tables into {args.truth_store_db_path}")
@@ -2997,6 +3117,176 @@ def main() -> int:
                         f"{row['table_name']}: rows_loaded={int(row['rows_loaded'])} "
                         f"table_rows={int(row['table_row_count'])}"
                     )
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
+    if args.scout_benchmark_window:
+        if not args.readiness_start or not args.readiness_end:
+            raise SystemExit("--scout-benchmark-window requires --readiness-start and --readiness-end")
+        try:
+            readiness_start = parse_market_day(args.readiness_start)
+            readiness_end = parse_market_day(args.readiness_end)
+            if readiness_end < readiness_start:
+                raise SystemExit("--readiness-end must be on or after --readiness-start")
+            scout_window_key = (
+                args.scout_window_key
+                or f"scout_{readiness_start.isoformat()}_{readiness_end.isoformat()}"
+            )
+            scout_window_label = (
+                args.scout_window_label
+                or f"Scout window {readiness_start.isoformat()} to {readiness_end.isoformat()}"
+            )
+            frames = materialize_model_benchmark_window_scout(
+                output_dir=args.scout_output_dir,
+                opportunity_input_path=args.opportunity_input_path,
+                readiness_start=readiness_start,
+                readiness_end=readiness_end,
+                benchmark_window_key=scout_window_key,
+                benchmark_window_label=scout_window_label,
+                baseline_model_key=args.baseline_model_key,
+            )
+            print(
+                f"[source={CURTAILMENT_OPPORTUNITY_TABLE}+benchmark_window_scout] Materialized {len(frames)} tables from "
+                f"{args.opportunity_input_path} for {readiness_start} to {readiness_end} "
+                f"using baseline={args.baseline_model_key}"
+            )
+            for table_name, frame in frames.items():
+                output_path = os.path.join(args.scout_output_dir, f"{table_name}.csv")
+                print(f"{table_name}: rows={len(frame)} path={output_path}")
+            scout = frames[MODEL_BENCHMARK_WINDOW_SCOUT_TABLE]
+            if not scout.empty:
+                print()
+                print("Benchmark Window Scout")
+                print(scout.to_string(index=False))
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
+    if args.materialize_reviewed_bundle_batch_eval:
+        if args.candidate_model_key:
+            raise SystemExit(
+                "--materialize-reviewed-bundle-batch-eval does not support --candidate-model-key; "
+                "use --materialize-benchmark-suite for candidate compare"
+            )
+        try:
+            forecast_horizons = coerce_forecast_horizons(args.backtest_horizons)
+            discovered_windows = discover_reviewed_bundle_batch_windows(
+                args.reviewed_bundle_batch_root,
+                bundle_glob=args.reviewed_bundle_batch_pattern,
+            )
+            frames = materialize_reviewed_bundle_batch_evaluation(
+                output_dir=args.reviewed_bundle_batch_output_dir,
+                root_dir=args.reviewed_bundle_batch_root,
+                bundle_glob=args.reviewed_bundle_batch_pattern,
+                model_key=args.backtest_model_key,
+                forecast_horizons=forecast_horizons,
+                baseline_model_key=args.baseline_model_key,
+            )
+            print(
+                f"[source=reviewed_bundle_autodiscovery+model_readiness] Materialized {len(frames)} tables from "
+                f"{args.reviewed_bundle_batch_root} matching {args.reviewed_bundle_batch_pattern} "
+                f"windows={len(discovered_windows)} model_selection={args.backtest_model_key} "
+                f"horizons={','.join(str(value) for value in forecast_horizons)}"
+            )
+            for table_name, frame in frames.items():
+                output_path = os.path.join(args.reviewed_bundle_batch_output_dir, f"{table_name}.csv")
+                print(f"{table_name}: rows={len(frame)} path={output_path}")
+            window_summary = frames[REVIEWED_BUNDLE_BATCH_WINDOW_SUMMARY_TABLE]
+            if not window_summary.empty:
+                print()
+                print("Reviewed Bundle Batch Window Summary")
+                print(
+                    window_summary[
+                        [
+                            "benchmark_window_key",
+                            "window_day_count",
+                            "ready_day_count",
+                            "not_ready_day_count",
+                            "informative_window_flag",
+                            "informative_signal_basis",
+                            "mean_overall_t_plus_1h_deliverable_mae_mwh",
+                            "max_overall_t_plus_1h_deliverable_mae_mwh",
+                            "mean_gb_nl_t_plus_1h_deliverable_mae_mwh",
+                            "max_proxy_internal_transfer_share_t_plus_1h",
+                        ]
+                    ].to_string(index=False)
+                )
+            blocker_summary = frames[REVIEWED_BUNDLE_BATCH_BLOCKER_SUMMARY_TABLE]
+            if not blocker_summary.empty:
+                print()
+                print("Reviewed Bundle Batch Top Blockers")
+                print(
+                    blocker_summary[
+                        [
+                            "benchmark_window_key",
+                            "blocker_type",
+                            "blocker_day_count",
+                            "blocker_row_count",
+                            "top_route_name",
+                            "top_cluster_key",
+                            "max_blocker_priority_score",
+                            "recommended_next_step",
+                        ]
+                    ]
+                    .head(20)
+                    .to_string(index=False)
+                )
+            if args.truth_store_db_path:
+                store_summary = upsert_truth_frames_to_sqlite(frames, args.truth_store_db_path)
+                print(f"[store=sqlite] Upserted reviewed-bundle batch tables into {args.truth_store_db_path}")
+                for _, row in store_summary.iterrows():
+                    print(
+                        f"{row['table_name']}: rows_loaded={int(row['rows_loaded'])} "
+                        f"table_rows={int(row['table_row_count'])}"
+                    )
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
+    if args.materialize_exploratory_cluster_map:
+        if not args.exploratory_map_readiness_path:
+            raise SystemExit("--materialize-exploratory-cluster-map requires --exploratory-map-readiness-path")
+        try:
+            frames = materialize_exploratory_cluster_map(
+                opportunity_input_path=args.opportunity_input_path,
+                readiness_input_path=args.exploratory_map_readiness_path,
+                output_dir=args.exploratory_map_output_dir,
+            )
+            print(
+                f"[source={CURTAILMENT_OPPORTUNITY_TABLE}+{MODEL_READINESS_TABLE}] Materialized {len(frames)} tables from "
+                f"{args.opportunity_input_path} using readiness={args.exploratory_map_readiness_path}"
+            )
+            for table_name, frame in frames.items():
+                output_path = os.path.join(args.exploratory_map_output_dir, f"{table_name}.csv")
+                print(f"{table_name}: rows={len(frame)} path={output_path}")
+            html_path = os.path.join(args.exploratory_map_output_dir, EXPLORATORY_CLUSTER_MAP_HTML)
+            print(f"{EXPLORATORY_CLUSTER_MAP_HTML}: path={html_path}")
+            point_frame = frames[EXPLORATORY_CLUSTER_MAP_POINT_TABLE]
+            hourly_frame = frames[EXPLORATORY_CLUSTER_MAP_HOURLY_TABLE]
+            if not point_frame.empty:
+                print()
+                print("Exploratory Cluster Map Points")
+                print(point_frame.to_string(index=False))
+            if not hourly_frame.empty:
+                print()
+                print("Exploratory Cluster Map Hourly")
+                print(
+                    hourly_frame[
+                        [
+                            "interval_start_utc",
+                            "cluster_key",
+                            "opportunity_deliverable_mwh_sum",
+                            "opportunity_gross_value_eur_sum",
+                            "reviewed_internal_route_count",
+                            "proxy_internal_route_count",
+                            "model_readiness_state",
+                        ]
+                    ].head(24).to_string(index=False)
+                )
             return 0
         except Exception as exc:
             print(f"ERROR: {exc}", file=sys.stderr)
@@ -3016,8 +3306,8 @@ def main() -> int:
                 benchmark_windows=benchmark_windows,
                 model_key=args.backtest_model_key,
                 forecast_horizons=forecast_horizons,
-                baseline_model_key=MODEL_POTENTIAL_RATIO_V2,
-                candidate_model_key=MODEL_GB_NL_REVIEWED_SPECIALIST_V3,
+                baseline_model_key=args.baseline_model_key,
+                candidate_model_key=args.candidate_model_key,
                 manifest_source=str(args.benchmark_suite_manifest),
             )
             print(
@@ -3056,6 +3346,12 @@ def main() -> int:
                 print()
                 print("Model Candidate Compare Suite")
                 print(suite_compare.to_string(index=False))
+            elif args.candidate_model_key:
+                print()
+                print(
+                    f"Benchmark candidate compare skipped for candidate={args.candidate_model_key}; "
+                    "the requested model was not materialized with joined eligible coverage."
+                )
             if args.truth_store_db_path:
                 store_summary = upsert_truth_frames_to_sqlite(frames, args.truth_store_db_path)
                 print(f"[store=sqlite] Upserted benchmark suite tables into {args.truth_store_db_path}")

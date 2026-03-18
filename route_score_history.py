@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 from asset_mapping import cluster_frame
+from gb_transfer_reviewed import SHETLAND_DEPENDENCY_SOURCE_FAMILY
 from gb_topology import INTERCONNECTOR_HUBS, ROUTE_HUB_OPTIONS
 from network_overlay import build_border_network_overlay
 from physical_constraints import ROUTE_BORDER_KEYS, ROUTES, compute_netbacks
@@ -232,6 +233,11 @@ def _aggregate_internal_review_lookup(frame: pd.DataFrame) -> pd.DataFrame:
         ascending=[True, True, True, True, True, True],
     )
     return work.drop_duplicates(["interval_start_utc", "cluster_key", "hub_key"], keep="first").copy()
+
+
+def _shetland_dependency_review_override(frame: pd.DataFrame) -> pd.Series:
+    source_family = frame["internal_transfer_source_family"].fillna("").astype(str)
+    return frame["cluster_key"].eq("shetland_wind") & source_family.eq(SHETLAND_DEPENDENCY_SOURCE_FAMILY)
 
 
 def build_fact_route_score_hourly(
@@ -811,7 +817,10 @@ def build_fact_route_score_hourly(
             False,
         ).astype(bool)
         hard_upstream_dependency_block = route_transfer["gate_state"].fillna("").eq("blocked_upstream_dependency")
-        internal_review_effective = internal_review_accepted & ~hard_upstream_dependency_block
+        dependency_review_override = _shetland_dependency_review_override(route_transfer)
+        internal_review_effective = internal_review_accepted & (
+            ~hard_upstream_dependency_block | dependency_review_override
+        )
         route_transfer["internal_transfer_evidence_tier"] = np.where(
             internal_review_effective,
             route_transfer["internal_transfer_reviewed_evidence_tier"],

@@ -23,6 +23,8 @@ DEFAULT_REVIEW_STATE = "accepted_reviewed_tier"
 DEFAULT_REVIEWED_EVIDENCE_TIER = "reviewed_internal_transfer_period"
 DEFAULT_CAPACITY_POLICY_ACTION = "allow_reviewed_internal_period"
 DEFAULT_PERIOD_TIMEZONE = "UTC"
+SCOTLAND_NORTH_TO_SOUTH_SOURCE_FAMILY = "scotland_north_to_south_review"
+SHETLAND_DEPENDENCY_SOURCE_FAMILY = "shetland_dependency_review"
 
 _SOURCE_CATALOG: Dict[str, dict[str, str]] = {
     "internal_boundary_restriction": {
@@ -38,6 +40,21 @@ _SOURCE_CATALOG: Dict[str, dict[str, str]] = {
     "public_constraint_period": {
         "source_family": "public_constraint_doc",
         "source_label": "Public constraint period",
+        "source_url": "",
+    },
+    "etys_2023_b6_capability": {
+        "source_family": SCOTLAND_NORTH_TO_SOUTH_SOURCE_FAMILY,
+        "source_label": "ETYS 2023 B6 north-to-south capability",
+        "source_url": "https://www.neso.energy/document/286591/download",
+    },
+    "scotland_north_to_south_gap_review": {
+        "source_family": SCOTLAND_NORTH_TO_SOUTH_SOURCE_FAMILY,
+        "source_label": "Scotland north-to-south gap-hours review",
+        "source_url": "",
+    },
+    "shetland_island_link_dependency_review": {
+        "source_family": SHETLAND_DEPENDENCY_SOURCE_FAMILY,
+        "source_label": "Shetland island-link dependency review",
         "source_url": "",
     },
 }

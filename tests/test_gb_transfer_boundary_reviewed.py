@@ -76,7 +76,7 @@ class GbTransferBoundaryReviewedTests(unittest.TestCase):
         self.assertEqual(row["source_key"], "fact_day_ahead_constraint_boundary_half_hourly:FLOWSTH")
         self.assertEqual(row["source_provider"], "neso")
 
-    def test_build_fact_gb_transfer_boundary_reviewed_hourly_keeps_non_tightening_britned_rows_for_east_england(self) -> None:
+    def test_build_fact_gb_transfer_boundary_reviewed_hourly_keeps_non_tightening_reviewed_pass_rows_for_east_england(self) -> None:
         boundary = pd.DataFrame(
             [
                 _boundary_row(
@@ -98,7 +98,7 @@ class GbTransferBoundaryReviewedTests(unittest.TestCase):
         )
 
         self.assertFalse(fact.empty)
-        self.assertEqual(set(fact["hub_key"]), {"britned"})
+        self.assertEqual(set(fact["hub_key"]), {"britned", "ifa", "ifa2", "eleclink"})
         self.assertEqual(
             set(fact["cluster_key"]),
             {"east_anglia_offshore", "humber_offshore", "dogger_hornsea_offshore"},
@@ -131,7 +131,7 @@ class GbTransferBoundaryReviewedTests(unittest.TestCase):
         self.assertTrue((fact["boundary_key"] == "NKILGRMO").all())
         self.assertTrue({"britned", "ifa", "ifa2", "eleclink"}.issuperset(set(fact["hub_key"])))
 
-    def test_build_fact_gb_transfer_boundary_reviewed_hourly_keeps_non_tightening_britned_rows_for_scotland(self) -> None:
+    def test_build_fact_gb_transfer_boundary_reviewed_hourly_keeps_non_tightening_reviewed_pass_rows_for_scotland(self) -> None:
         boundary = pd.DataFrame(
             [
                 _boundary_row(
@@ -153,7 +153,7 @@ class GbTransferBoundaryReviewedTests(unittest.TestCase):
         )
 
         self.assertFalse(fact.empty)
-        self.assertEqual(set(fact["hub_key"]), {"britned"})
+        self.assertEqual(set(fact["hub_key"]), {"britned", "ifa", "ifa2", "eleclink"})
         self.assertEqual(set(fact["parent_region"]), {"Scotland"})
         self.assertIn("moray_firth_offshore", set(fact["cluster_key"]))
         self.assertIn("east_coast_scotland_offshore", set(fact["cluster_key"]))

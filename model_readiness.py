@@ -6,7 +6,7 @@ from typing import Dict
 import numpy as np
 import pandas as pd
 
-from opportunity_backtest import MODEL_GB_NL_REVIEWED_SPECIALIST_V3, MODEL_POTENTIAL_RATIO_V2
+from opportunity_backtest import MODEL_POTENTIAL_RATIO_V2
 
 
 MODEL_READINESS_TABLE = "fact_model_readiness_daily"
@@ -15,7 +15,7 @@ MODEL_CANDIDATE_COMPARE_TABLE = "fact_model_candidate_compare_daily"
 MODEL_CANDIDATE_COMPARE_WINDOW_TABLE = "fact_model_candidate_compare_window"
 MODEL_CANDIDATE_COMPARE_SUITE_TABLE = "fact_model_candidate_compare_suite"
 DEFAULT_READINESS_MODEL_KEY = MODEL_POTENTIAL_RATIO_V2
-DEFAULT_CANDIDATE_MODEL_KEY = MODEL_GB_NL_REVIEWED_SPECIALIST_V3
+DEFAULT_CANDIDATE_MODEL_KEY: str | None = None
 TARGET_ROUTE_NAME = "R2_netback_GB_NL_DE_PL"
 TARGET_T1_DELIVERABLE_MAE = 0.50
 TARGET_GBNL_T1_DELIVERABLE_MAE = 1.50
@@ -467,6 +467,19 @@ def _candidate_mae_delta(frame: pd.DataFrame) -> float:
     if pd.isna(candidate_mae) or pd.isna(baseline_mae):
         return np.nan
     return float(candidate_mae - baseline_mae)
+
+
+def _candidate_compare_requested(
+    *,
+    baseline_model_key: str,
+    candidate_model_key: str | None,
+) -> bool:
+    if candidate_model_key is None:
+        return False
+    candidate_text = str(candidate_model_key).strip()
+    if not candidate_text or candidate_text == str(baseline_model_key).strip():
+        return False
+    return True
 
 
 def _promotion_state_from_deltas(
@@ -1098,8 +1111,13 @@ def build_fact_model_candidate_compare_daily(
     fact_drift_window: pd.DataFrame,
     *,
     baseline_model_key: str = DEFAULT_READINESS_MODEL_KEY,
-    candidate_model_key: str = DEFAULT_CANDIDATE_MODEL_KEY,
+    candidate_model_key: str | None = DEFAULT_CANDIDATE_MODEL_KEY,
 ) -> pd.DataFrame:
+    if not _candidate_compare_requested(
+        baseline_model_key=baseline_model_key,
+        candidate_model_key=candidate_model_key,
+    ):
+        return _empty_model_candidate_compare_frame()
     if fact_backtest_prediction_hourly is None or fact_backtest_prediction_hourly.empty:
         return _empty_model_candidate_compare_frame()
 
@@ -1226,8 +1244,13 @@ def build_fact_model_candidate_compare_window(
     promotion_window_flag: bool,
     display_order: int = 0,
     baseline_model_key: str = DEFAULT_READINESS_MODEL_KEY,
-    candidate_model_key: str = DEFAULT_CANDIDATE_MODEL_KEY,
+    candidate_model_key: str | None = DEFAULT_CANDIDATE_MODEL_KEY,
 ) -> pd.DataFrame:
+    if not _candidate_compare_requested(
+        baseline_model_key=baseline_model_key,
+        candidate_model_key=candidate_model_key,
+    ):
+        return _empty_model_candidate_compare_window_frame()
     predictions = fact_backtest_prediction_hourly.copy() if fact_backtest_prediction_hourly is not None else pd.DataFrame()
     predictions["interval_start_utc"] = pd.to_datetime(predictions.get("interval_start_utc"), utc=True, errors="coerce")
     predictions["forecast_horizon_hours"] = pd.to_numeric(predictions.get("forecast_horizon_hours"), errors="coerce")
@@ -1517,7 +1540,7 @@ def materialize_model_readiness_review(
     fact_drift_window: pd.DataFrame,
     model_key: str = DEFAULT_READINESS_MODEL_KEY,
     baseline_model_key: str = DEFAULT_READINESS_MODEL_KEY,
-    candidate_model_key: str = DEFAULT_CANDIDATE_MODEL_KEY,
+    candidate_model_key: str | None = DEFAULT_CANDIDATE_MODEL_KEY,
 ) -> Dict[str, pd.DataFrame]:
     readiness = build_fact_model_readiness_daily(
         fact_backtest_prediction_hourly=fact_backtest_prediction_hourly,
@@ -1538,15 +1561,19 @@ def materialize_model_readiness_review(
         MODEL_READINESS_TABLE: readiness,
         MODEL_BLOCKER_PRIORITY_TABLE: blocker,
     }
-    compare = build_fact_model_candidate_compare_daily(
-        fact_backtest_prediction_hourly=fact_backtest_prediction_hourly,
-        fact_backtest_summary_slice=fact_backtest_summary_slice,
-        fact_backtest_top_error_hourly=fact_backtest_top_error_hourly,
-        fact_drift_window=fact_drift_window,
+    if _candidate_compare_requested(
         baseline_model_key=baseline_model_key,
         candidate_model_key=candidate_model_key,
-    )
-    if not compare.empty:
-        compare.to_csv(output_path / f"{MODEL_CANDIDATE_COMPARE_TABLE}.csv", index=False)
-        frames[MODEL_CANDIDATE_COMPARE_TABLE] = compare
+    ):
+        compare = build_fact_model_candidate_compare_daily(
+            fact_backtest_prediction_hourly=fact_backtest_prediction_hourly,
+            fact_backtest_summary_slice=fact_backtest_summary_slice,
+            fact_backtest_top_error_hourly=fact_backtest_top_error_hourly,
+            fact_drift_window=fact_drift_window,
+            baseline_model_key=baseline_model_key,
+            candidate_model_key=candidate_model_key,
+        )
+        if not compare.empty:
+            compare.to_csv(output_path / f"{MODEL_CANDIDATE_COMPARE_TABLE}.csv", index=False)
+            frames[MODEL_CANDIDATE_COMPARE_TABLE] = compare
     return frames
