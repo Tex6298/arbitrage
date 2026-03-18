@@ -105,6 +105,8 @@ Generated outputs now have an explicit retention policy:
   - operational inventory for `keep`, `archive`, and `delete`
 - `cleanup/bmu_generated_artifacts_manifest_v1.csv`
   - the same retention inventory pattern for BMU truth-history artifacts
+- `cleanup/opportunity_backtest_generated_artifacts_manifest_v1.csv`
+  - retention inventory for standalone `opportunity_backtest_*` snapshots
 - `_local_runs/`
   - future home for transient exploratory, smoke, scout, and stepping-stone
     outputs

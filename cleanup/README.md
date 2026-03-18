@@ -17,6 +17,8 @@ The operating model is:
   - tracked inventory for current curtailment-generated top-level directories
 - `bmu_generated_artifacts_manifest_v1.csv`
   - tracked inventory for BMU truth-history and BMU example outputs
+- `opportunity_backtest_generated_artifacts_manifest_v1.csv`
+  - tracked inventory for standalone `opportunity_backtest_*` snapshots
 - `dry_run_generated_artifact_cleanup.py`
   - non-mutating validator and report generator
 - `execute_generated_artifact_cleanup.py`
@@ -103,3 +105,15 @@ Use `--action archive` and `--action delete` as separate runs. Without
 
 For non-curtailment families, add the same `--scope-prefix` values used during
 the dry-run.
+
+For the standalone backtest family, use `opportunity_backtest` as the scope
+prefix:
+
+```bash
+python cleanup/dry_run_generated_artifact_cleanup.py ^
+  --repo-root . ^
+  --manifest-path cleanup/opportunity_backtest_generated_artifacts_manifest_v1.csv ^
+  --scope-prefix opportunity_backtest ^
+  --show all ^
+  --format table
+```
