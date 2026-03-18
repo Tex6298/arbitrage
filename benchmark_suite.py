@@ -312,7 +312,7 @@ def _infer_readiness_window_from_opportunity_input(opportunity_input: pd.DataFra
 def _reviewed_bundle_alias_priority(bundle_path: Path) -> tuple[int, int, str]:
     name = bundle_path.name.lower()
     return (
-        1 if "refresh" in name else 0,
+        0 if "rerun" in name else 1 if "refresh" not in name else 2,
         len(bundle_path.name),
         bundle_path.name,
     )

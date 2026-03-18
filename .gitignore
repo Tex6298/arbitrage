@@ -1,4 +1,5 @@
 .env
+.axon/
 .tmp_elexon/
 __pycache__/
 *.py[cod]
@@ -11,3 +12,5 @@ bmu_truth_history/
 bmu_truth_history_test/
 weather_history/
 weather_history_test/
+_local_archive/
+_local_runs/

@@ -2317,6 +2317,79 @@ class OpportunityBacktestTests(unittest.TestCase):
         self.assertTrue(route_rows["drift_state"].eq("pass").all())
         self.assertTrue(cluster_rows["drift_state"].eq("pass").all())
 
+    def test_build_fact_drift_window_keeps_first_zero_activity_day_after_empty_warmup_as_pass(self) -> None:
+        rows = []
+        for hour in range(6):
+            interval_start = pd.Timestamp(f"2024-09-30T{hour:02d}:00:00Z")
+            rows.append(
+                {
+                    "interval_start_utc": interval_start,
+                    "interval_end_utc": interval_start + pd.Timedelta(hours=1),
+                    "model_key": MODEL_POTENTIAL_RATIO_V2,
+                    "forecast_horizon_hours": 1,
+                    "forecast_horizon_label": "t+1h",
+                    "cluster_key": "shetland_wind",
+                    "route_name": "R2_netback_GB_NL_DE_PL",
+                    "prediction_eligible_flag": False,
+                    "route_delivery_tier": "no_price_signal",
+                    "internal_transfer_evidence_tier": "gb_topology_transfer_gate_proxy",
+                    "internal_transfer_gate_state": "capacity_unknown_reachable",
+                    "connector_notice_market_state": "no_public_connector_restriction",
+                    "system_balance_state": "no_public_system_balance",
+                    "feature_system_balance_known_flag_asof": False,
+                    "curtailment_source_tier": "regional_proxy",
+                    "actual_opportunity_deliverable_mwh": 0.0,
+                    "predicted_opportunity_deliverable_mwh": 0.0,
+                    "opportunity_deliverable_residual_mwh": 0.0,
+                    "opportunity_deliverable_abs_error_mwh": 0.0,
+                    "actual_opportunity_gross_value_eur": 0.0,
+                    "predicted_opportunity_gross_value_eur": 0.0,
+                    "opportunity_gross_value_residual_eur": 0.0,
+                    "opportunity_gross_value_abs_error_eur": 0.0,
+                    "source_lineage": "fact_backtest_prediction_hourly",
+                }
+            )
+        for hour in range(6):
+            interval_start = pd.Timestamp(f"2024-10-01T{hour:02d}:00:00Z")
+            rows.append(
+                {
+                    "interval_start_utc": interval_start,
+                    "interval_end_utc": interval_start + pd.Timedelta(hours=1),
+                    "model_key": MODEL_POTENTIAL_RATIO_V2,
+                    "forecast_horizon_hours": 1,
+                    "forecast_horizon_label": "t+1h",
+                    "cluster_key": "shetland_wind",
+                    "route_name": "R2_netback_GB_NL_DE_PL",
+                    "prediction_eligible_flag": True,
+                    "route_delivery_tier": "no_price_signal",
+                    "internal_transfer_evidence_tier": "gb_topology_transfer_gate_proxy",
+                    "internal_transfer_gate_state": "capacity_unknown_reachable",
+                    "connector_notice_market_state": "known_upcoming_restriction",
+                    "system_balance_state": "active_imbalance",
+                    "feature_system_balance_known_flag_asof": True,
+                    "curtailment_source_tier": "regional_proxy",
+                    "actual_opportunity_deliverable_mwh": 0.0,
+                    "predicted_opportunity_deliverable_mwh": 0.0,
+                    "opportunity_deliverable_residual_mwh": 0.0,
+                    "opportunity_deliverable_abs_error_mwh": 0.0,
+                    "actual_opportunity_gross_value_eur": 0.0,
+                    "predicted_opportunity_gross_value_eur": 0.0,
+                    "opportunity_gross_value_residual_eur": 0.0,
+                    "opportunity_gross_value_abs_error_eur": 0.0,
+                    "source_lineage": "fact_backtest_prediction_hourly",
+                }
+            )
+
+        drift = build_fact_drift_window(pd.DataFrame(rows))
+        target_window = drift[drift["window_date"].eq(pd.Timestamp("2024-10-01T00:00:00Z"))].reset_index(drop=True)
+        route_rows = target_window[target_window["drift_scope"].eq("route_daily")]
+        cluster_rows = target_window[target_window["drift_scope"].eq("cluster_daily")]
+
+        self.assertFalse(route_rows.empty)
+        self.assertFalse(cluster_rows.empty)
+        self.assertTrue(route_rows["drift_state"].eq("pass").all())
+        self.assertTrue(cluster_rows["drift_state"].eq("pass").all())
+
     def test_summarize_backtest_prediction_hourly_reports_both_models(self) -> None:
         fact = pd.DataFrame(
             [

@@ -3107,6 +3107,13 @@ def build_fact_drift_window(fact_backtest_prediction_hourly: pd.DataFrame) -> pd
             & previous_residual_mae.fillna(np.inf)
             .le(ZERO_ACTIVITY_DRIFT_EPSILON)
         )
+        zero_activity_warmup_mask = (
+            pass_mask
+            & previous_eligible_row_count.fillna(0.0).le(0.0)
+            & current_actual_mean.fillna(np.inf).le(ZERO_ACTIVITY_DRIFT_EPSILON)
+            & current_predicted_mean.fillna(np.inf).le(ZERO_ACTIVITY_DRIFT_EPSILON)
+            & current_residual_mae.fillna(np.inf).le(ZERO_ACTIVITY_DRIFT_EPSILON)
+        )
         reviewed_event_target_shift_mask = (
             pass_mask
             & pd.Series(drift_scope, index=model_frame.index).isin(["route_daily", "cluster_daily"])
@@ -3148,7 +3155,7 @@ def build_fact_drift_window(fact_backtest_prediction_hourly: pd.DataFrame) -> pd
             (feature_scores >= FEATURE_DRIFT_WARN_THRESHOLD)
             | (target_scores >= TARGET_DRIFT_WARN_THRESHOLD)
             | (residual_scores >= RESIDUAL_DRIFT_WARN_THRESHOLD)
-        ) & pass_mask & ~zero_activity_feature_only_mask & ~reviewed_event_target_shift_mask & ~reviewed_event_stable_shift_mask
+        ) & pass_mask & ~zero_activity_feature_only_mask & ~zero_activity_warmup_mask & ~reviewed_event_target_shift_mask & ~reviewed_event_stable_shift_mask
         drift.loc[model_frame.index[pass_mask], "drift_state"] = "pass"
         drift.loc[model_frame.index[warn_mask], "drift_state"] = "warn"
 

@@ -1,3 +1,0 @@
-requested_start_date,requested_end_date,selection_context,connector_key,source_variant_key,source_provider,source_key,source_label,source_attempted_flag,source_fetch_ok,source_event_count,source_overlap_event_count,source_overlap_hour_count,source_latest_publish_time_utc,source_selected_flag,source_selection_rank,source_selection_reason,source_gap_reason
-2024-11-15,2024-11-17,historical_replay,eleclink,nordpool_umm_authenticated_api,nordpool_umm,nordpool_umm_authenticated_api,Nord Pool UMM authenticated API,False,False,0,0,0,,False,1,,nordpool_umm_credentials_not_provided
-2024-11-15,2024-11-17,historical_replay,eleclink,nordpool_umm_export,nordpool_umm,nordpool_umm_export,Nord Pool UMM export,False,False,0,0,0,,False,2,,nordpool_umm_export_not_provided

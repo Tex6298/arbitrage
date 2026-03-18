@@ -23,6 +23,14 @@ Key behavior:
 - Scores routes leg-by-leg and blocks a route when any border leg is underwater
 - Uses synthetic data only when you ask for it with `--dry`
 
+## Documentation
+
+If you need the repo story rather than just the commands:
+
+- [docs/README.md](docs/README.md)
+- [docs/gb_curtailment_lineage.md](docs/gb_curtailment_lineage.md)
+- [docs/canonical_artifacts.md](docs/canonical_artifacts.md)
+
 ## Quick start
 
 1. Install dependencies:
@@ -848,6 +856,9 @@ Key behavior:
   - `python inline_arbitrage_live.py --materialize-opportunity-backtest --opportunity-input-path curtailment_opportunity_history --backtest-output-dir opportunity_backtest_history`
 - To turn an opportunity export plus its backtest into a hard product-readiness gate:
   - `python inline_arbitrage_live.py --materialize-model-readiness --opportunity-input-path curtailment_opportunity_history --readiness-start 2024-10-01 --readiness-end 2024-10-07 --readiness-output-dir model_readiness_history`
+- Historical context and which outputs are still authoritative now live in:
+  - [docs/gb_curtailment_lineage.md](docs/gb_curtailment_lineage.md)
+  - [docs/canonical_artifacts.md](docs/canonical_artifacts.md)
 - To materialize a multi-window shadow benchmark suite from a manifest for an archived candidate compare:
   - `python inline_arbitrage_live.py --materialize-benchmark-suite --benchmark-suite-manifest benchmark_suites/gb_nl_reviewed_shadow_acceptance_v1.csv --benchmark-suite-output-dir model_readiness_gb_nl_shadow_suite --backtest-model-key all --baseline-model-key opportunity_potential_ratio_v2 --candidate-model-key opportunity_gb_nl_reviewed_specialist_v3 --backtest-horizons 1,6,24,168`
 - To scout whether an existing opportunity export is useful as a later holdout before editing the manifest:

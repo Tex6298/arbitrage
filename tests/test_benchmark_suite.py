@@ -232,12 +232,13 @@ class BenchmarkSuiteTests(unittest.TestCase):
             (root / "curtailment_opportunity_live_britned_reviewed_2024-10-14_2024-10-16").mkdir()
             (root / "curtailment_opportunity_live_britned_reviewed_2024-12-07_2024-12-09").mkdir()
             (root / "curtailment_opportunity_live_britned_reviewed_refresh_2024-10-14_2024-10-16").mkdir()
+            (root / "curtailment_opportunity_live_britned_reviewed_rerun_2024-10-14_2024-10-16").mkdir()
 
             specs = discover_reviewed_bundle_batch_windows(root)
             self.assertEqual(
                 [spec.benchmark_window_key for spec in specs],
                 [
-                    "curtailment_opportunity_live_britned_reviewed_2024-10-14_2024-10-16",
+                    "curtailment_opportunity_live_britned_reviewed_rerun_2024-10-14_2024-10-16",
                     "curtailment_opportunity_live_britned_reviewed_2024-12-07_2024-12-09",
                 ],
             )
