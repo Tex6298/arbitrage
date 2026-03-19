@@ -1009,6 +1009,7 @@ def materialize_reviewed_bundle_batch_evaluation(
     readiness_frames_annotated: list[pd.DataFrame] = []
     blocker_rows_annotated: list[pd.DataFrame] = []
     window_summary_frames: list[pd.DataFrame] = []
+    prior_scoped_inputs: list[pd.DataFrame] = []
 
     for discovered_spec in discovered_windows:
         opportunity_input = load_curtailment_opportunity_input(discovered_spec.opportunity_input_path)
@@ -1033,11 +1034,17 @@ def materialize_reviewed_bundle_batch_evaluation(
             readiness_start=runtime_spec.readiness_start,
             readiness_end=runtime_spec.readiness_end,
         )
+        historical_scoped_input = (
+            pd.concat(prior_scoped_inputs, ignore_index=True)
+            if prior_scoped_inputs
+            else pd.DataFrame()
+        )
         backtest_frames = materialize_opportunity_backtest(
             output_dir=window_output_dir,
             fact_curtailment_opportunity_hourly=scoped_input,
             model_key=model_key,
             forecast_horizons=forecast_horizons,
+            historical_fact_curtailment_opportunity_hourly=historical_scoped_input,
         )
         selected_model_keys = set(backtest_frames[BACKTEST_PREDICTION_TABLE]["model_key"].dropna())
         readiness_model_key = baseline_model_key if baseline_model_key in selected_model_keys else model_key
@@ -1074,6 +1081,7 @@ def materialize_reviewed_bundle_batch_evaluation(
         window_summary_frames.append(
             _build_reviewed_bundle_window_summary(readiness_daily, scout, spec=runtime_spec)
         )
+        prior_scoped_inputs.append(scoped_input)
 
     dim_window = build_dim_reviewed_bundle_batch_window(
         runtime_windows,

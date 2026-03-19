@@ -17,6 +17,7 @@ from opportunity_backtest import (
     _apply_potential_ratio_event_phase_calibration,
     _apply_potential_ratio_persist_close_suppressor,
     _apply_potential_ratio_r2_reviewed_event_lifecycle,
+    _apply_potential_ratio_r2_supported_range_suppressors,
     _prepare_specialist_feature_frame,
     _prior_mean_by_group,
     _prior_mean_from_history_by_group,
@@ -310,6 +311,66 @@ class OpportunityBacktestTests(unittest.TestCase):
         self.assertEqual(int(third["training_sample_count"]), 1)
         self.assertAlmostEqual(float(third["predicted_opportunity_deliverable_mwh"]), 9.0)
         self.assertAlmostEqual(float(third["predicted_opportunity_gross_value_eur"]), 540.0)
+
+    def test_build_fact_backtest_prediction_hourly_uses_historical_input_for_v2_prior_means(self) -> None:
+        historical_fact = pd.DataFrame(
+            [
+                _opportunity_row(
+                    "2024-10-01T09:00:00Z",
+                    "east_anglia_offshore",
+                    "R1_netback_GB_FR_DE_PL",
+                    "ifa",
+                    "reviewed",
+                    "known_upcoming_restriction",
+                    10.0,
+                    50.0,
+                    curtailment_selected_mwh=12.0,
+                    deliverable_mw_proxy=10.0,
+                ),
+                _opportunity_row(
+                    "2024-10-02T09:00:00Z",
+                    "east_anglia_offshore",
+                    "R1_netback_GB_FR_DE_PL",
+                    "ifa",
+                    "reviewed",
+                    "known_upcoming_restriction",
+                    9.0,
+                    60.0,
+                    curtailment_selected_mwh=18.0,
+                    deliverable_mw_proxy=10.0,
+                ),
+            ]
+        )
+        current_fact = pd.DataFrame(
+            [
+                _opportunity_row(
+                    "2024-10-03T09:00:00Z",
+                    "east_anglia_offshore",
+                    "R1_netback_GB_FR_DE_PL",
+                    "ifa",
+                    "reviewed",
+                    "known_upcoming_restriction",
+                    12.0,
+                    60.0,
+                    curtailment_selected_mwh=20.0,
+                    deliverable_mw_proxy=10.0,
+                ),
+            ]
+        )
+
+        backtest = build_fact_backtest_prediction_hourly(
+            current_fact,
+            model_key=MODEL_POTENTIAL_RATIO_V2,
+            forecast_horizons=(24,),
+            historical_fact_curtailment_opportunity_hourly=historical_fact,
+        )
+
+        row = backtest.iloc[0]
+        self.assertTrue(bool(row["prediction_eligible_flag"]))
+        self.assertEqual(row["prediction_basis"], "ratio_exact_notice_hour")
+        self.assertEqual(int(row["training_sample_count"]), 1)
+        self.assertAlmostEqual(float(row["predicted_opportunity_deliverable_mwh"]), 9.0)
+        self.assertAlmostEqual(float(row["predicted_opportunity_gross_value_eur"]), 540.0)
 
     def test_build_fact_backtest_prediction_hourly_uses_market_state_features_for_britned_flip(self) -> None:
         fact = pd.DataFrame(
@@ -1515,6 +1576,108 @@ class OpportunityBacktestTests(unittest.TestCase):
         self.assertEqual(adjusted.iloc[3]["prediction_basis"], "ratio_route_notice_state")
         self.assertEqual(float(adjusted.iloc[4]["predicted_opportunity_deliverable_mwh"]), 0.0)
         self.assertEqual(adjusted.iloc[4]["prediction_basis"], "ratio_cluster_route_upstream_market_state")
+
+    def test_apply_potential_ratio_r2_supported_range_suppressors_zeroes_2025_no_public_preopen(self) -> None:
+        result = pd.DataFrame(
+            [
+                {
+                    "forecast_origin_utc": pd.Timestamp("2025-05-17T01:00:00Z"),
+                    "forecast_horizon_hours": 1,
+                    "route_name": "R2_netback_GB_NL_DE_PL",
+                    "cluster_key": "dogger_hornsea_offshore",
+                    "feature_connector_itl_state_asof": "no_public_itl_restriction",
+                    "feature_route_delivery_tier_asof": "no_price_signal",
+                    "feature_route_price_transition_state_asof": "price_non_positive->price_non_positive",
+                    "feature_internal_transfer_source_family_asof": "day_ahead_constraint_boundary",
+                    "feature_origin_hour_of_day": 1.0,
+                    "feature_curtailment_selected_mwh_asof": 140.0,
+                    "predicted_opportunity_deliverable_mwh": 140.0,
+                    "actual_opportunity_deliverable_mwh": 0.0,
+                    "prediction_basis": "ratio_route_notice_state_opening_guardrail_preopen",
+                    "training_sample_count": 0,
+                },
+            ]
+        )
+
+        adjusted = _apply_potential_ratio_r2_supported_range_suppressors(result)
+
+        self.assertAlmostEqual(float(adjusted.iloc[0]["predicted_opportunity_deliverable_mwh"]), 0.0)
+        self.assertEqual(
+            adjusted.iloc[0]["prediction_basis"],
+            "ratio_route_notice_state_opening_guardrail_preopen_r2_2025_no_public_preopen_suppressor",
+        )
+
+    def test_apply_potential_ratio_r2_supported_range_suppressors_zeroes_2025_published_reviewed_event_opener_only(self) -> None:
+        result = pd.DataFrame(
+            [
+                {
+                    "forecast_origin_utc": pd.Timestamp("2025-12-15T04:00:00Z"),
+                    "forecast_horizon_hours": 1,
+                    "route_name": "R2_netback_GB_NL_DE_PL",
+                    "cluster_key": "dogger_hornsea_offshore",
+                    "feature_connector_itl_state_asof": "published_restriction",
+                    "feature_route_delivery_tier_asof": "no_price_signal",
+                    "feature_route_price_transition_state_asof": "price_non_positive->price_non_positive",
+                    "feature_internal_transfer_source_family_asof": "day_ahead_constraint_boundary",
+                    "feature_origin_hour_of_day": 4.0,
+                    "feature_curtailment_selected_mwh_asof": 120.0,
+                    "predicted_opportunity_deliverable_mwh": 120.0,
+                    "actual_opportunity_deliverable_mwh": 0.0,
+                    "prediction_basis": "ratio_route_notice_state_r2_reviewed_event_preopen_open",
+                    "training_sample_count": 0,
+                },
+                {
+                    "forecast_origin_utc": pd.Timestamp("2025-12-15T05:00:00Z"),
+                    "forecast_horizon_hours": 1,
+                    "route_name": "R2_netback_GB_NL_DE_PL",
+                    "cluster_key": "dogger_hornsea_offshore",
+                    "feature_connector_itl_state_asof": "published_restriction",
+                    "feature_route_delivery_tier_asof": "reviewed",
+                    "feature_route_price_transition_state_asof": "price_non_positive->price_mid_positive",
+                    "feature_internal_transfer_source_family_asof": "day_ahead_constraint_boundary",
+                    "feature_origin_hour_of_day": 5.0,
+                    "feature_curtailment_selected_mwh_asof": 100.0,
+                    "predicted_opportunity_deliverable_mwh": 100.0,
+                    "actual_opportunity_deliverable_mwh": 0.0,
+                    "prediction_basis": "ratio_global_r2_reviewed_event_open",
+                    "training_sample_count": 0,
+                },
+                {
+                    "forecast_origin_utc": pd.Timestamp("2024-10-02T04:00:00Z"),
+                    "forecast_horizon_hours": 1,
+                    "route_name": "R2_netback_GB_NL_DE_PL",
+                    "cluster_key": "dogger_hornsea_offshore",
+                    "feature_connector_itl_state_asof": "published_restriction",
+                    "feature_route_delivery_tier_asof": "no_price_signal",
+                    "feature_route_price_transition_state_asof": "price_non_positive->price_non_positive",
+                    "feature_internal_transfer_source_family_asof": "day_ahead_constraint_boundary",
+                    "feature_origin_hour_of_day": 4.0,
+                    "feature_curtailment_selected_mwh_asof": 90.0,
+                    "predicted_opportunity_deliverable_mwh": 90.0,
+                    "actual_opportunity_deliverable_mwh": 0.0,
+                    "prediction_basis": "ratio_route_notice_state_r2_reviewed_event_preopen_open",
+                    "training_sample_count": 0,
+                },
+            ]
+        )
+
+        adjusted = _apply_potential_ratio_r2_supported_range_suppressors(result)
+
+        self.assertAlmostEqual(float(adjusted.iloc[0]["predicted_opportunity_deliverable_mwh"]), 0.0)
+        self.assertEqual(
+            adjusted.iloc[0]["prediction_basis"],
+            "ratio_route_notice_state_r2_reviewed_event_preopen_open_r2_2025_reviewed_event_suppressor",
+        )
+        self.assertAlmostEqual(float(adjusted.iloc[1]["predicted_opportunity_deliverable_mwh"]), 0.0)
+        self.assertEqual(
+            adjusted.iloc[1]["prediction_basis"],
+            "ratio_global_r2_reviewed_event_open_r2_2025_reviewed_event_suppressor",
+        )
+        self.assertAlmostEqual(float(adjusted.iloc[2]["predicted_opportunity_deliverable_mwh"]), 90.0)
+        self.assertEqual(
+            adjusted.iloc[2]["prediction_basis"],
+            "ratio_route_notice_state_r2_reviewed_event_preopen_open",
+        )
 
     def test_build_fact_backtest_prediction_hourly_scopes_specialist_v3_and_preserves_lineage(self) -> None:
         fact = pd.DataFrame(

@@ -84,6 +84,7 @@ R2_REVIEWED_EVENT_LATE_REOPEN_CURTAILMENT_RATIO = 1.05
 R2_REVIEWED_EVENT_LATE_REOPEN_CLUSTER_CAP_MWH = {
     "dogger_hornsea_offshore": 170.0,
 }
+R2_2025_REGIME_WORK_START_UTC = pd.Timestamp("2025-03-01T00:00:00Z")
 EVENT_PHASE_CALIBRATION_RATIO_EPSILON = 1e-6
 EVENT_PHASE_CALIBRATION_MIN_HISTORY = 3
 EVENT_PHASE_CALIBRATION_RATIO_MIN = 0.0
@@ -1175,14 +1176,21 @@ def _prepare_backtest_input(fact_curtailment_opportunity_hourly: pd.DataFrame) -
     return frame.sort_values(["interval_start_utc", "cluster_key", "route_name", "hub_key"]).reset_index(drop=True)
 
 
-def _build_horizon_example_frame(frame: pd.DataFrame, forecast_horizon_hours: int) -> pd.DataFrame:
+def _build_horizon_example_frame(
+    frame: pd.DataFrame,
+    forecast_horizon_hours: int,
+    *,
+    origin_source_frame: pd.DataFrame | None = None,
+) -> pd.DataFrame:
     target = frame.copy()
+    if origin_source_frame is None:
+        origin_source_frame = frame
     target["forecast_horizon_hours"] = forecast_horizon_hours
     target["forecast_horizon_label"] = f"t_plus_{forecast_horizon_hours}h"
     target["forecast_origin_utc"] = target["interval_start_utc"] - pd.Timedelta(hours=forecast_horizon_hours)
     target["feature_asof_utc"] = target["forecast_origin_utc"]
 
-    origin = frame[
+    origin = origin_source_frame[
         [
             "cluster_key",
             "route_name",
@@ -1426,8 +1434,18 @@ def _build_group_mean_backtest(frame: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def _build_potential_ratio_backtest(frame: pd.DataFrame) -> pd.DataFrame:
-    frame = frame.copy()
+def _build_potential_ratio_backtest(
+    frame: pd.DataFrame,
+    history_frame: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    target_frame = frame.copy()
+    target_frame["__is_backtest_target"] = True
+    combined_frames = [target_frame]
+    if history_frame is not None and not history_frame.empty:
+        historical = history_frame.copy()
+        historical["__is_backtest_target"] = False
+        combined_frames.insert(0, historical)
+    frame = pd.concat(combined_frames, ignore_index=True, sort=False)
     frame["origin_potential_opportunity_mwh"] = np.minimum(
         pd.to_numeric(frame["feature_curtailment_selected_mwh_asof"], errors="coerce").fillna(0.0).clip(lower=0.0),
         pd.to_numeric(frame["feature_deliverable_mw_proxy_asof"], errors="coerce").fillna(0.0).clip(lower=0.0),
@@ -1881,8 +1899,10 @@ def _build_potential_ratio_backtest(frame: pd.DataFrame) -> pd.DataFrame:
     result["predicted_opportunity_deliverable_mwh"] = result["origin_potential_opportunity_mwh"] * result["predicted_ratio"]
     result = _apply_potential_ratio_opening_guardrail(result)
     result = _apply_potential_ratio_r2_reviewed_event_lifecycle(result)
+    result = _apply_potential_ratio_r2_supported_range_suppressors(result)
     result = _apply_potential_ratio_event_phase_calibration(result)
     result = _apply_potential_ratio_persist_close_suppressor(result)
+    result = result[result["__is_backtest_target"].fillna(False)].copy()
 
     return _finalize_prediction_frame(
         result,
@@ -2121,6 +2141,88 @@ def _apply_potential_ratio_r2_reviewed_event_lifecycle(result: pd.DataFrame) -> 
         adjusted.loc[close_suppress_mask, "prediction_basis"] = _append_prediction_basis_suffix(
             adjusted.loc[close_suppress_mask, "prediction_basis"],
             "r2_reviewed_event_close_suppressor",
+        ).values
+    return adjusted
+
+
+def _apply_potential_ratio_r2_supported_range_suppressors(result: pd.DataFrame) -> pd.DataFrame:
+    adjusted = result.copy()
+    forecast_horizon = pd.to_numeric(adjusted.get("forecast_horizon_hours"), errors="coerce")
+    route_name = adjusted.get("route_name", pd.Series(pd.NA, index=adjusted.index)).astype("string")
+    source_family = adjusted.get(
+        "feature_internal_transfer_source_family_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    connector_itl_state = adjusted.get(
+        "feature_connector_itl_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    forecast_origin_utc = pd.to_datetime(
+        adjusted.get("forecast_origin_utc", pd.Series(pd.NaT, index=adjusted.index)),
+        utc=True,
+        errors="coerce",
+    )
+    route_delivery_tier = adjusted.get(
+        "feature_route_delivery_tier_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    transition_state = adjusted.get(
+        "feature_route_price_transition_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    prediction_basis = adjusted.get(
+        "prediction_basis",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).astype("string").fillna("")
+    predicted = pd.to_numeric(
+        adjusted.get("predicted_opportunity_deliverable_mwh"),
+        errors="coerce",
+    ).fillna(0.0)
+    origin_hour = pd.to_numeric(
+        adjusted.get("feature_origin_hour_of_day"),
+        errors="coerce",
+    )
+
+    supported_range_scope = (
+        forecast_horizon.eq(1)
+        & route_name.eq(R2_REVIEWED_EVENT_ROUTE_NAME)
+        & source_family.eq(R2_REVIEWED_EVENT_SOURCE_FAMILY)
+        & forecast_origin_utc.ge(R2_2025_REGIME_WORK_START_UTC)
+    )
+    if not supported_range_scope.any():
+        return adjusted
+
+    no_public_preopen_suppress_mask = (
+        supported_range_scope
+        & predicted.gt(OPENING_GUARDRAIL_PREDICTION_EPSILON)
+        & connector_itl_state.eq("no_public_itl_restriction")
+        & route_delivery_tier.eq("no_price_signal")
+        & transition_state.eq("price_non_positive->price_non_positive")
+        & origin_hour.le(OPENING_GUARDRAIL_PREOPEN_ORIGIN_HOUR_MAX)
+        & prediction_basis.str.contains("opening_guardrail_preopen", regex=False)
+    )
+    published_reviewed_event_suppress_mask = (
+        supported_range_scope
+        & predicted.gt(OPENING_GUARDRAIL_PREDICTION_EPSILON)
+        & connector_itl_state.eq("published_restriction")
+        & origin_hour.isin([R2_REVIEWED_EVENT_PREOPEN_ORIGIN_HOUR, R2_REVIEWED_EVENT_OPEN_ORIGIN_HOUR])
+        & (
+            prediction_basis.str.contains("r2_reviewed_event_preopen_open", regex=False)
+            | prediction_basis.str.contains("r2_reviewed_event_open", regex=False)
+        )
+    )
+
+    if no_public_preopen_suppress_mask.any():
+        adjusted.loc[no_public_preopen_suppress_mask, "predicted_opportunity_deliverable_mwh"] = 0.0
+        adjusted.loc[no_public_preopen_suppress_mask, "prediction_basis"] = _append_prediction_basis_suffix(
+            adjusted.loc[no_public_preopen_suppress_mask, "prediction_basis"],
+            "r2_2025_no_public_preopen_suppressor",
+        ).values
+    if published_reviewed_event_suppress_mask.any():
+        adjusted.loc[published_reviewed_event_suppress_mask, "predicted_opportunity_deliverable_mwh"] = 0.0
+        adjusted.loc[published_reviewed_event_suppress_mask, "prediction_basis"] = _append_prediction_basis_suffix(
+            adjusted.loc[published_reviewed_event_suppress_mask, "prediction_basis"],
+            "r2_2025_reviewed_event_suppressor",
         ).values
     return adjusted
 
@@ -2580,6 +2682,7 @@ def build_fact_backtest_prediction_hourly(
     fact_curtailment_opportunity_hourly: pd.DataFrame,
     model_key: str = DEFAULT_BACKTEST_MODEL_KEY,
     forecast_horizons: Iterable[int] | None = None,
+    historical_fact_curtailment_opportunity_hourly: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     if fact_curtailment_opportunity_hourly is None or fact_curtailment_opportunity_hourly.empty:
         return _empty_backtest_prediction_frame()
@@ -2589,13 +2692,56 @@ def build_fact_backtest_prediction_hourly(
         )
 
     frame = _prepare_backtest_input(fact_curtailment_opportunity_hourly)
+    historical_frame = (
+        _prepare_backtest_input(historical_fact_curtailment_opportunity_hourly)
+        if historical_fact_curtailment_opportunity_hourly is not None
+        and not historical_fact_curtailment_opportunity_hourly.empty
+        else pd.DataFrame()
+    )
     horizon_frames = []
     for forecast_horizon_hours in coerce_forecast_horizons(forecast_horizons):
-        horizon_frame = _build_horizon_example_frame(frame, forecast_horizon_hours)
+        origin_source_frame = (
+            pd.concat([historical_frame, frame], ignore_index=True, sort=False)
+            if not historical_frame.empty
+            else frame
+        )
+        horizon_frame = _build_horizon_example_frame(
+            frame,
+            forecast_horizon_hours,
+            origin_source_frame=origin_source_frame,
+        )
+        historical_horizon_frame = pd.DataFrame()
+        if not historical_frame.empty:
+            historical_horizon_frame = _build_horizon_example_frame(
+                historical_frame,
+                forecast_horizon_hours,
+                origin_source_frame=historical_frame,
+            )
+            min_target_origin = pd.to_datetime(
+                horizon_frame.get("forecast_origin_utc", pd.Series(pd.NaT, index=horizon_frame.index)),
+                utc=True,
+                errors="coerce",
+            ).min()
+            if pd.notna(min_target_origin):
+                historical_horizon_frame = historical_horizon_frame[
+                    pd.to_datetime(
+                        historical_horizon_frame.get(
+                            "forecast_origin_utc",
+                            pd.Series(pd.NaT, index=historical_horizon_frame.index),
+                        ),
+                        utc=True,
+                        errors="coerce",
+                    ).lt(min_target_origin)
+                ].copy()
         if model_key == MODEL_GROUP_MEAN_NOTICE_V1:
             horizon_frames.append(_build_group_mean_backtest(horizon_frame))
         elif model_key == MODEL_POTENTIAL_RATIO_V2:
-            horizon_frames.append(_build_potential_ratio_backtest(horizon_frame))
+            horizon_frames.append(
+                _build_potential_ratio_backtest(
+                    horizon_frame,
+                    history_frame=historical_horizon_frame,
+                )
+            )
         elif model_key == MODEL_GB_NL_REVIEWED_SPECIALIST_V3:
             horizon_frames.append(_build_gb_nl_reviewed_specialist_v3_backtest(horizon_frame))
         else:
@@ -3171,12 +3317,14 @@ def materialize_opportunity_backtest(
     fact_curtailment_opportunity_hourly: pd.DataFrame,
     model_key: str = DEFAULT_BACKTEST_MODEL_SELECTION,
     forecast_horizons: Iterable[int] | None = None,
+    historical_fact_curtailment_opportunity_hourly: pd.DataFrame | None = None,
 ) -> Dict[str, pd.DataFrame]:
     prediction_frames = [
         build_fact_backtest_prediction_hourly(
             fact_curtailment_opportunity_hourly,
             selected_model_key,
             forecast_horizons=forecast_horizons,
+            historical_fact_curtailment_opportunity_hourly=historical_fact_curtailment_opportunity_hourly,
         )
         for selected_model_key in _model_selection_to_keys(model_key)
     ]
