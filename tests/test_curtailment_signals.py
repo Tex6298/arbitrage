@@ -1,10 +1,18 @@
+import datetime as dt
 import http.client
 import unittest
 from unittest.mock import patch
 
 import pandas as pd
 
-from curtailment_signals import CONSTRAINT_QA_TARGET_DEFINITION, _fetch_bytes, _fetch_csv, add_constraint_qa_columns
+from bmu_truth_utils import build_half_hour_interval_frame
+from curtailment_signals import (
+    CONSTRAINT_QA_TARGET_DEFINITION,
+    _fetch_bytes,
+    _fetch_csv,
+    add_constraint_qa_columns,
+    build_regional_curtailment_hourly_proxy,
+)
 
 
 class CurtailmentSignalsTests(unittest.TestCase):
@@ -59,6 +67,43 @@ class CurtailmentSignalsTests(unittest.TestCase):
         self.assertEqual(first_row["qa_wind_relevant_positive_mwh"], 7556.0)
         self.assertEqual(first_row["qa_inertia_positive_mwh"], 0.0)
         self.assertEqual(first_row["qa_largest_loss_positive_mwh"], 0.0)
+
+    def test_build_regional_curtailment_hourly_proxy_handles_fallback_dst_days(self) -> None:
+        for day in (dt.date(2024, 10, 27), dt.date(2025, 10, 26)):
+            with self.subTest(day=day):
+                intervals = build_half_hour_interval_frame(day, day).rename(columns={"settlement_date": "date"})
+                wind_split = intervals[["date", "interval_start_local", "interval_start_utc"]].copy()
+                wind_split["scotland_wind_mw"] = 30.0
+                wind_split["england_wales_wind_mw"] = 70.0
+                constraints = pd.DataFrame(
+                    [
+                        {
+                            "date": day,
+                            "source_year_label": f"{day.year}-{day.year + 1}",
+                            "total_curtailment_mwh": 25.0,
+                            "total_curtailment_cost_gbp": 2500.0,
+                        }
+                    ]
+                )
+
+                fact = build_regional_curtailment_hourly_proxy(constraints, wind_split)
+                parent_region = fact[fact["scope_type"] == "parent_region"].copy()
+
+                self.assertEqual(parent_region["interval_start_utc"].nunique(), 25)
+                self.assertEqual(len(parent_region), 50)
+
+                repeated_hour_utc = list(
+                    parent_region[parent_region["interval_start_local"].dt.hour == 1]["interval_start_utc"]
+                    .drop_duplicates()
+                    .sort_values()
+                )
+                self.assertEqual(
+                    repeated_hour_utc,
+                    [
+                        pd.Timestamp(f"{day.isoformat()}T00:00:00Z"),
+                        pd.Timestamp(f"{day.isoformat()}T01:00:00Z"),
+                    ],
+                )
 
 
 if __name__ == "__main__":

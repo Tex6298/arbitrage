@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
+from pytz.exceptions import AmbiguousTimeError
 
 from curtailment_signals import _datapackage_show, _fetch_csv
 
@@ -72,18 +73,22 @@ def _localize_boundary_window(
 ) -> pd.Series:
     localized = pd.Series(pd.NaT, index=naive_timestamp.index, dtype="datetime64[ns, Europe/London]")
     for _, group in naive_timestamp.groupby(boundary_key):
+        ordered = group.sort_values(kind="stable")
         try:
-            localized.loc[group.index] = group.dt.tz_localize(
+            localized_group = ordered.dt.tz_localize(
                 LONDON_TZ,
                 ambiguous="infer",
                 nonexistent="shift_forward",
             )
-        except (ValueError, TypeError):
-            localized.loc[group.index] = group.dt.tz_localize(
+        except (AmbiguousTimeError, ValueError, TypeError):
+            duplicate_mask = ordered.duplicated(keep=False)
+            ambiguous_flags = (~duplicate_mask) | ordered.groupby(ordered, sort=False).cumcount().eq(0)
+            localized_group = ordered.dt.tz_localize(
                 LONDON_TZ,
-                ambiguous=False,
+                ambiguous=ambiguous_flags.to_numpy(),
                 nonexistent="shift_forward",
             )
+        localized.loc[ordered.index] = localized_group
     return localized
 
 

@@ -62,6 +62,10 @@ def _prediction_row(
 
 class BenchmarkSuiteTests(unittest.TestCase):
     def test_discover_and_materialize_reviewed_bundle_batch_eval(self) -> None:
+        def _write_bundle_sentinel(path: Path) -> None:
+            path.mkdir(parents=True, exist_ok=True)
+            (path / "fact_curtailment_opportunity_hourly.csv").write_text("interval_start_utc\n", encoding="utf-8")
+
         def _bundle_input(start_text: str, end_text: str, *, deliverable_mwh: float, route_price: float) -> pd.DataFrame:
             return pd.DataFrame(
                 [
@@ -229,10 +233,11 @@ class BenchmarkSuiteTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
-            (root / "curtailment_opportunity_live_britned_reviewed_2024-10-14_2024-10-16").mkdir()
-            (root / "curtailment_opportunity_live_britned_reviewed_2024-12-07_2024-12-09").mkdir()
+            _write_bundle_sentinel(root / "curtailment_opportunity_live_britned_reviewed_2024-10-14_2024-10-16")
+            _write_bundle_sentinel(root / "curtailment_opportunity_live_britned_reviewed_2024-12-07_2024-12-09")
             (root / "curtailment_opportunity_live_britned_reviewed_refresh_2024-10-14_2024-10-16").mkdir()
-            (root / "curtailment_opportunity_live_britned_reviewed_rerun_2024-10-14_2024-10-16").mkdir()
+            _write_bundle_sentinel(root / "curtailment_opportunity_live_britned_reviewed_rerun_2024-10-14_2024-10-16")
+            (root / "curtailment_opportunity_live_britned_reviewed_2025-01-24_2025-01-26").mkdir()
 
             specs = discover_reviewed_bundle_batch_windows(root)
             self.assertEqual(

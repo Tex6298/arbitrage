@@ -27,6 +27,7 @@ from opportunity_backtest import (
     BACKTEST_PREDICTION_TABLE,
     BACKTEST_SUMMARY_SLICE_TABLE,
     BACKTEST_TOP_ERROR_TABLE,
+    CURTAILMENT_OPPORTUNITY_TABLE,
     DRIFT_WINDOW_TABLE,
     MODEL_POTENTIAL_RATIO_V2,
     SPECIALIST_SCOPE_HUB_KEY,
@@ -318,16 +319,26 @@ def _reviewed_bundle_alias_priority(bundle_path: Path) -> tuple[int, int, str]:
     )
 
 
+def _reviewed_bundle_has_opportunity_output(bundle_path: Path) -> bool:
+    if bundle_path.is_dir():
+        return (bundle_path / f"{CURTAILMENT_OPPORTUNITY_TABLE}.csv").exists()
+    return bundle_path.exists()
+
+
 def discover_reviewed_bundle_batch_windows(
     root_dir: str | Path,
     *,
     bundle_glob: str = DEFAULT_REVIEWED_BUNDLE_BATCH_GLOB,
 ) -> list[BenchmarkWindowSpec]:
     root_path = Path(root_dir)
-    bundle_paths = sorted(path for path in root_path.glob(bundle_glob) if path.is_dir())
+    bundle_paths = sorted(
+        path
+        for path in root_path.glob(bundle_glob)
+        if path.is_dir() and _reviewed_bundle_has_opportunity_output(path)
+    )
     if not bundle_paths:
         raise ValueError(
-            f"no reviewed opportunity bundles found under {root_path} matching '{bundle_glob}'"
+            f"no complete reviewed opportunity bundles found under {root_path} matching '{bundle_glob}'"
         )
 
     canonical_paths_by_range: dict[tuple[dt.date, dt.date] | tuple[str, str], Path] = {}
@@ -1009,7 +1020,6 @@ def materialize_reviewed_bundle_batch_evaluation(
     readiness_frames_annotated: list[pd.DataFrame] = []
     blocker_rows_annotated: list[pd.DataFrame] = []
     window_summary_frames: list[pd.DataFrame] = []
-    prior_scoped_inputs: list[pd.DataFrame] = []
 
     for discovered_spec in discovered_windows:
         opportunity_input = load_curtailment_opportunity_input(discovered_spec.opportunity_input_path)
@@ -1034,17 +1044,11 @@ def materialize_reviewed_bundle_batch_evaluation(
             readiness_start=runtime_spec.readiness_start,
             readiness_end=runtime_spec.readiness_end,
         )
-        historical_scoped_input = (
-            pd.concat(prior_scoped_inputs, ignore_index=True)
-            if prior_scoped_inputs
-            else pd.DataFrame()
-        )
         backtest_frames = materialize_opportunity_backtest(
             output_dir=window_output_dir,
             fact_curtailment_opportunity_hourly=scoped_input,
             model_key=model_key,
             forecast_horizons=forecast_horizons,
-            historical_fact_curtailment_opportunity_hourly=historical_scoped_input,
         )
         selected_model_keys = set(backtest_frames[BACKTEST_PREDICTION_TABLE]["model_key"].dropna())
         readiness_model_key = baseline_model_key if baseline_model_key in selected_model_keys else model_key
@@ -1081,7 +1085,6 @@ def materialize_reviewed_bundle_batch_evaluation(
         window_summary_frames.append(
             _build_reviewed_bundle_window_summary(readiness_daily, scout, spec=runtime_spec)
         )
-        prior_scoped_inputs.append(scoped_input)
 
     dim_window = build_dim_reviewed_bundle_batch_window(
         runtime_windows,

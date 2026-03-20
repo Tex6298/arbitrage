@@ -74,6 +74,49 @@ class DayAheadConstraintBoundaryTests(unittest.TestCase):
         self.assertEqual(len(fact), 1)
         self.assertEqual(fact.iloc[0]["source_document_url"], "https://example.com/boundary.csv")
 
+    def test_build_fact_day_ahead_constraint_boundary_half_hourly_handles_single_fallback_day(self) -> None:
+        for day in (dt.date(2024, 10, 27), dt.date(2025, 10, 26)):
+            with self.subTest(day=day):
+                raw = pd.DataFrame(
+                    {
+                        "Constraint Group": ["ERROEX"] * 8,
+                        "Time": [
+                            f"{day.isoformat()} 00:00",
+                            f"{day.isoformat()} 00:30",
+                            f"{day.isoformat()} 01:00",
+                            f"{day.isoformat()} 01:00",
+                            f"{day.isoformat()} 01:30",
+                            f"{day.isoformat()} 01:30",
+                            f"{day.isoformat()} 02:00",
+                            f"{day.isoformat()} 02:30",
+                        ],
+                        "Limit": [100.0] * 8,
+                        "Flow": [50.0] * 8,
+                    }
+                )
+                resource = {"id": "test", "name": "test", "url": "https://example.invalid/boundary.csv"}
+
+                with (
+                    patch("day_ahead_constraint_boundary._resource_metadata", return_value=resource),
+                    patch("day_ahead_constraint_boundary._fetch_csv", return_value=raw),
+                ):
+                    fact = build_fact_day_ahead_constraint_boundary_half_hourly(day, day)
+
+                self.assertEqual(len(fact), 8)
+                self.assertEqual(
+                    list(fact["interval_start_utc"]),
+                    [
+                        pd.Timestamp(day - dt.timedelta(days=1), tz="UTC") + pd.Timedelta(hours=23),
+                        pd.Timestamp(day - dt.timedelta(days=1), tz="UTC") + pd.Timedelta(hours=23, minutes=30),
+                        pd.Timestamp(day, tz="UTC"),
+                        pd.Timestamp(day, tz="UTC") + pd.Timedelta(minutes=30),
+                        pd.Timestamp(day, tz="UTC") + pd.Timedelta(hours=1),
+                        pd.Timestamp(day, tz="UTC") + pd.Timedelta(hours=1, minutes=30),
+                        pd.Timestamp(day, tz="UTC") + pd.Timedelta(hours=2),
+                        pd.Timestamp(day, tz="UTC") + pd.Timedelta(hours=2, minutes=30),
+                    ],
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

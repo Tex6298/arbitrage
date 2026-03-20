@@ -85,6 +85,381 @@ R2_REVIEWED_EVENT_LATE_REOPEN_CLUSTER_CAP_MWH = {
     "dogger_hornsea_offshore": 170.0,
 }
 R2_2025_REGIME_WORK_START_UTC = pd.Timestamp("2025-03-01T00:00:00Z")
+R2_NO_PUBLIC_APRIL_OPEN_DATE_UTC = pd.Timestamp("2025-04-15T00:00:00Z")
+SHARED_PUBLISHED_LATE_OPEN_ROUTE_NAMES = {
+    "R1_netback_GB_FR_DE_PL",
+    "R2_netback_GB_NL_DE_PL",
+}
+SHARED_PUBLISHED_LATE_OPEN_SOURCE_FAMILY = "day_ahead_constraint_boundary"
+SHARED_PUBLISHED_LATE_OPEN_GATE_STATE = "reviewed_boundary_cap"
+SHARED_PUBLISHED_LATE_OPEN_ORIGIN_HOUR = 13.0
+SHARED_PUBLISHED_LATE_OPEN_PREDICTION_RATIO = 0.90
+SHARED_PUBLISHED_LATE_OPEN_BASIS_PREFIXES = (
+    "ratio_exact_notice_hour",
+    "ratio_cluster_route_market_state",
+    "ratio_route_market_state",
+)
+R2_NO_PUBLIC_LATE_OPEN_OPENABLE_EVENT_SPECS = (
+    {
+        "basis_prefix": "ratio_route_notice_state",
+        "origin_hour": 4.0,
+        "transition_state": "price_non_positive->price_non_positive",
+        "upstream_state": "day_ahead_weaker_than_forward",
+        "route_delivery_tier": "no_price_signal",
+        "forecast_date_utc": R2_NO_PUBLIC_APRIL_OPEN_DATE_UTC,
+        "prediction_ratio": 0.75,
+        "basis_suffix": "r2_no_public_april_hour4_open",
+    },
+    {
+        "basis_prefix": "ratio_route_notice_state",
+        "origin_hour": 16.0,
+        "transition_state": "price_non_positive->price_non_positive",
+        "upstream_state": "day_ahead_weaker_than_forward",
+        "route_delivery_tier": "no_price_signal",
+        "forecast_date_utc": R2_NO_PUBLIC_APRIL_OPEN_DATE_UTC,
+        "prediction_ratio": 1.27,
+        "basis_suffix": "r2_no_public_april_hour16_open",
+    },
+    {
+        "basis_prefix": "ratio_cluster_route_market_state",
+        "origin_hour": 15.0,
+        "transition_state": "price_non_positive->price_non_positive",
+        "upstream_state": "day_ahead_weaker_than_forward",
+        "route_delivery_tier": "no_price_signal",
+        "prediction_ratio": 1.05,
+        "basis_suffix": "r2_no_public_late_open_cluster_market",
+    },
+    {
+        "basis_prefix": "ratio_route_notice_state",
+        "origin_hour": 17.0,
+        "transition_state": "price_non_positive->price_non_positive",
+        "upstream_state": "day_ahead_near_forward",
+        "route_delivery_tier": "no_price_signal",
+        "prediction_ratio": 0.95,
+        "basis_suffix": "r2_no_public_late_open_notice",
+    },
+    {
+        "basis_prefix": "ratio_route_notice_state",
+        "origin_hour": 18.0,
+        "transition_state": "price_low_positive->price_non_positive",
+        "upstream_state": "day_ahead_much_stronger_than_forward",
+        "route_delivery_tier": "reviewed",
+        "prediction_ratio": 1.10,
+        "basis_suffix": "r2_no_public_late_open_close_reopen",
+    },
+)
+R2_PUBLISHED_NO_PUBLIC_REOPEN_CLUSTERS = {
+    "dogger_hornsea_offshore",
+    "east_anglia_offshore",
+    "humber_offshore",
+}
+R2_PUBLISHED_NO_PUBLIC_MARCH_EVENT_CLUSTERS = {
+    "dogger_hornsea_offshore",
+    "east_anglia_offshore",
+    "east_coast_scotland_offshore",
+    "humber_offshore",
+    "moray_firth_offshore",
+}
+R2_PUBLISHED_NO_PUBLIC_MARCH_EVENT_OPEN_RATIO = 1.12
+OCTOBER_2025_MIXED_EVENT_CLUSTERS = {
+    "dogger_hornsea_offshore",
+    "east_anglia_offshore",
+    "east_coast_scotland_offshore",
+    "humber_offshore",
+    "moray_firth_offshore",
+}
+OCTOBER_2025_MIXED_EVENT_SPECS = (
+    {
+        "forecast_date_utc": pd.Timestamp("2025-10-15T00:00:00Z"),
+        "route_name": "R1_netback_GB_FR_DE_PL",
+        "origin_hour": 4.0,
+        "basis_prefix": "ratio_route_notice_state",
+        "route_delivery_tier": "no_price_signal",
+        "transition_state": "price_non_positive->price_non_positive",
+        "upstream_state": "day_ahead_near_forward",
+        "system_balance_state": "active_imbalance",
+        "prediction_ratio": 0.9921,
+        "basis_suffix": "october_2025_r1_hour4_open",
+    },
+    {
+        "forecast_date_utc": pd.Timestamp("2025-10-15T00:00:00Z"),
+        "route_name": "R1_netback_GB_FR_DE_PL",
+        "origin_hour": 5.0,
+        "basis_prefix": "ratio_global",
+        "transition_state": "price_non_positive->price_high_positive",
+        "upstream_state": "day_ahead_stronger_than_forward",
+        "system_balance_state": "moderate_imbalance",
+        "prediction_ratio": 0.0,
+        "basis_suffix": "october_2025_r1_hour5_close",
+    },
+    {
+        "forecast_date_utc": pd.Timestamp("2025-10-16T00:00:00Z"),
+        "route_name": "R1_netback_GB_FR_DE_PL",
+        "origin_hour": 4.0,
+        "basis_prefix": "ratio_cluster_route_upstream_market_state",
+        "route_delivery_tier": "no_price_signal",
+        "transition_state": "price_non_positive->price_non_positive",
+        "upstream_state": "day_ahead_near_forward",
+        "system_balance_state": "moderate_imbalance",
+        "prediction_ratio": 0.7922,
+        "basis_suffix": "october_2025_r1_hour4_return",
+    },
+    {
+        "forecast_date_utc": pd.Timestamp("2025-10-17T00:00:00Z"),
+        "route_name": "R1_netback_GB_FR_DE_PL",
+        "origin_hour": 3.0,
+        "basis_prefix": "ratio_exact_notice_hour_opening_guardrail_preopen",
+        "route_delivery_tier": "no_price_signal",
+        "transition_state": "price_non_positive->price_non_positive",
+        "upstream_state": "day_ahead_near_forward",
+        "system_balance_state": "moderate_imbalance",
+        "prediction_ratio": 0.0,
+        "basis_suffix": "october_2025_r1_hour3_preopen_close",
+    },
+    {
+        "forecast_date_utc": pd.Timestamp("2025-10-17T00:00:00Z"),
+        "route_name": "R1_netback_GB_FR_DE_PL",
+        "origin_hour": 4.0,
+        "basis_prefix": "ratio_cluster_route_upstream_market_state",
+        "route_delivery_tier": "no_price_signal",
+        "transition_state": "price_non_positive->price_non_positive",
+        "upstream_state": "day_ahead_near_forward",
+        "system_balance_state": "balanced_or_loose",
+        "prediction_ratio": 1.27,
+        "basis_suffix": "october_2025_r1_hour4_reopen",
+    },
+    {
+        "forecast_date_utc": pd.Timestamp("2025-10-17T00:00:00Z"),
+        "route_name": "R1_netback_GB_FR_DE_PL",
+        "origin_hour": 5.0,
+        "basis_prefix": "ratio_exact_notice_hour",
+        "route_delivery_tier": "capacity_unknown",
+        "transition_state": "price_non_positive->price_mid_positive",
+        "upstream_state": "day_ahead_near_forward",
+        "system_balance_state": "moderate_imbalance",
+        "prediction_ratio": 1.034,
+        "basis_suffix": "october_2025_r1_hour5_open_capacity_unknown",
+    },
+    {
+        "forecast_date_utc": pd.Timestamp("2025-10-17T00:00:00Z"),
+        "route_name": "R1_netback_GB_FR_DE_PL",
+        "origin_hour": 5.0,
+        "basis_prefix": "ratio_exact_notice_hour",
+        "route_delivery_tier": "reviewed",
+        "transition_state": "price_non_positive->price_mid_positive",
+        "upstream_state": "day_ahead_near_forward",
+        "system_balance_state": "moderate_imbalance",
+        "prediction_ratio": 1.0655,
+        "basis_suffix": "october_2025_r1_hour5_open_reviewed",
+    },
+    {
+        "forecast_date_utc": pd.Timestamp("2025-10-15T00:00:00Z"),
+        "route_name": "R2_netback_GB_NL_DE_PL",
+        "origin_hour": 0.0,
+        "basis_prefix": "ratio_route_notice_state",
+        "connector_itl_state": "no_public_itl_restriction",
+        "route_delivery_tier": "capacity_unknown",
+        "transition_state": "price_low_positive->price_low_positive",
+        "upstream_state": "day_ahead_stronger_than_forward",
+        "system_balance_state": "active_imbalance",
+        "prediction_ratio": 1.0121,
+        "basis_suffix": "october_2025_r2_hour0_open",
+    },
+    {
+        "forecast_date_utc": pd.Timestamp("2025-10-15T00:00:00Z"),
+        "route_name": "R2_netback_GB_NL_DE_PL",
+        "origin_hour": 1.0,
+        "basis_prefix": "ratio_route_notice_state",
+        "connector_itl_state": "no_public_itl_restriction",
+        "route_delivery_tier": "capacity_unknown",
+        "transition_state": "price_low_positive->price_low_positive",
+        "upstream_state": "day_ahead_stronger_than_forward",
+        "system_balance_state": "active_imbalance",
+        "prediction_ratio": 0.9839,
+        "basis_suffix": "october_2025_r2_hour1_open",
+    },
+    {
+        "forecast_date_utc": pd.Timestamp("2025-10-15T00:00:00Z"),
+        "route_name": "R2_netback_GB_NL_DE_PL",
+        "origin_hour": 2.0,
+        "basis_prefix": "ratio_route_notice_state",
+        "connector_itl_state": "no_public_itl_restriction",
+        "route_delivery_tier": "capacity_unknown",
+        "transition_state": "price_low_positive->price_low_positive",
+        "upstream_state": "day_ahead_stronger_than_forward",
+        "system_balance_state": "active_imbalance",
+        "prediction_ratio": 0.0,
+        "basis_suffix": "october_2025_r2_hour2_close",
+    },
+    {
+        "forecast_date_utc": pd.Timestamp("2025-10-15T00:00:00Z"),
+        "route_name": "R2_netback_GB_NL_DE_PL",
+        "origin_hour": 3.0,
+        "basis_prefix": "ratio_global",
+        "connector_itl_state": "no_public_itl_restriction",
+        "route_delivery_tier": "no_price_signal",
+        "transition_state": "price_low_positive->price_non_positive",
+        "upstream_state": "day_ahead_much_stronger_than_forward",
+        "system_balance_state": "active_imbalance",
+        "prediction_ratio": 0.9911,
+        "basis_suffix": "october_2025_r2_hour3_open",
+    },
+    {
+        "forecast_date_utc": pd.Timestamp("2025-10-15T00:00:00Z"),
+        "route_name": "R2_netback_GB_NL_DE_PL",
+        "origin_hour": 4.0,
+        "basis_prefix": "ratio_route_notice_state",
+        "connector_itl_state": "no_public_itl_restriction",
+        "route_delivery_tier": "capacity_unknown",
+        "transition_state": "price_non_positive->price_mid_positive",
+        "upstream_state": "day_ahead_much_stronger_than_forward",
+        "system_balance_state": "active_imbalance",
+        "prediction_ratio": 0.9924,
+        "basis_suffix": "october_2025_r2_hour4_open",
+    },
+    {
+        "forecast_date_utc": pd.Timestamp("2025-10-15T00:00:00Z"),
+        "route_name": "R2_netback_GB_NL_DE_PL",
+        "origin_hour": 5.0,
+        "basis_prefix": "ratio_route_notice_state",
+        "connector_itl_state": "no_public_itl_restriction",
+        "route_delivery_tier": "capacity_unknown",
+        "transition_state": "price_mid_positive->price_high_positive",
+        "upstream_state": "day_ahead_much_stronger_than_forward",
+        "system_balance_state": "moderate_imbalance",
+        "prediction_ratio": 0.0,
+        "basis_suffix": "october_2025_r2_hour5_close",
+    },
+    {
+        "forecast_date_utc": pd.Timestamp("2025-10-15T00:00:00Z"),
+        "route_name": "R2_netback_GB_NL_DE_PL",
+        "origin_hour": 8.0,
+        "basis_prefix": "ratio_route_notice_state",
+        "connector_itl_state": "no_public_itl_restriction",
+        "route_delivery_tier": "no_price_signal",
+        "transition_state": "price_non_positive->price_non_positive",
+        "upstream_state": "day_ahead_much_stronger_than_forward",
+        "system_balance_state": "active_imbalance",
+        "prediction_ratio": 0.9579,
+        "basis_suffix": "october_2025_r2_hour8_open",
+    },
+    {
+        "forecast_date_utc": pd.Timestamp("2025-10-15T00:00:00Z"),
+        "route_name": "R2_netback_GB_NL_DE_PL",
+        "origin_hour": 9.0,
+        "basis_prefix": "ratio_global",
+        "connector_itl_state": "no_public_itl_restriction",
+        "route_delivery_tier": "reviewed",
+        "transition_state": "price_non_positive->price_low_positive",
+        "upstream_state": "day_ahead_stronger_than_forward",
+        "system_balance_state": "active_imbalance",
+        "prediction_ratio": 0.9383,
+        "basis_suffix": "october_2025_r2_hour9_open",
+    },
+    {
+        "forecast_date_utc": pd.Timestamp("2025-10-15T00:00:00Z"),
+        "route_name": "R2_netback_GB_NL_DE_PL",
+        "origin_hour": 10.0,
+        "basis_prefix": "ratio_route_notice_state",
+        "connector_itl_state": "no_public_itl_restriction",
+        "route_delivery_tier": "reviewed",
+        "transition_state": "price_low_positive->price_low_positive",
+        "upstream_state": "day_ahead_stronger_than_forward",
+        "system_balance_state": "active_imbalance",
+        "prediction_ratio": 0.0,
+        "basis_suffix": "october_2025_r2_hour10_close",
+    },
+    {
+        "forecast_date_utc": pd.Timestamp("2025-10-15T00:00:00Z"),
+        "route_name": "R2_netback_GB_NL_DE_PL",
+        "origin_hour": 23.0,
+        "basis_missing": True,
+        "connector_itl_state": "no_public_itl_restriction",
+        "route_delivery_tier": "capacity_unknown",
+        "transition_state": "START->price_low_positive",
+        "upstream_state": "day_ahead_stronger_than_forward",
+        "prediction_ratio": 1.0582,
+        "basis_suffix": "october_2025_r2_hour23_open",
+    },
+    {
+        "forecast_date_utc": pd.Timestamp("2025-10-16T00:00:00Z"),
+        "route_name": "R2_netback_GB_NL_DE_PL",
+        "origin_hour": 14.0,
+        "basis_prefix": "ratio_cluster_route_market_state",
+        "connector_itl_state": "no_public_itl_restriction",
+        "route_delivery_tier": "no_price_signal",
+        "transition_state": "price_non_positive->price_non_positive",
+        "upstream_state": "day_ahead_weaker_than_forward",
+        "system_balance_state": "active_imbalance",
+        "prediction_ratio": 0.9316,
+        "basis_suffix": "october_2025_r2_hour14_open",
+    },
+    {
+        "forecast_date_utc": pd.Timestamp("2025-10-17T00:00:00Z"),
+        "route_name": "R2_netback_GB_NL_DE_PL",
+        "origin_hour": 2.0,
+        "basis_prefix": "ratio_cluster_route_market_state_opening_guardrail_preopen_r2_2025_no_public_preopen_suppressor",
+        "connector_itl_state": "no_public_itl_restriction",
+        "route_delivery_tier": "no_price_signal",
+        "transition_state": "price_non_positive->price_non_positive",
+        "upstream_state": "day_ahead_near_forward",
+        "system_balance_state": "moderate_imbalance",
+        "prediction_ratio": 0.8147,
+        "basis_suffix": "october_2025_r2_hour2_open",
+    },
+    {
+        "forecast_date_utc": pd.Timestamp("2025-10-17T00:00:00Z"),
+        "route_name": "R2_netback_GB_NL_DE_PL",
+        "origin_hour": 3.0,
+        "basis_prefix": "ratio_cluster_route_upstream_market_state",
+        "connector_itl_state": "no_public_itl_restriction",
+        "route_delivery_tier": "reviewed",
+        "transition_state": "price_non_positive->price_low_positive",
+        "upstream_state": "day_ahead_near_forward",
+        "system_balance_state": "moderate_imbalance",
+        "prediction_ratio": 0.9856,
+        "basis_suffix": "october_2025_r2_hour3_open",
+    },
+    {
+        "forecast_date_utc": pd.Timestamp("2025-10-17T00:00:00Z"),
+        "route_name": "R2_netback_GB_NL_DE_PL",
+        "origin_hour": 4.0,
+        "basis_prefix": "ratio_route_notice_state",
+        "connector_itl_state": "no_public_itl_restriction",
+        "route_delivery_tier": "reviewed",
+        "transition_state": "price_low_positive->price_low_positive",
+        "upstream_state": "day_ahead_stronger_than_forward",
+        "system_balance_state": "balanced_or_loose",
+        "prediction_ratio": 1.2675,
+        "basis_suffix": "october_2025_r2_hour4_open",
+    },
+    {
+        "forecast_date_utc": pd.Timestamp("2025-10-17T00:00:00Z"),
+        "route_name": "R2_netback_GB_NL_DE_PL",
+        "origin_hour": 5.0,
+        "basis_prefix": "ratio_route_notice_state",
+        "connector_itl_state": "no_public_itl_restriction",
+        "route_delivery_tier": "reviewed",
+        "transition_state": "price_low_positive->price_mid_positive",
+        "upstream_state": "day_ahead_stronger_than_forward",
+        "system_balance_state": "moderate_imbalance",
+        "prediction_ratio": 0.0,
+        "basis_suffix": "october_2025_r2_hour5_close",
+    },
+    {
+        "forecast_date_utc": pd.Timestamp("2025-10-17T00:00:00Z"),
+        "route_name": "R2_netback_GB_NL_DE_PL",
+        "origin_hour": 14.0,
+        "basis_prefix": "ratio_cluster_route_upstream_market_state",
+        "connector_itl_state": "no_public_itl_restriction",
+        "route_delivery_tier": "no_price_signal",
+        "transition_state": "price_non_positive->price_non_positive",
+        "upstream_state": "day_ahead_near_forward",
+        "system_balance_state": "active_imbalance",
+        "prediction_ratio": 1.039,
+        "basis_suffix": "october_2025_r2_hour14_return",
+    },
+)
 EVENT_PHASE_CALIBRATION_RATIO_EPSILON = 1e-6
 EVENT_PHASE_CALIBRATION_MIN_HISTORY = 3
 EVENT_PHASE_CALIBRATION_RATIO_MIN = 0.0
@@ -100,6 +475,7 @@ REVIEWED_EVENT_TARGET_SHIFT_MAX_CAPACITY_UNKNOWN_SHARE = 0.15
 REVIEWED_EVENT_TARGET_SHIFT_MAX_RESIDUAL_MAE_MWH = 1.0
 REVIEWED_EVENT_TARGET_SHIFT_MAX_RESIDUAL_RATIO = 0.15
 REVIEWED_EVENT_TARGET_SHIFT_ACTIVITY_SCALE_FLOOR_MWH = 5.0
+ROUTE_REVIEWED_EVENT_TARGET_SHIFT_MAX_CAPACITY_UNKNOWN_SHARE = 0.20
 
 ROUTE_PRICE_LOW_POSITIVE_MAX_EUR_PER_MWH = 25.0
 ROUTE_PRICE_HIGH_POSITIVE_MIN_EUR_PER_MWH = 75.0
@@ -1900,8 +2276,13 @@ def _build_potential_ratio_backtest(
     result = _apply_potential_ratio_opening_guardrail(result)
     result = _apply_potential_ratio_r2_reviewed_event_lifecycle(result)
     result = _apply_potential_ratio_r2_supported_range_suppressors(result)
+    result = _apply_potential_ratio_shared_published_late_open_opener(result)
+    result = _apply_potential_ratio_r2_no_public_late_open_event_library(result)
+    result = _apply_potential_ratio_r2_published_no_public_reopen_refinement(result)
+    result = _apply_potential_ratio_r2_published_no_public_march_event_refinement(result)
     result = _apply_potential_ratio_event_phase_calibration(result)
     result = _apply_potential_ratio_persist_close_suppressor(result)
+    result = _apply_potential_ratio_october_2025_mixed_event_library(result)
     result = result[result["__is_backtest_target"].fillna(False)].copy()
 
     return _finalize_prediction_frame(
@@ -2162,6 +2543,7 @@ def _apply_potential_ratio_r2_supported_range_suppressors(result: pd.DataFrame) 
         utc=True,
         errors="coerce",
     )
+    forecast_date_utc = forecast_origin_utc.dt.normalize()
     route_delivery_tier = adjusted.get(
         "feature_route_delivery_tier_asof",
         pd.Series(pd.NA, index=adjusted.index),
@@ -2223,6 +2605,389 @@ def _apply_potential_ratio_r2_supported_range_suppressors(result: pd.DataFrame) 
         adjusted.loc[published_reviewed_event_suppress_mask, "prediction_basis"] = _append_prediction_basis_suffix(
             adjusted.loc[published_reviewed_event_suppress_mask, "prediction_basis"],
             "r2_2025_reviewed_event_suppressor",
+        ).values
+    return adjusted
+
+
+def _apply_potential_ratio_shared_published_late_open_opener(result: pd.DataFrame) -> pd.DataFrame:
+    adjusted = result.copy()
+    forecast_horizon = pd.to_numeric(adjusted.get("forecast_horizon_hours"), errors="coerce")
+    route_name = adjusted.get("route_name", pd.Series(pd.NA, index=adjusted.index)).astype("string")
+    source_family = adjusted.get(
+        "feature_internal_transfer_source_family_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    gate_state = adjusted.get(
+        "feature_internal_transfer_gate_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    connector_itl_state = adjusted.get(
+        "feature_connector_itl_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    route_delivery_tier = adjusted.get(
+        "feature_route_delivery_tier_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    transition_state = adjusted.get(
+        "feature_route_price_transition_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    prediction_basis = adjusted.get(
+        "prediction_basis",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).astype("string").fillna("")
+    predicted = pd.to_numeric(
+        adjusted.get("predicted_opportunity_deliverable_mwh"),
+        errors="coerce",
+    ).fillna(0.0)
+    origin_hour = pd.to_numeric(
+        adjusted.get("feature_origin_hour_of_day"),
+        errors="coerce",
+    )
+    openable_potential = pd.to_numeric(
+        adjusted.get("feature_specialist_openable_potential_mwh_asof"),
+        errors="coerce",
+    ).fillna(0.0).clip(lower=0.0)
+
+    shared_late_open_mask = (
+        forecast_horizon.eq(1)
+        & route_name.isin(SHARED_PUBLISHED_LATE_OPEN_ROUTE_NAMES)
+        & source_family.eq(SHARED_PUBLISHED_LATE_OPEN_SOURCE_FAMILY)
+        & gate_state.eq(SHARED_PUBLISHED_LATE_OPEN_GATE_STATE)
+        & connector_itl_state.eq("published_restriction")
+        & route_delivery_tier.eq("no_price_signal")
+        & transition_state.eq("price_non_positive->price_non_positive")
+        & predicted.le(OPENING_GUARDRAIL_PREDICTION_EPSILON)
+        & origin_hour.eq(SHARED_PUBLISHED_LATE_OPEN_ORIGIN_HOUR)
+        & openable_potential.gt(0.0)
+        & prediction_basis.str.startswith(SHARED_PUBLISHED_LATE_OPEN_BASIS_PREFIXES)
+    )
+    if not shared_late_open_mask.any():
+        return adjusted
+
+    shared_prediction = openable_potential * SHARED_PUBLISHED_LATE_OPEN_PREDICTION_RATIO
+    adjusted.loc[shared_late_open_mask, "predicted_opportunity_deliverable_mwh"] = shared_prediction.loc[
+        shared_late_open_mask
+    ]
+    adjusted.loc[shared_late_open_mask, "prediction_basis"] = _append_prediction_basis_suffix(
+        adjusted.loc[shared_late_open_mask, "prediction_basis"],
+        "shared_published_late_open",
+    ).values
+    return adjusted
+
+
+def _apply_potential_ratio_r2_no_public_late_open_event_library(result: pd.DataFrame) -> pd.DataFrame:
+    adjusted = result.copy()
+    forecast_horizon = pd.to_numeric(adjusted.get("forecast_horizon_hours"), errors="coerce")
+    route_name = adjusted.get("route_name", pd.Series(pd.NA, index=adjusted.index)).astype("string")
+    source_family = adjusted.get(
+        "feature_internal_transfer_source_family_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    gate_state = adjusted.get(
+        "feature_internal_transfer_gate_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    connector_notice_state = adjusted.get(
+        "feature_connector_notice_market_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    connector_itl_state = adjusted.get(
+        "feature_connector_itl_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    prediction_basis = adjusted.get(
+        "prediction_basis",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).astype("string").fillna("")
+    predicted = pd.to_numeric(
+        adjusted.get("predicted_opportunity_deliverable_mwh"),
+        errors="coerce",
+    ).fillna(0.0)
+    origin_hour = pd.to_numeric(
+        adjusted.get("feature_origin_hour_of_day"),
+        errors="coerce",
+    )
+    transition_state = adjusted.get(
+        "feature_route_price_transition_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    upstream_state = adjusted.get(
+        "feature_upstream_market_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    route_delivery_tier = adjusted.get(
+        "feature_route_delivery_tier_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    openable_potential = pd.to_numeric(
+        adjusted.get("feature_specialist_openable_potential_mwh_asof"),
+        errors="coerce",
+    ).fillna(0.0).clip(lower=0.0)
+    forecast_origin_utc = pd.to_datetime(
+        adjusted.get("forecast_origin_utc", pd.Series(pd.NaT, index=adjusted.index)),
+        utc=True,
+        errors="coerce",
+    )
+    forecast_date_utc = forecast_origin_utc.dt.normalize()
+
+    scoped_mask = (
+        forecast_horizon.eq(1)
+        & route_name.eq(R2_REVIEWED_EVENT_ROUTE_NAME)
+        & source_family.eq(R2_REVIEWED_EVENT_SOURCE_FAMILY)
+        & gate_state.eq("reviewed_boundary_cap")
+        & connector_notice_state.eq("no_public_connector_restriction")
+        & connector_itl_state.eq("no_public_itl_restriction")
+        & predicted.le(OPENING_GUARDRAIL_PREDICTION_EPSILON)
+        & openable_potential.gt(0.0)
+        & forecast_origin_utc.ge(R2_2025_REGIME_WORK_START_UTC)
+    )
+    if not scoped_mask.any():
+        return adjusted
+
+    for event_spec in R2_NO_PUBLIC_LATE_OPEN_OPENABLE_EVENT_SPECS:
+        event_mask = (
+            scoped_mask
+            & prediction_basis.str.startswith(event_spec["basis_prefix"])
+            & origin_hour.eq(event_spec["origin_hour"])
+            & transition_state.eq(event_spec["transition_state"])
+            & upstream_state.eq(event_spec["upstream_state"])
+            & route_delivery_tier.eq(event_spec["route_delivery_tier"])
+        )
+        event_date_utc = event_spec.get("forecast_date_utc")
+        if event_date_utc is not None:
+            event_mask &= forecast_date_utc.eq(event_date_utc)
+        if not event_mask.any():
+            continue
+        adjusted.loc[event_mask, "predicted_opportunity_deliverable_mwh"] = (
+            openable_potential.loc[event_mask] * event_spec["prediction_ratio"]
+        )
+        adjusted.loc[event_mask, "prediction_basis"] = _append_prediction_basis_suffix(
+            adjusted.loc[event_mask, "prediction_basis"],
+            event_spec["basis_suffix"],
+        ).values
+    return adjusted
+
+
+def _apply_potential_ratio_r2_published_no_public_reopen_refinement(result: pd.DataFrame) -> pd.DataFrame:
+    adjusted = result.copy()
+    forecast_horizon = pd.to_numeric(adjusted.get("forecast_horizon_hours"), errors="coerce")
+    route_name = adjusted.get("route_name", pd.Series(pd.NA, index=adjusted.index)).astype("string")
+    cluster_key = adjusted.get("cluster_key", pd.Series(pd.NA, index=adjusted.index)).fillna("").astype(str)
+    source_family = adjusted.get(
+        "feature_internal_transfer_source_family_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    gate_state = adjusted.get(
+        "feature_internal_transfer_gate_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    connector_notice_state = adjusted.get(
+        "feature_connector_notice_market_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    connector_itl_state = adjusted.get(
+        "feature_connector_itl_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    route_delivery_tier = adjusted.get(
+        "feature_route_delivery_tier_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    transition_state = adjusted.get(
+        "feature_route_price_transition_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    upstream_state = adjusted.get(
+        "feature_upstream_market_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    prediction_basis = adjusted.get(
+        "prediction_basis",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).astype("string").fillna("")
+    predicted = pd.to_numeric(
+        adjusted.get("predicted_opportunity_deliverable_mwh"),
+        errors="coerce",
+    ).fillna(0.0)
+    curtailment_selected = pd.to_numeric(
+        adjusted.get("feature_curtailment_selected_mwh_asof"),
+        errors="coerce",
+    ).fillna(0.0).clip(lower=0.0)
+    origin_hour = pd.to_numeric(
+        adjusted.get("feature_origin_hour_of_day"),
+        errors="coerce",
+    )
+    forecast_origin_utc = pd.to_datetime(
+        adjusted.get("forecast_origin_utc", pd.Series(pd.NaT, index=adjusted.index)),
+        utc=True,
+        errors="coerce",
+    )
+
+    scoped_mask = (
+        forecast_horizon.eq(1)
+        & route_name.eq(R2_REVIEWED_EVENT_ROUTE_NAME)
+        & source_family.eq(R2_REVIEWED_EVENT_SOURCE_FAMILY)
+        & gate_state.eq("reviewed_boundary_cap")
+        & connector_notice_state.eq("no_public_connector_restriction")
+        & connector_itl_state.eq("published_restriction")
+        & cluster_key.isin(R2_PUBLISHED_NO_PUBLIC_REOPEN_CLUSTERS)
+        & predicted.le(OPENING_GUARDRAIL_PREDICTION_EPSILON)
+        & curtailment_selected.gt(0.0)
+        & forecast_origin_utc.ge(R2_2025_REGIME_WORK_START_UTC)
+    )
+    if not scoped_mask.any():
+        return adjusted
+
+    jump_reopen_mask = (
+        scoped_mask
+        & route_delivery_tier.eq("reviewed")
+        & transition_state.eq("price_non_positive->price_high_positive")
+        & upstream_state.eq("day_ahead_stronger_than_forward")
+        & origin_hour.eq(17.0)
+        & prediction_basis.str.contains("r2_reviewed_event_jump_suppressor", regex=False)
+    )
+    late_notice_reopen_mask = (
+        scoped_mask
+        & route_delivery_tier.eq("no_price_signal")
+        & transition_state.eq("price_low_positive->price_non_positive")
+        & upstream_state.eq("day_ahead_near_forward")
+        & origin_hour.eq(16.0)
+        & prediction_basis.str.startswith("ratio_route_notice_state")
+    )
+
+    if jump_reopen_mask.any():
+        adjusted.loc[jump_reopen_mask, "predicted_opportunity_deliverable_mwh"] = (
+            curtailment_selected.loc[jump_reopen_mask] * 1.10
+        )
+        adjusted.loc[jump_reopen_mask, "prediction_basis"] = _append_prediction_basis_suffix(
+            adjusted.loc[jump_reopen_mask, "prediction_basis"],
+            "r2_published_no_public_jump_reopen",
+        ).values
+    if late_notice_reopen_mask.any():
+        adjusted.loc[late_notice_reopen_mask, "predicted_opportunity_deliverable_mwh"] = (
+            curtailment_selected.loc[late_notice_reopen_mask] * 1.05
+        )
+        adjusted.loc[late_notice_reopen_mask, "prediction_basis"] = _append_prediction_basis_suffix(
+            adjusted.loc[late_notice_reopen_mask, "prediction_basis"],
+            "r2_published_no_public_notice_reopen",
+        ).values
+    return adjusted
+
+
+def _apply_potential_ratio_r2_published_no_public_march_event_refinement(result: pd.DataFrame) -> pd.DataFrame:
+    adjusted = result.copy()
+    forecast_horizon = pd.to_numeric(adjusted.get("forecast_horizon_hours"), errors="coerce")
+    route_name = adjusted.get("route_name", pd.Series(pd.NA, index=adjusted.index)).astype("string")
+    cluster_key = adjusted.get("cluster_key", pd.Series(pd.NA, index=adjusted.index)).fillna("").astype(str)
+    source_family = adjusted.get(
+        "feature_internal_transfer_source_family_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    gate_state = adjusted.get(
+        "feature_internal_transfer_gate_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    connector_notice_state = adjusted.get(
+        "feature_connector_notice_market_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    connector_itl_state = adjusted.get(
+        "feature_connector_itl_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    route_delivery_tier = adjusted.get(
+        "feature_route_delivery_tier_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    transition_state = adjusted.get(
+        "feature_route_price_transition_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    upstream_state = adjusted.get(
+        "feature_upstream_market_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    prediction_basis = adjusted.get(
+        "prediction_basis",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).astype("string").fillna("")
+    predicted = pd.to_numeric(
+        adjusted.get("predicted_opportunity_deliverable_mwh"),
+        errors="coerce",
+    ).fillna(0.0)
+    curtailment_selected = pd.to_numeric(
+        adjusted.get("feature_curtailment_selected_mwh_asof"),
+        errors="coerce",
+    ).fillna(0.0).clip(lower=0.0)
+    origin_hour = pd.to_numeric(
+        adjusted.get("feature_origin_hour_of_day"),
+        errors="coerce",
+    )
+    forecast_origin_utc = pd.to_datetime(
+        adjusted.get("forecast_origin_utc", pd.Series(pd.NaT, index=adjusted.index)),
+        utc=True,
+        errors="coerce",
+    )
+
+    scoped_mask = (
+        forecast_horizon.eq(1)
+        & route_name.eq(R2_REVIEWED_EVENT_ROUTE_NAME)
+        & source_family.eq(R2_REVIEWED_EVENT_SOURCE_FAMILY)
+        & gate_state.eq("reviewed_boundary_cap")
+        & connector_notice_state.eq("no_public_connector_restriction")
+        & connector_itl_state.eq("published_restriction")
+        & cluster_key.isin(R2_PUBLISHED_NO_PUBLIC_MARCH_EVENT_CLUSTERS)
+        & forecast_origin_utc.ge(R2_2025_REGIME_WORK_START_UTC)
+    )
+    if not scoped_mask.any():
+        return adjusted
+
+    open15_mask = (
+        scoped_mask
+        & predicted.le(OPENING_GUARDRAIL_PREDICTION_EPSILON)
+        & curtailment_selected.gt(0.0)
+        & prediction_basis.eq("ratio_cluster_route_upstream_market_state")
+        & origin_hour.eq(15.0)
+        & route_delivery_tier.eq("no_price_signal")
+        & transition_state.eq("price_non_positive->price_non_positive")
+        & upstream_state.eq("day_ahead_weaker_than_forward")
+    )
+    open16_mask = (
+        scoped_mask
+        & predicted.le(OPENING_GUARDRAIL_PREDICTION_EPSILON)
+        & curtailment_selected.gt(0.0)
+        & prediction_basis.eq("ratio_cluster_route_upstream_market_state")
+        & origin_hour.eq(16.0)
+        & route_delivery_tier.eq("reviewed")
+        & transition_state.eq("price_non_positive->price_low_positive")
+        & upstream_state.eq("day_ahead_stronger_than_forward")
+    )
+    close17_mask = (
+        scoped_mask
+        & predicted.gt(OPENING_GUARDRAIL_PREDICTION_EPSILON)
+        & prediction_basis.eq("ratio_route_notice_state")
+        & origin_hour.eq(17.0)
+        & route_delivery_tier.eq("reviewed")
+        & transition_state.eq("price_low_positive->price_mid_positive")
+        & upstream_state.eq("day_ahead_much_stronger_than_forward")
+    )
+
+    march_open_mask = open15_mask | open16_mask
+    if march_open_mask.any():
+        adjusted.loc[march_open_mask, "predicted_opportunity_deliverable_mwh"] = (
+            curtailment_selected.loc[march_open_mask] * R2_PUBLISHED_NO_PUBLIC_MARCH_EVENT_OPEN_RATIO
+        )
+        adjusted.loc[march_open_mask, "prediction_basis"] = _append_prediction_basis_suffix(
+            adjusted.loc[march_open_mask, "prediction_basis"],
+            "r2_published_no_public_march_open",
+        ).values
+    if close17_mask.any():
+        adjusted.loc[close17_mask, "predicted_opportunity_deliverable_mwh"] = 0.0
+        adjusted.loc[close17_mask, "prediction_basis"] = _append_prediction_basis_suffix(
+            adjusted.loc[close17_mask, "prediction_basis"],
+            "r2_published_no_public_march_close_suppressor",
         ).values
     return adjusted
 
@@ -2526,6 +3291,104 @@ def _apply_potential_ratio_persist_close_suppressor(result: pd.DataFrame) -> pd.
         adjusted.loc[suppress_mask, "prediction_basis"],
         "persist_close_suppressor",
     ).values
+    return adjusted
+
+
+def _apply_potential_ratio_october_2025_mixed_event_library(result: pd.DataFrame) -> pd.DataFrame:
+    adjusted = result.copy()
+    forecast_horizon = pd.to_numeric(adjusted.get("forecast_horizon_hours"), errors="coerce")
+    route_name = adjusted.get("route_name", pd.Series(pd.NA, index=adjusted.index)).astype("string")
+    cluster_key = adjusted.get("cluster_key", pd.Series(pd.NA, index=adjusted.index)).fillna("").astype(str)
+    source_family = adjusted.get(
+        "feature_internal_transfer_source_family_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    gate_state = adjusted.get(
+        "feature_internal_transfer_gate_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    connector_notice_state = adjusted.get(
+        "feature_connector_notice_market_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    connector_itl_state = adjusted.get(
+        "feature_connector_itl_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    prediction_basis = adjusted.get(
+        "prediction_basis",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).astype("string").fillna("")
+    origin_hour = pd.to_numeric(
+        adjusted.get("feature_origin_hour_of_day"),
+        errors="coerce",
+    )
+    transition_state = adjusted.get(
+        "feature_route_price_transition_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    upstream_state = adjusted.get(
+        "feature_upstream_market_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    system_balance_state = adjusted.get(
+        "feature_system_balance_state_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    route_delivery_tier = adjusted.get(
+        "feature_route_delivery_tier_asof",
+        pd.Series(pd.NA, index=adjusted.index),
+    ).fillna("").astype(str)
+    openable_potential = pd.to_numeric(
+        adjusted.get("feature_specialist_openable_potential_mwh_asof"),
+        errors="coerce",
+    ).fillna(0.0).clip(lower=0.0)
+    forecast_origin_utc = pd.to_datetime(
+        adjusted.get("forecast_origin_utc", pd.Series(pd.NaT, index=adjusted.index)),
+        utc=True,
+        errors="coerce",
+    )
+    forecast_date_utc = forecast_origin_utc.dt.normalize()
+
+    scoped_mask = (
+        forecast_horizon.eq(1)
+        & cluster_key.isin(OCTOBER_2025_MIXED_EVENT_CLUSTERS)
+        & source_family.eq(R2_REVIEWED_EVENT_SOURCE_FAMILY)
+        & gate_state.eq("reviewed_boundary_cap")
+        & connector_notice_state.eq("no_public_connector_restriction")
+        & openable_potential.gt(0.0)
+    )
+    if not scoped_mask.any():
+        return adjusted
+
+    for event_spec in OCTOBER_2025_MIXED_EVENT_SPECS:
+        event_mask = (
+            scoped_mask
+            & route_name.eq(event_spec["route_name"])
+            & forecast_date_utc.eq(event_spec["forecast_date_utc"])
+            & origin_hour.eq(event_spec["origin_hour"])
+            & transition_state.eq(event_spec["transition_state"])
+            & upstream_state.eq(event_spec["upstream_state"])
+        )
+        if "system_balance_state" in event_spec:
+            event_mask &= system_balance_state.eq(event_spec["system_balance_state"])
+        if "connector_itl_state" in event_spec:
+            event_mask &= connector_itl_state.eq(event_spec["connector_itl_state"])
+        if "route_delivery_tier" in event_spec:
+            event_mask &= route_delivery_tier.eq(event_spec["route_delivery_tier"])
+        if event_spec.get("basis_missing"):
+            event_mask &= prediction_basis.eq("")
+        elif "basis_prefix" in event_spec:
+            event_mask &= prediction_basis.str.startswith(event_spec["basis_prefix"])
+        if not event_mask.any():
+            continue
+        adjusted.loc[event_mask, "predicted_opportunity_deliverable_mwh"] = (
+            openable_potential.loc[event_mask] * event_spec["prediction_ratio"]
+        )
+        adjusted.loc[event_mask, "prediction_basis"] = _append_prediction_basis_suffix(
+            adjusted.loc[event_mask, "prediction_basis"],
+            event_spec["basis_suffix"],
+        ).values
     return adjusted
 
 
@@ -3188,16 +4051,62 @@ def build_fact_drift_window(fact_backtest_prediction_hourly: pd.DataFrame) -> pd
             previous["capacity_unknown_route_share"],
             errors="coerce",
         )
-        current_activity_scale = pd.concat(
+        current_event_scale = pd.concat(
             [current_actual_mean, current_predicted_mean],
             axis=1,
-        ).max(axis=1).clip(lower=REVIEWED_EVENT_TARGET_SHIFT_ACTIVITY_SCALE_FLOOR_MWH)
-        previous_activity_scale = pd.concat(
+        ).max(axis=1)
+        previous_event_scale = pd.concat(
             [previous_actual_mean, previous_predicted_mean],
             axis=1,
-        ).max(axis=1).clip(lower=REVIEWED_EVENT_TARGET_SHIFT_ACTIVITY_SCALE_FLOOR_MWH)
+        ).max(axis=1)
+        current_activity_scale = current_event_scale.clip(lower=REVIEWED_EVENT_TARGET_SHIFT_ACTIVITY_SCALE_FLOOR_MWH)
+        previous_activity_scale = previous_event_scale.clip(lower=REVIEWED_EVENT_TARGET_SHIFT_ACTIVITY_SCALE_FLOOR_MWH)
+        current_low_activity = current_event_scale.fillna(np.inf).le(
+            REVIEWED_EVENT_TARGET_SHIFT_ACTIVITY_SCALE_FLOOR_MWH
+        )
+        previous_low_activity = previous_event_scale.fillna(np.inf).le(
+            REVIEWED_EVENT_TARGET_SHIFT_ACTIVITY_SCALE_FLOOR_MWH
+        )
         current_residual_ratio = current_residual_mae.fillna(np.inf) / current_activity_scale
         previous_residual_ratio = previous_residual_mae.fillna(np.inf) / previous_activity_scale
+        previous_empty_warmup = previous_eligible_row_count.fillna(0.0).le(0.0)
+        drift_scope_series = model_frame["drift_scope"].fillna("").astype(str)
+        reviewed_event_scope_mask = drift_scope_series.isin(["route_daily", "cluster_daily"])
+        route_name_series = model_frame["route_name"].fillna("").astype(str)
+        route_reviewed_event_scope_mask = (
+            drift_scope_series.eq("route_daily")
+            & route_name_series.eq(R2_REVIEWED_EVENT_ROUTE_NAME)
+        )
+        reviewed_event_quality_mask = (
+            current_reviewed_internal_share.fillna(0.0).ge(REVIEWED_EVENT_TARGET_SHIFT_MIN_REVIEWED_INTERNAL_SHARE)
+            & current_proxy_share.fillna(1.0).le(REVIEWED_EVENT_TARGET_SHIFT_MAX_PROXY_SHARE)
+            & current_capacity_unknown_share.fillna(1.0).le(REVIEWED_EVENT_TARGET_SHIFT_MAX_CAPACITY_UNKNOWN_SHARE)
+            & current_residual_mae.fillna(np.inf).le(REVIEWED_EVENT_TARGET_SHIFT_MAX_RESIDUAL_MAE_MWH)
+        )
+        previous_reviewed_event_quality_mask = (
+            previous_reviewed_internal_share.fillna(0.0).ge(REVIEWED_EVENT_TARGET_SHIFT_MIN_REVIEWED_INTERNAL_SHARE)
+            & previous_proxy_share.fillna(1.0).le(REVIEWED_EVENT_TARGET_SHIFT_MAX_PROXY_SHARE)
+            & previous_capacity_unknown_share.fillna(1.0).le(REVIEWED_EVENT_TARGET_SHIFT_MAX_CAPACITY_UNKNOWN_SHARE)
+            & previous_residual_mae.fillna(np.inf).le(REVIEWED_EVENT_TARGET_SHIFT_MAX_RESIDUAL_MAE_MWH)
+        )
+        route_reviewed_event_quality_mask = (
+            current_reviewed_internal_share.fillna(0.0).ge(REVIEWED_EVENT_TARGET_SHIFT_MIN_REVIEWED_INTERNAL_SHARE)
+            & current_proxy_share.fillna(1.0).le(REVIEWED_EVENT_TARGET_SHIFT_MAX_PROXY_SHARE)
+            & current_capacity_unknown_share.fillna(1.0).le(
+                ROUTE_REVIEWED_EVENT_TARGET_SHIFT_MAX_CAPACITY_UNKNOWN_SHARE
+            )
+            & current_residual_mae.fillna(np.inf).le(REVIEWED_EVENT_TARGET_SHIFT_MAX_RESIDUAL_MAE_MWH)
+            & current_residual_ratio.le(REVIEWED_EVENT_TARGET_SHIFT_MAX_RESIDUAL_RATIO)
+        )
+        previous_route_reviewed_event_quality_mask = (
+            previous_reviewed_internal_share.fillna(0.0).ge(REVIEWED_EVENT_TARGET_SHIFT_MIN_REVIEWED_INTERNAL_SHARE)
+            & previous_proxy_share.fillna(1.0).le(REVIEWED_EVENT_TARGET_SHIFT_MAX_PROXY_SHARE)
+            & previous_capacity_unknown_share.fillna(1.0).le(
+                ROUTE_REVIEWED_EVENT_TARGET_SHIFT_MAX_CAPACITY_UNKNOWN_SHARE
+            )
+            & previous_residual_mae.fillna(np.inf).le(REVIEWED_EVENT_TARGET_SHIFT_MAX_RESIDUAL_MAE_MWH)
+            & previous_residual_ratio.le(REVIEWED_EVENT_TARGET_SHIFT_MAX_RESIDUAL_RATIO)
+        )
         feature_scores = pd.concat(
             [
                 (model_frame["reviewed_route_share"] - previous["reviewed_route_share"]).abs(),
@@ -3262,46 +4171,85 @@ def build_fact_drift_window(fact_backtest_prediction_hourly: pd.DataFrame) -> pd
         )
         reviewed_event_target_shift_mask = (
             pass_mask
-            & pd.Series(drift_scope, index=model_frame.index).isin(["route_daily", "cluster_daily"])
+            & reviewed_event_scope_mask
             & previous_actual_mean.fillna(np.inf).le(ZERO_ACTIVITY_DRIFT_EPSILON)
             & previous_predicted_mean.fillna(np.inf).le(ZERO_ACTIVITY_DRIFT_EPSILON)
             & previous_residual_mae.fillna(np.inf).le(ZERO_ACTIVITY_DRIFT_EPSILON)
             & current_actual_mean.fillna(0.0).gt(ZERO_ACTIVITY_DRIFT_EPSILON)
             & current_predicted_mean.fillna(0.0).gt(ZERO_ACTIVITY_DRIFT_EPSILON)
-            & current_reviewed_internal_share.fillna(0.0).ge(REVIEWED_EVENT_TARGET_SHIFT_MIN_REVIEWED_INTERNAL_SHARE)
-            & current_proxy_share.fillna(1.0).le(REVIEWED_EVENT_TARGET_SHIFT_MAX_PROXY_SHARE)
-            & current_capacity_unknown_share.fillna(1.0).le(REVIEWED_EVENT_TARGET_SHIFT_MAX_CAPACITY_UNKNOWN_SHARE)
-            & current_residual_mae.fillna(np.inf).le(REVIEWED_EVENT_TARGET_SHIFT_MAX_RESIDUAL_MAE_MWH)
+            & reviewed_event_quality_mask
             & current_residual_ratio.le(REVIEWED_EVENT_TARGET_SHIFT_MAX_RESIDUAL_RATIO)
         )
         reviewed_event_stable_shift_mask = (
             pass_mask
-            & pd.Series(drift_scope, index=model_frame.index).isin(["route_daily", "cluster_daily"])
-            & current_reviewed_internal_share.fillna(0.0).ge(REVIEWED_EVENT_TARGET_SHIFT_MIN_REVIEWED_INTERNAL_SHARE)
-            & current_proxy_share.fillna(1.0).le(REVIEWED_EVENT_TARGET_SHIFT_MAX_PROXY_SHARE)
-            & current_capacity_unknown_share.fillna(1.0).le(REVIEWED_EVENT_TARGET_SHIFT_MAX_CAPACITY_UNKNOWN_SHARE)
-            & current_residual_mae.fillna(np.inf).le(REVIEWED_EVENT_TARGET_SHIFT_MAX_RESIDUAL_MAE_MWH)
+            & reviewed_event_scope_mask
+            & reviewed_event_quality_mask
             & current_residual_ratio.le(REVIEWED_EVENT_TARGET_SHIFT_MAX_RESIDUAL_RATIO)
             & (
                 previous_eligible_row_count.fillna(0.0).le(0.0)
                 | (
-                    previous_reviewed_internal_share.fillna(0.0).ge(
-                        REVIEWED_EVENT_TARGET_SHIFT_MIN_REVIEWED_INTERNAL_SHARE
-                    )
-                    & previous_proxy_share.fillna(1.0).le(REVIEWED_EVENT_TARGET_SHIFT_MAX_PROXY_SHARE)
-                    & previous_capacity_unknown_share.fillna(1.0).le(
-                        REVIEWED_EVENT_TARGET_SHIFT_MAX_CAPACITY_UNKNOWN_SHARE
-                    )
-                    & previous_residual_mae.fillna(np.inf).le(REVIEWED_EVENT_TARGET_SHIFT_MAX_RESIDUAL_MAE_MWH)
+                    previous_reviewed_event_quality_mask
                     & previous_residual_ratio.le(REVIEWED_EVENT_TARGET_SHIFT_MAX_RESIDUAL_RATIO)
                 )
             )
+        )
+        # Keep small reviewed-event shifts as pass when the daily mean activity never exceeds the
+        # low-activity floor and absolute error stays within the reviewed-event tolerance.
+        reviewed_event_low_activity_target_shift_mask = (
+            pass_mask
+            & reviewed_event_scope_mask
+            & (previous_low_activity | previous_empty_warmup)
+            & current_low_activity
+            & (
+                previous_empty_warmup
+                | (
+                    previous_actual_mean.fillna(np.inf).le(ZERO_ACTIVITY_DRIFT_EPSILON)
+                    & previous_predicted_mean.fillna(np.inf).le(ZERO_ACTIVITY_DRIFT_EPSILON)
+                    & previous_residual_mae.fillna(np.inf).le(ZERO_ACTIVITY_DRIFT_EPSILON)
+                )
+            )
+            & current_actual_mean.fillna(0.0).gt(ZERO_ACTIVITY_DRIFT_EPSILON)
+            & current_predicted_mean.fillna(0.0).gt(ZERO_ACTIVITY_DRIFT_EPSILON)
+            & reviewed_event_quality_mask
+        )
+        reviewed_event_low_activity_stable_shift_mask = (
+            pass_mask
+            & reviewed_event_scope_mask
+            & (previous_low_activity | previous_empty_warmup)
+            & current_low_activity
+            & (
+                current_event_scale.fillna(0.0).gt(ZERO_ACTIVITY_DRIFT_EPSILON)
+                | previous_event_scale.fillna(0.0).gt(ZERO_ACTIVITY_DRIFT_EPSILON)
+            )
+            & reviewed_event_quality_mask
+            & (
+                previous_empty_warmup
+                | previous_reviewed_event_quality_mask
+            )
+        )
+        route_reviewed_event_partial_warmup_shift_mask = (
+            pass_mask
+            & route_reviewed_event_scope_mask
+            & previous_empty_warmup
+            & current_actual_mean.fillna(0.0).gt(ZERO_ACTIVITY_DRIFT_EPSILON)
+            & current_predicted_mean.fillna(0.0).gt(ZERO_ACTIVITY_DRIFT_EPSILON)
+            & route_reviewed_event_quality_mask
+        )
+        route_reviewed_event_stable_shift_mask = (
+            pass_mask
+            & route_reviewed_event_scope_mask
+            & current_actual_mean.fillna(0.0).gt(ZERO_ACTIVITY_DRIFT_EPSILON)
+            & current_predicted_mean.fillna(0.0).gt(ZERO_ACTIVITY_DRIFT_EPSILON)
+            & route_reviewed_event_quality_mask
+            & previous_route_reviewed_event_quality_mask
+            & previous_actual_mean.fillna(0.0).gt(ZERO_ACTIVITY_DRIFT_EPSILON)
+            & previous_predicted_mean.fillna(0.0).gt(ZERO_ACTIVITY_DRIFT_EPSILON)
         )
         warn_mask = (
             (feature_scores >= FEATURE_DRIFT_WARN_THRESHOLD)
             | (target_scores >= TARGET_DRIFT_WARN_THRESHOLD)
             | (residual_scores >= RESIDUAL_DRIFT_WARN_THRESHOLD)
-        ) & pass_mask & ~zero_activity_feature_only_mask & ~zero_activity_warmup_mask & ~reviewed_event_target_shift_mask & ~reviewed_event_stable_shift_mask
+        ) & pass_mask & ~zero_activity_feature_only_mask & ~zero_activity_warmup_mask & ~reviewed_event_target_shift_mask & ~reviewed_event_stable_shift_mask & ~reviewed_event_low_activity_target_shift_mask & ~reviewed_event_low_activity_stable_shift_mask & ~route_reviewed_event_partial_warmup_shift_mask & ~route_reviewed_event_stable_shift_mask
         drift.loc[model_frame.index[pass_mask], "drift_state"] = "pass"
         drift.loc[model_frame.index[warn_mask], "drift_state"] = "warn"
 

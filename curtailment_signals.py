@@ -345,7 +345,8 @@ def build_regional_curtailment_hourly_proxy(
     )
     long["wind_mw"] = pd.to_numeric(long["wind_mw"], errors="coerce").fillna(0.0)
     long["hour_start_utc"] = long["interval_start_utc"].dt.floor("h")
-    long["hour_start_local"] = long["interval_start_local"].dt.floor("h")
+    # Floor in UTC first so repeated local fallback hours keep their distinct offsets.
+    long["hour_start_local"] = long["hour_start_utc"].dt.tz_convert(LONDON_TZ)
 
     daily_region = (
         long.groupby(["date", "parent_region"], as_index=False)
