@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from html import escape
 from pathlib import Path
 from typing import Dict
 
@@ -16,6 +17,7 @@ from opportunity_backtest import MODEL_POTENTIAL_RATIO_V2
 EXPLORATORY_CLUSTER_MAP_POINT_TABLE = "dim_exploratory_cluster_map_point"
 EXPLORATORY_CLUSTER_MAP_HOURLY_TABLE = "fact_exploratory_cluster_map_hourly"
 EXPLORATORY_CLUSTER_MAP_HTML = "exploratory_cluster_map.html"
+OPERATIONAL_CLUSTER_MAP_HTML = "operational_cluster_map.html"
 
 
 def _empty_exploratory_cluster_map_point_frame() -> pd.DataFrame:
@@ -269,19 +271,237 @@ def _frame_json(frame: pd.DataFrame) -> str:
     return serializable.to_json(orient="records", date_format="iso")
 
 
-def render_exploratory_cluster_map_html(
+def _cluster_map_mode_config(mode: str) -> dict[str, str]:
+    normalized = (mode or "").strip().lower()
+    if normalized == "exploratory":
+        return {
+            "mode": "exploratory",
+            "html_title": "Exploratory Cluster Map",
+            "html_name": EXPLORATORY_CLUSTER_MAP_HTML,
+            "eyebrow": "Exploratory Only",
+            "headline": "GB Cluster Time Slider",
+            "subhead": (
+                "This is a cluster-point exploration surface, not an operational map. "
+                "It shows current opportunity intensity on the seed spatial scaffold "
+                "and badges each cluster with mapping confidence plus the daily readiness gate."
+            ),
+            "mode_badge": "exploratory only",
+        }
+    if normalized == "operational":
+        return {
+            "mode": "operational",
+            "html_title": "Operational Cluster Map",
+            "html_name": OPERATIONAL_CLUSTER_MAP_HTML,
+            "eyebrow": "Internal Operational",
+            "headline": "GB Cluster Operational Map",
+            "subhead": (
+                "This is the internal readiness-gated cluster map. It uses the same "
+                "opportunity scaffold, but operational interpretation is allowed only "
+                "when the daily readiness gate is passing."
+            ),
+            "mode_badge": "operational",
+        }
+    raise ValueError(f"Unsupported cluster map mode: {mode}")
+
+
+def _readiness_css_class(value: str) -> str:
+    return f"readiness-{str(value or 'readiness_unknown').lower()}"
+
+
+def _confidence_css_class(value: str) -> str:
+    return f"confidence-{str(value or 'unknown').lower()}"
+
+
+def _badge_html(label: str, value: str, css_class: str) -> str:
+    return f'<span class="badge {escape(css_class)}">{escape(label)}: {escape(value)}</span>'
+
+
+def _first_interval_rows(fact_exploratory_cluster_map_hourly: pd.DataFrame) -> pd.DataFrame:
+    if fact_exploratory_cluster_map_hourly is None or fact_exploratory_cluster_map_hourly.empty:
+        return _empty_exploratory_cluster_map_hourly_frame()
+    hourly = fact_exploratory_cluster_map_hourly.copy()
+    hourly["interval_start_utc"] = pd.to_datetime(hourly["interval_start_utc"], utc=True, errors="coerce")
+    hourly = hourly.dropna(subset=["interval_start_utc"]).copy()
+    if hourly.empty:
+        return _empty_exploratory_cluster_map_hourly_frame()
+    first_interval = hourly["interval_start_utc"].sort_values().iloc[0]
+    return hourly[hourly["interval_start_utc"].eq(first_interval)].copy()
+
+
+def _format_interval_label(value: object) -> str:
+    timestamp = pd.to_datetime(value, utc=True, errors="coerce")
+    if pd.isna(timestamp):
+        return "No interval selected"
+    return timestamp.strftime("%d %b %Y, %H:%M UTC")
+
+
+def _blocking_label(row: pd.Series | None) -> str:
+    if row is None:
+        return ""
+    blocking_reasons = str(row.get("blocking_reasons", "") or "").strip()
+    if blocking_reasons:
+        return blocking_reasons
+    readiness_state = str(row.get("model_readiness_state", "") or "").strip()
+    return readiness_state or "readiness_unknown"
+
+
+def _operational_blocked(mode: str, row: pd.Series | None) -> bool:
+    if mode != "operational" or row is None:
+        return False
+    return not bool(row.get("model_ready_flag", False))
+
+
+def _build_initial_cluster_map_state(
+    dim_exploratory_cluster_map_point: pd.DataFrame,
+    fact_exploratory_cluster_map_hourly: pd.DataFrame,
+    *,
+    mode: str,
+) -> dict[str, str]:
+    first_rows = _first_interval_rows(fact_exploratory_cluster_map_hourly)
+    first_row = first_rows.iloc[0] if not first_rows.empty else None
+    first_point = dim_exploratory_cluster_map_point.iloc[0] if not dim_exploratory_cluster_map_point.empty else None
+    selected_row = None
+    if first_point is not None and not first_rows.empty:
+        point_rows = first_rows[first_rows["cluster_key"].astype(str).eq(str(first_point["cluster_key"]))]
+        if not point_rows.empty:
+            selected_row = point_rows.iloc[0]
+    if selected_row is None:
+        selected_row = first_row
+
+    if first_row is None:
+        return {
+            "status_bar_html": _badge_html("Mode", _cluster_map_mode_config(mode)["mode_badge"], "readiness-readiness_unknown"),
+            "time_label": "No interval selected",
+            "summary_label": "No map data available.",
+            "cluster_title": "Cluster detail",
+            "cluster_badges_html": "",
+            "stat_deliverable": "0.0",
+            "stat_gross_value": "0.0",
+            "stat_feasible_routes": "0",
+            "stat_reviewed_routes": "0",
+            "meta_region": "",
+            "meta_hubs": "",
+            "meta_active_hubs": "none",
+            "meta_active_routes": "none",
+            "meta_connection": "",
+            "readiness_summary": "No cluster selected.",
+        }
+
+    deliverable = first_rows["opportunity_deliverable_mwh_sum"].fillna(0.0).sum()
+    positive_clusters = int(first_rows["opportunity_deliverable_mwh_sum"].fillna(0.0).gt(0).sum())
+    blocked = _operational_blocked(mode, first_row)
+    blocking_label = _blocking_label(first_row)
+    summary_label = (
+        f"Blocked for operational use: {blocking_label}."
+        if blocked
+        else f"{positive_clusters} active clusters, {deliverable:.1f} MWh deliverable across the scaffold."
+    )
+
+    status_badges = [
+        _badge_html(
+            "Daily gate",
+            str(first_row.get("model_readiness_state", "readiness_unknown") or "readiness_unknown"),
+            _readiness_css_class(str(first_row.get("model_readiness_state", "readiness_unknown") or "readiness_unknown")),
+        ),
+        _badge_html(
+            "Model",
+            str(first_row.get("model_key", MODEL_POTENTIAL_RATIO_V2) or MODEL_POTENTIAL_RATIO_V2),
+            "readiness-readiness_unknown",
+        ),
+        _badge_html("Mode", _cluster_map_mode_config(mode)["mode_badge"], "readiness-readiness_unknown"),
+    ]
+    if blocked:
+        status_badges.append(_badge_html("Blocking", blocking_label, "readiness-not_ready"))
+
+    if first_point is None:
+        cluster_title = "Cluster detail"
+        cluster_badges_html = ""
+        meta_region = ""
+        meta_hubs = ""
+        meta_connection = ""
+    else:
+        cluster_title = str(first_point.get("cluster_label", "Cluster detail") or "Cluster detail")
+        cluster_badges_html = "".join(
+            [
+                _badge_html(
+                    "Confidence",
+                    str(first_point.get("mapping_confidence", "unknown") or "unknown"),
+                    _confidence_css_class(str(first_point.get("mapping_confidence", "unknown") or "unknown")),
+                ),
+                _badge_html(
+                    "Readiness",
+                    str(selected_row.get("model_readiness_state", "readiness_unknown") if selected_row is not None else "readiness_unknown"),
+                    _readiness_css_class(
+                        str(selected_row.get("model_readiness_state", "readiness_unknown") if selected_row is not None else "readiness_unknown")
+                    ),
+                ),
+            ]
+        )
+        meta_region = str(first_point.get("parent_region", "") or "")
+        meta_hubs = str(first_point.get("preferred_hub_candidates", "") or "")
+        meta_connection = str(first_point.get("connection_context", "") or "")
+
+    readiness_date = str(selected_row.get("window_date", "") or "")[:10] if selected_row is not None else ""
+    readiness_state = str(selected_row.get("model_readiness_state", "readiness_unknown") or "readiness_unknown") if selected_row is not None else "readiness_unknown"
+    selected_blocking_label = _blocking_label(selected_row)
+    if _operational_blocked(mode, selected_row):
+        readiness_summary = (
+            f"Operational view is blocked on {readiness_date or 'unknown date'} because daily readiness is "
+            f"{readiness_state}. Blocking reasons: {selected_blocking_label}."
+        )
+    else:
+        readiness_summary = (
+            f"{str(selected_row.get('model_key', MODEL_POTENTIAL_RATIO_V2) or MODEL_POTENTIAL_RATIO_V2) if selected_row is not None else MODEL_POTENTIAL_RATIO_V2} "
+            f"on {readiness_date} is {readiness_state}. "
+            f"{f'Blocking reasons: {selected_blocking_label}.' if selected_blocking_label else 'No blocking reasons recorded for this day.'}"
+        )
+
+    return {
+        "status_bar_html": "".join(status_badges),
+        "time_label": _format_interval_label(first_row.get("interval_start_utc")),
+        "summary_label": summary_label,
+        "cluster_title": cluster_title,
+        "cluster_badges_html": cluster_badges_html,
+        "stat_deliverable": f"{float(selected_row.get('opportunity_deliverable_mwh_sum', 0.0) or 0.0):.1f}" if selected_row is not None else "0.0",
+        "stat_gross_value": f"{float(selected_row.get('opportunity_gross_value_eur_sum', 0.0) or 0.0):.0f}" if selected_row is not None else "0.0",
+        "stat_feasible_routes": str(int(selected_row.get("feasible_route_count", 0) or 0)) if selected_row is not None else "0",
+        "stat_reviewed_routes": str(int(selected_row.get("reviewed_internal_route_count", 0) or 0)) if selected_row is not None else "0",
+        "meta_region": meta_region,
+        "meta_hubs": meta_hubs,
+        "meta_active_hubs": str(selected_row.get("active_hubs", "none") or "none") if selected_row is not None else "none",
+        "meta_active_routes": str(selected_row.get("active_routes", "none") or "none") if selected_row is not None else "none",
+        "meta_connection": meta_connection,
+        "readiness_summary": readiness_summary,
+    }
+
+
+def render_cluster_map_html(
     dim_exploratory_cluster_map_point: pd.DataFrame,
     fact_exploratory_cluster_map_hourly: pd.DataFrame,
     output_path: str | Path,
+    *,
+    mode: str,
 ) -> None:
+    mode_config = _cluster_map_mode_config(mode)
+    initial_state = _build_initial_cluster_map_state(
+        dim_exploratory_cluster_map_point,
+        fact_exploratory_cluster_map_hourly,
+        mode=mode,
+    )
     points_json = _frame_json(dim_exploratory_cluster_map_point)
     hourly_json = _frame_json(fact_exploratory_cluster_map_hourly)
+    mode_config_json = json.dumps(
+        {
+            "mode": mode_config["mode"],
+            "modeBadge": mode_config["mode_badge"],
+        }
+    )
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Exploratory Cluster Map</title>
+  <title>{escape(mode_config["html_title"])}</title>
   <style>
     :root {{
       --ink: #19242c;
@@ -477,6 +697,19 @@ def render_exploratory_cluster_map_html(
     .badge.readiness-not_ready {{ background: rgba(159, 59, 34, 0.14); color: var(--not-ready); border-color: rgba(159, 59, 34, 0.22); }}
     .badge.readiness-readiness_unknown,
     .badge.readiness-readiness_unavailable {{ background: rgba(111, 124, 130, 0.14); color: var(--unknown); border-color: rgba(111, 124, 130, 0.2); }}
+    .operational-blocked .map-stage {{
+      border-color: rgba(159, 59, 34, 0.18);
+      box-shadow: inset 0 0 0 1px rgba(159, 59, 34, 0.08);
+    }}
+    .operational-blocked .marker-dot {{
+      filter: saturate(0.18) grayscale(0.28);
+      opacity: 0.46;
+      box-shadow: 0 6px 18px rgba(25, 36, 44, 0.1);
+    }}
+    .operational-blocked .marker-label {{
+      color: var(--muted);
+      background: rgba(255, 252, 246, 0.72);
+    }}
     .stats {{
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -498,6 +731,13 @@ def render_exploratory_cluster_map_html(
     .stat-value {{
       font-size: 22px;
       font-weight: 700;
+    }}
+    .operational-blocked .stat {{
+      background: rgba(244, 239, 227, 0.68);
+      border-color: rgba(159, 59, 34, 0.12);
+    }}
+    .operational-blocked .stat-value {{
+      color: var(--muted);
     }}
     .meta {{
       display: grid;
@@ -527,17 +767,17 @@ def render_exploratory_cluster_map_html(
   <div class="app">
     <section class="panel map-panel">
       <div class="header">
-        <div class="eyebrow">Exploratory Only</div>
-        <h1>GB Cluster Time Slider</h1>
+        <div class="eyebrow">{escape(mode_config["eyebrow"])}</div>
+        <h1>{escape(mode_config["headline"])}</h1>
         <div class="subhead">
-          This is a cluster-point exploration surface, not an operational map. It shows current opportunity intensity on the seed spatial scaffold and badges each cluster with mapping confidence plus the daily readiness gate.
+          {escape(mode_config["subhead"])}
         </div>
       </div>
-      <div class="status-bar" id="status-bar"></div>
+      <div class="status-bar" id="status-bar">{initial_state["status_bar_html"]}</div>
       <div class="controls">
         <div class="control-row">
-          <div class="time-label" id="time-label">No interval selected</div>
-          <div class="hint" id="summary-label">Waiting for map data.</div>
+          <div class="time-label" id="time-label">{escape(initial_state["time_label"])}</div>
+          <div class="hint" id="summary-label">{escape(initial_state["summary_label"])}</div>
         </div>
         <input id="time-range" class="range" type="range" min="0" max="0" value="0">
       </div>
@@ -547,44 +787,45 @@ def render_exploratory_cluster_map_html(
     </section>
     <aside class="panel sidebar">
       <section class="card">
-        <h2 id="cluster-title">Cluster detail</h2>
-        <div class="badge-row" id="cluster-badges"></div>
+        <h2 id="cluster-title">{escape(initial_state["cluster_title"])}</h2>
+        <div class="badge-row" id="cluster-badges">{initial_state["cluster_badges_html"]}</div>
         <div class="stats">
           <div class="stat">
             <div class="stat-label">Deliverable</div>
-            <div class="stat-value" id="stat-deliverable">0.0</div>
+            <div class="stat-value" id="stat-deliverable">{escape(initial_state["stat_deliverable"])}</div>
           </div>
           <div class="stat">
             <div class="stat-label">Gross Value</div>
-            <div class="stat-value" id="stat-gross-value">0.0</div>
+            <div class="stat-value" id="stat-gross-value">{escape(initial_state["stat_gross_value"])}</div>
           </div>
           <div class="stat">
             <div class="stat-label">Feasible Routes</div>
-            <div class="stat-value" id="stat-feasible-routes">0</div>
+            <div class="stat-value" id="stat-feasible-routes">{escape(initial_state["stat_feasible_routes"])}</div>
           </div>
           <div class="stat">
             <div class="stat-label">Reviewed Routes</div>
-            <div class="stat-value" id="stat-reviewed-routes">0</div>
+            <div class="stat-value" id="stat-reviewed-routes">{escape(initial_state["stat_reviewed_routes"])}</div>
           </div>
         </div>
       </section>
       <section class="card">
         <h3>Cluster Context</h3>
         <div class="meta">
-          <div><strong>Region</strong><span id="meta-region"></span></div>
-          <div><strong>Preferred hubs</strong><span id="meta-hubs"></span></div>
-          <div><strong>Active hubs</strong><span id="meta-active-hubs"></span></div>
-          <div><strong>Routes</strong><span id="meta-active-routes"></span></div>
-          <div><strong>Connection</strong><span id="meta-connection"></span></div>
+          <div><strong>Region</strong><span id="meta-region">{escape(initial_state["meta_region"])}</span></div>
+          <div><strong>Preferred hubs</strong><span id="meta-hubs">{escape(initial_state["meta_hubs"])}</span></div>
+          <div><strong>Active hubs</strong><span id="meta-active-hubs">{escape(initial_state["meta_active_hubs"])}</span></div>
+          <div><strong>Routes</strong><span id="meta-active-routes">{escape(initial_state["meta_active_routes"])}</span></div>
+          <div><strong>Connection</strong><span id="meta-connection">{escape(initial_state["meta_connection"])}</span></div>
         </div>
       </section>
       <section class="card">
         <h3>Daily Readiness</h3>
-        <div class="hint" id="readiness-summary"></div>
+        <div class="hint" id="readiness-summary">{escape(initial_state["readiness_summary"])}</div>
       </section>
     </aside>
   </div>
   <script>
+    const modeConfig = {mode_config_json};
     const pointRows = {points_json};
     const hourlyRows = {hourly_json};
     const markerLayer = document.getElementById("marker-layer");
@@ -595,6 +836,8 @@ def render_exploratory_cluster_map_html(
     const clusterTitle = document.getElementById("cluster-title");
     const clusterBadges = document.getElementById("cluster-badges");
     const readinessSummary = document.getElementById("readiness-summary");
+    const blockedWords = ["Blocked", "for operational use"];
+    const operationalBlockedWords = ["Operational view", "is blocked"];
 
     const timeKeys = [...new Set(hourlyRows.map((row) => row.interval_start_utc))].sort();
     const groupedByTime = new Map();
@@ -627,6 +870,17 @@ def render_exploratory_cluster_map_html(
 
     function readinessClass(value) {{
       return `readiness-${{String(value || "readiness_unknown").toLowerCase()}}`;
+    }}
+
+    function blockingLabel(row) {{
+      if (!row) {{
+        return "";
+      }}
+      return String(row.blocking_reasons || row.model_readiness_state || "readiness_unknown");
+    }}
+
+    function operationalBlocked(row) {{
+      return modeConfig.mode === "operational" && !Boolean(row?.model_ready_flag);
     }}
 
     function badge(label, value, cssClass) {{
@@ -695,14 +949,18 @@ def render_exploratory_cluster_map_html(
       if (!timeKeys.length) {{
         timeLabel.textContent = "No interval selected";
         summaryLabel.textContent = "No map data available.";
-        statusBar.innerHTML = badge("Mode", "exploratory only", "readiness-readiness_unknown");
+        document.body.classList.remove("operational-blocked");
+        statusBar.innerHTML = badge("Mode", modeConfig.modeBadge, "readiness-readiness_unknown");
         return;
       }}
       const rows = [...currentRows().values()];
       const first = rows[0] || null;
+      const blocked = operationalBlocked(first);
+      const blockedLabel = blockingLabel(first);
       const deliverable = rows.reduce((sum, row) => sum + Number(row.opportunity_deliverable_mwh_sum || 0), 0);
       const positiveClusters = rows.filter((row) => Number(row.opportunity_deliverable_mwh_sum || 0) > 0).length;
       const intervalKey = timeKeys[Number(timeRange.value) || 0];
+      document.body.classList.toggle("operational-blocked", blocked);
       timeLabel.textContent = new Date(intervalKey).toLocaleString("en-GB", {{
         year: "numeric",
         month: "short",
@@ -711,12 +969,22 @@ def render_exploratory_cluster_map_html(
         minute: "2-digit",
         timeZone: "UTC",
       }}) + " UTC";
-      summaryLabel.textContent = `${{positiveClusters}} active clusters, ${{deliverable.toFixed(1)}} MWh deliverable across the scaffold.`;
-      statusBar.innerHTML = [
+      if (blocked) {{
+        summaryLabel.textContent = blockedLabel
+          ? `${{blockedWords.join(" ")}}: ${{blockedLabel}}.`
+          : `${{blockedWords.join(" ")}}.`;
+      }} else {{
+        summaryLabel.textContent = `${{positiveClusters}} active clusters, ${{deliverable.toFixed(1)}} MWh deliverable across the scaffold.`;
+      }}
+      const badges = [
         badge("Daily gate", first?.model_readiness_state || "readiness_unknown", readinessClass(first?.model_readiness_state || "readiness_unknown")),
         badge("Model", first?.model_key || "{MODEL_POTENTIAL_RATIO_V2}", "readiness-readiness_unknown"),
-        badge("Mode", "exploratory only", "readiness-readiness_unknown"),
-      ].join("");
+        badge("Mode", modeConfig.modeBadge, "readiness-readiness_unknown"),
+      ];
+      if (blocked) {{
+        badges.push(badge("Blocking", blockedLabel || "readiness_unknown", "readiness-not_ready"));
+      }}
+      statusBar.innerHTML = badges.join("");
     }}
 
     function renderSidebar() {{
@@ -743,7 +1011,12 @@ def render_exploratory_cluster_map_html(
       document.getElementById("meta-active-routes").textContent = hourly?.active_routes || "none";
       document.getElementById("meta-connection").textContent = point.connection_context || "";
       const blockers = hourly?.blocking_reasons ? `Blocking reasons: ${{hourly.blocking_reasons}}.` : "No blocking reasons recorded for this day.";
-      readinessSummary.textContent = `${{hourly?.model_key || "{MODEL_POTENTIAL_RATIO_V2}"}} on ${{(hourly?.window_date || "").slice(0, 10)}} is ${{hourly?.model_readiness_state || "readiness_unknown"}}. ${{blockers}}`;
+      if (operationalBlocked(hourly)) {{
+        const blockedLabel = blockingLabel(hourly);
+        readinessSummary.textContent = `${{operationalBlockedWords.join(" ")}} on ${{(hourly?.window_date || "").slice(0, 10) || "unknown date"}} because daily readiness is ${{hourly?.model_readiness_state || "readiness_unknown"}}. Blocking reasons: ${{blockedLabel}}.`;
+      }} else {{
+        readinessSummary.textContent = `${{hourly?.model_key || "{MODEL_POTENTIAL_RATIO_V2}"}} on ${{(hourly?.window_date || "").slice(0, 10)}} is ${{hourly?.model_readiness_state || "readiness_unknown"}}. ${{blockers}}`;
+      }}
     }}
 
     function render() {{
@@ -766,10 +1039,38 @@ def render_exploratory_cluster_map_html(
     Path(output_path).write_text(html, encoding="utf-8")
 
 
-def materialize_exploratory_cluster_map(
+def render_exploratory_cluster_map_html(
+    dim_exploratory_cluster_map_point: pd.DataFrame,
+    fact_exploratory_cluster_map_hourly: pd.DataFrame,
+    output_path: str | Path,
+) -> None:
+    render_cluster_map_html(
+        dim_exploratory_cluster_map_point,
+        fact_exploratory_cluster_map_hourly,
+        output_path,
+        mode="exploratory",
+    )
+
+
+def render_operational_cluster_map_html(
+    dim_exploratory_cluster_map_point: pd.DataFrame,
+    fact_exploratory_cluster_map_hourly: pd.DataFrame,
+    output_path: str | Path,
+) -> None:
+    render_cluster_map_html(
+        dim_exploratory_cluster_map_point,
+        fact_exploratory_cluster_map_hourly,
+        output_path,
+        mode="operational",
+    )
+
+
+def _materialize_cluster_map(
     opportunity_input_path: str | Path,
     readiness_input_path: str | Path,
     output_dir: str | Path,
+    *,
+    mode: str,
 ) -> Dict[str, pd.DataFrame]:
     opportunity = _load_table(opportunity_input_path, CURTAILMENT_OPPORTUNITY_TABLE)
     readiness = _load_table(readiness_input_path, MODEL_READINESS_TABLE)
@@ -782,12 +1083,39 @@ def materialize_exploratory_cluster_map(
     output_path.mkdir(parents=True, exist_ok=True)
     points.to_csv(output_path / f"{EXPLORATORY_CLUSTER_MAP_POINT_TABLE}.csv", index=False)
     hourly.to_csv(output_path / f"{EXPLORATORY_CLUSTER_MAP_HOURLY_TABLE}.csv", index=False)
-    render_exploratory_cluster_map_html(
+    render_cluster_map_html(
         dim_exploratory_cluster_map_point=points,
         fact_exploratory_cluster_map_hourly=hourly,
-        output_path=output_path / EXPLORATORY_CLUSTER_MAP_HTML,
+        output_path=output_path / _cluster_map_mode_config(mode)["html_name"],
+        mode=mode,
     )
     return {
         EXPLORATORY_CLUSTER_MAP_POINT_TABLE: points,
         EXPLORATORY_CLUSTER_MAP_HOURLY_TABLE: hourly,
     }
+
+
+def materialize_exploratory_cluster_map(
+    opportunity_input_path: str | Path,
+    readiness_input_path: str | Path,
+    output_dir: str | Path,
+) -> Dict[str, pd.DataFrame]:
+    return _materialize_cluster_map(
+        opportunity_input_path=opportunity_input_path,
+        readiness_input_path=readiness_input_path,
+        output_dir=output_dir,
+        mode="exploratory",
+    )
+
+
+def materialize_operational_cluster_map(
+    opportunity_input_path: str | Path,
+    readiness_input_path: str | Path,
+    output_dir: str | Path,
+) -> Dict[str, pd.DataFrame]:
+    return _materialize_cluster_map(
+        opportunity_input_path=opportunity_input_path,
+        readiness_input_path=readiness_input_path,
+        output_dir=output_dir,
+        mode="operational",
+    )

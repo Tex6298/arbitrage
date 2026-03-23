@@ -11,12 +11,16 @@ This is closer to an ADR-style design history than a traditional changelog:
 - [Canonical Artifacts](canonical_artifacts.md): which code paths and generated
   outputs are authoritative today
 - [Map Operational Posture](map_operational_posture.md): current decision on
-  exploratory versus internal operational map use
+  exploratory versus internal operational map use, including the readiness-gated
+  operational map alias
 - [Reviewed Backfill and Displacement](reviewed_backfill_and_displacement.md):
   additive path for continuous reviewed backfill and same-region fossil
   displacement analysis
 - [../cleanup/README.md](../cleanup/README.md): how generated outputs are now
   classified for keep, archive, and delete
+
+Operational map builds now use `--materialize-operational-cluster-map` with a
+matching readiness directory or CSV that contains `fact_model_readiness_daily`.
 
 If you are starting work from scratch, read:
 

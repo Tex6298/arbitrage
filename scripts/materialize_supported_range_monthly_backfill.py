@@ -56,6 +56,11 @@ def iter_months(start_month: dt.date, end_month: dt.date) -> list[MonthlyWindow]
     return windows
 
 
+def _london_fallback_day(year: int) -> dt.date:
+    last_day = dt.date(year, 10, 31)
+    return last_day - dt.timedelta(days=(last_day.weekday() + 1) % 7)
+
+
 def iter_reviewed_bundle_windows(
     month_windows: Iterable[MonthlyWindow],
     *,
@@ -72,7 +77,30 @@ def iter_reviewed_bundle_windows(
                 month_window.end_date,
                 current_start + dt.timedelta(days=max_window_days - 1),
             )
-            reviewed_windows.append(MonthlyWindow(start_date=current_start, end_date=current_end))
+            fallback_day = (
+                _london_fallback_day(current_start.year)
+                if current_start.month == 10
+                else None
+            )
+            if fallback_day is not None and current_start <= fallback_day <= current_end:
+                if current_start < fallback_day:
+                    reviewed_windows.append(
+                        MonthlyWindow(
+                            start_date=current_start,
+                            end_date=fallback_day - dt.timedelta(days=1),
+                        )
+                    )
+                split_day = fallback_day
+                while split_day <= current_end:
+                    reviewed_windows.append(
+                        MonthlyWindow(
+                            start_date=split_day,
+                            end_date=split_day,
+                        )
+                    )
+                    split_day += dt.timedelta(days=1)
+            else:
+                reviewed_windows.append(MonthlyWindow(start_date=current_start, end_date=current_end))
             current_start = current_end + dt.timedelta(days=1)
     return reviewed_windows
 

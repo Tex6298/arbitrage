@@ -18,7 +18,7 @@ If you are changing behavior, these are the main modules that matter:
 - `benchmark_suite.py`
   - manifest suites, scout runs, reviewed-bundle batch evaluation
 - `exploratory_cluster_map.py`
-  - exploratory map output only
+  - readiness-gated exploratory and internal operational HTML map outputs
 
 Generated output directories are not source code. Treat them as snapshots.
 
@@ -41,10 +41,20 @@ repo.
   - authoritative December readiness result after opening, persist-close, and
     drift-policy hardening
 
+### January authoritative rerun
+
+- `_local_runs/reviewed_volume_supported_range_v1/bundles/curtailment_opportunity_live_britned_reviewed_rerun_2025-01-24_2025-01-26`
+  - authoritative January rerun for the supported-range local stock
+  - closes the stale January boundary-reviewed artifact gap on current HEAD
+  - still contains residual Shetland proxy share, but passes the existing
+    readiness gate without policy relaxation
+
 ### Current authoritative batch rollup
 
-- `model_readiness_reviewed_bundle_batch_authoritative_rerun`
-  - authoritative batch evaluation over local reviewed BritNed bundles
+- `_local_runs/reviewed_volume_supported_range_v1/model_readiness_reviewed_bundle_batch_shared_plus_r2_no_public_plus_july_plus_march_plus_april_restore_plus_january_rerun_v1`
+  - current broad supported-range batch evaluation over local reviewed BritNed bundles
+  - current local result is `19/19` windows ready, `61/61` daily rows ready,
+    and an empty blocker summary
   - batch autodiscovery now prefers `rerun` bundles over base bundles, and base
     bundles over `refresh` bundles for the same date range
 
@@ -119,26 +129,34 @@ local archive rather than becoming another top-level tracked snapshot.
 
 ## Map outputs
 
-Map outputs are still exploratory unless explicitly promoted later.
+Map outputs now have both exploratory and operational aliases.
 
-- `exploratory_cluster_map_*`
-  - exploratory cluster-point time-slider outputs
-  - these are not the operational product surface
-  - regenerate them from the current opportunity and readiness artifacts rather
-    than treating an old map directory as canonical
+- `operational_cluster_map*`
+  - readiness-gated internal operational alias over the cluster-point map
+    surface
+  - build it from an opportunity export plus matching
+    `fact_model_readiness_daily`
+- `exploratory_cluster_map*`
+  - compatibility exploratory cluster-point time-slider outputs
+  - useful for design iteration and side-by-side comparison with the
+    operational alias
+
+Both map aliases should be regenerated from the current opportunity and
+readiness artifacts rather than treating an old map directory as canonical.
 
 The current posture decision is recorded in
-`docs/map_operational_posture.md`. After the broader supported-range sweep, the
-map should remain exploratory until the repeated 2025 `R2` regime failures are
-closed.
+`docs/map_operational_posture.md`. The broader supported-range sweep is now
+fully ready on current local stock, so any remaining caution is about product
+rollout decisions rather than an unresolved January readiness blocker.
 
 ## Practical starting points
 
 If you need the current state quickly:
 
 1. Read [GB Curtailment Lineage](gb_curtailment_lineage.md)
-2. Open `model_readiness_reviewed_bundle_batch_authoritative_rerun`
-3. Open `model_readiness_oct_2024_drift_policy_v3`
-4. Open `model_readiness_dec_2024_event_lifecycle`
-5. Only then drop into the older shadow or refresh directories if you need
+2. Open `_local_runs/reviewed_volume_supported_range_v1/model_readiness_reviewed_bundle_batch_shared_plus_r2_no_public_plus_july_plus_march_plus_april_restore_plus_january_rerun_v1`
+3. Open `_local_runs/reviewed_volume_supported_range_v1/bundles/curtailment_opportunity_live_britned_reviewed_rerun_2025-01-24_2025-01-26`
+4. Open `model_readiness_oct_2024_drift_policy_v3`
+5. Open `model_readiness_dec_2024_event_lifecycle`
+6. Only then drop into the older shadow or refresh directories if you need
    history

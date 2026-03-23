@@ -12,6 +12,7 @@ from curtailment_signals import (
     _fetch_csv,
     add_constraint_qa_columns,
     build_regional_curtailment_hourly_proxy,
+    fetch_constraint_daily,
 )
 
 
@@ -67,6 +68,32 @@ class CurtailmentSignalsTests(unittest.TestCase):
         self.assertEqual(first_row["qa_wind_relevant_positive_mwh"], 7556.0)
         self.assertEqual(first_row["qa_inertia_positive_mwh"], 0.0)
         self.assertEqual(first_row["qa_largest_loss_positive_mwh"], 0.0)
+
+    def test_fetch_constraint_daily_supports_2023_2024_resource(self) -> None:
+        raw = pd.DataFrame(
+            [
+                {
+                    "Date": "2024-03-15",
+                    "Largest Loss Volume": 1.0,
+                    "Largest Loss Cost": 10.0,
+                    "System Inertia Volume": 2.0,
+                    "System Inertia Cost": 20.0,
+                    "Voltage Volume": 3.0,
+                    "Voltage Cost": 30.0,
+                    "Thermal Volume": 4.0,
+                    "Thermal Cost": 40.0,
+                }
+            ]
+        )
+
+        with patch("curtailment_signals._fetch_csv", return_value=raw) as fetch_csv:
+            fact = fetch_constraint_daily("2023-2024")
+
+        self.assertIn("constraint-breakdown-2023-2024.csv", fetch_csv.call_args.args[0])
+        self.assertEqual(fact.iloc[0]["source_year_label"], "2023-2024")
+        self.assertEqual(fact.iloc[0]["source_resource_id"], "24d067d8-1328-452a-9720-21cb691e491e")
+        self.assertEqual(float(fact.iloc[0]["total_curtailment_mwh"]), 10.0)
+        self.assertEqual(float(fact.iloc[0]["total_curtailment_cost_gbp"]), 100.0)
 
     def test_build_regional_curtailment_hourly_proxy_handles_fallback_dst_days(self) -> None:
         for day in (dt.date(2024, 10, 27), dt.date(2025, 10, 26)):

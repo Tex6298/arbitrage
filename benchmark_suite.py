@@ -771,13 +771,16 @@ def build_fact_model_benchmark_window_scout(
         opportunity.get("date", pd.Series(pd.NaT, index=opportunity.index)),
         errors="coerce",
     )
-    specialist_scope = opportunity[
+    route_hub_mask = (
         opportunity.get("route_name", pd.Series(index=opportunity.index)).eq(SPECIALIST_SCOPE_ROUTE_NAME)
         & opportunity.get("hub_key", pd.Series(index=opportunity.index)).eq(SPECIALIST_SCOPE_HUB_KEY)
-        & opportunity.get("internal_transfer_evidence_tier", pd.Series(index=opportunity.index)).eq(
-            SPECIALIST_SCOPE_INTERNAL_TIER
-        )
-    ].copy()
+    )
+    specialist_mask = route_hub_mask & opportunity.get(
+        "internal_transfer_evidence_tier",
+        pd.Series(index=opportunity.index),
+    ).eq(SPECIALIST_SCOPE_INTERNAL_TIER)
+    route_hub_scope = opportunity[route_hub_mask].copy()
+    specialist_scope = opportunity[specialist_mask].copy()
     specialist_scope["opportunity_deliverable_mwh"] = pd.to_numeric(
         specialist_scope.get("opportunity_deliverable_mwh", pd.Series(0.0, index=specialist_scope.index)),
         errors="coerce",
@@ -815,9 +818,40 @@ def build_fact_model_benchmark_window_scout(
         errors="coerce",
     ).fillna(0.0)
 
+    informative_scope = specialist_scope
+    informative_baseline_scope = baseline_scope
+    if informative_scope.empty and not route_hub_scope.empty:
+        informative_scope = route_hub_scope.copy()
+        informative_scope["opportunity_deliverable_mwh"] = pd.to_numeric(
+            informative_scope.get("opportunity_deliverable_mwh", pd.Series(0.0, index=informative_scope.index)),
+            errors="coerce",
+        ).fillna(0.0)
+        informative_baseline_scope = predictions[
+            predictions.get("model_key", pd.Series(index=predictions.index)).eq(baseline_model_key)
+            & predictions["forecast_horizon_hours"].eq(READINESS_HORIZON_HOURS)
+            & predictions["prediction_eligible_flag"]
+            & predictions.get("route_name", pd.Series(index=predictions.index)).eq(SPECIALIST_SCOPE_ROUTE_NAME)
+            & predictions.get("hub_key", pd.Series(index=predictions.index)).eq(SPECIALIST_SCOPE_HUB_KEY)
+        ].copy()
+        informative_baseline_scope["opportunity_deliverable_abs_error_mwh"] = pd.to_numeric(
+            informative_baseline_scope.get(
+                "opportunity_deliverable_abs_error_mwh",
+                pd.Series(0.0, index=informative_baseline_scope.index),
+            ),
+            errors="coerce",
+        ).fillna(0.0)
+
     actual_sum = float(specialist_scope["opportunity_deliverable_mwh"].sum()) if not specialist_scope.empty else 0.0
     baseline_abs_error_sum = (
         float(baseline_scope["opportunity_deliverable_abs_error_mwh"].sum()) if not baseline_scope.empty else 0.0
+    )
+    informative_actual_sum = (
+        float(informative_scope["opportunity_deliverable_mwh"].sum()) if not informative_scope.empty else 0.0
+    )
+    informative_baseline_abs_error_sum = (
+        float(informative_baseline_scope["opportunity_deliverable_abs_error_mwh"].sum())
+        if not informative_baseline_scope.empty
+        else 0.0
     )
     if actual_sum > INFORMATIVE_WINDOW_SIGNAL_EPSILON_MWH:
         informative_window_flag = True
@@ -825,6 +859,16 @@ def build_fact_model_benchmark_window_scout(
     elif baseline_abs_error_sum > INFORMATIVE_WINDOW_SIGNAL_EPSILON_MWH:
         informative_window_flag = True
         informative_signal_basis = "reviewed_baseline_abs_error_mwh_sum"
+    elif int(len(specialist_scope)) <= 0 and not route_hub_scope.empty:
+        if informative_actual_sum > INFORMATIVE_WINDOW_SIGNAL_EPSILON_MWH:
+            informative_window_flag = True
+            informative_signal_basis = "proxy_route_hub_actual_deliverable_mwh_sum"
+        elif informative_baseline_abs_error_sum > INFORMATIVE_WINDOW_SIGNAL_EPSILON_MWH:
+            informative_window_flag = True
+            informative_signal_basis = "proxy_route_hub_baseline_abs_error_mwh_sum"
+        else:
+            informative_window_flag = False
+            informative_signal_basis = "proxy_route_hub_perfect_zero_window"
     elif int(len(specialist_scope)) <= 0:
         informative_window_flag = False
         informative_signal_basis = "no_reviewed_scope_rows"

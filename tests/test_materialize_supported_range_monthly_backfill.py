@@ -32,8 +32,27 @@ class MaterializeSupportedRangeMonthlyBackfillTests(unittest.TestCase):
                 (dt.date(2024, 10, 1), dt.date(2024, 10, 7)),
                 (dt.date(2024, 10, 8), dt.date(2024, 10, 14)),
                 (dt.date(2024, 10, 15), dt.date(2024, 10, 21)),
-                (dt.date(2024, 10, 22), dt.date(2024, 10, 28)),
+                (dt.date(2024, 10, 22), dt.date(2024, 10, 26)),
+                (dt.date(2024, 10, 27), dt.date(2024, 10, 27)),
+                (dt.date(2024, 10, 28), dt.date(2024, 10, 28)),
                 (dt.date(2024, 10, 29), dt.date(2024, 10, 31)),
+            ],
+        )
+
+    def test_iter_reviewed_bundle_windows_splits_fallback_chunk_into_single_day_tail(self) -> None:
+        month_windows = iter_months(dt.date(2025, 10, 1), dt.date(2025, 10, 1))
+        reviewed_windows = iter_reviewed_bundle_windows(month_windows, max_window_days=7)
+        self.assertEqual(
+            [(window.start_date, window.end_date) for window in reviewed_windows],
+            [
+                (dt.date(2025, 10, 1), dt.date(2025, 10, 7)),
+                (dt.date(2025, 10, 8), dt.date(2025, 10, 14)),
+                (dt.date(2025, 10, 15), dt.date(2025, 10, 21)),
+                (dt.date(2025, 10, 22), dt.date(2025, 10, 25)),
+                (dt.date(2025, 10, 26), dt.date(2025, 10, 26)),
+                (dt.date(2025, 10, 27), dt.date(2025, 10, 27)),
+                (dt.date(2025, 10, 28), dt.date(2025, 10, 28)),
+                (dt.date(2025, 10, 29), dt.date(2025, 10, 31)),
             ],
         )
 

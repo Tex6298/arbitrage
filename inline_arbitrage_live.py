@@ -92,6 +92,8 @@ from exploratory_cluster_map import (
     EXPLORATORY_CLUSTER_MAP_HTML,
     EXPLORATORY_CLUSTER_MAP_POINT_TABLE,
     materialize_exploratory_cluster_map,
+    materialize_operational_cluster_map,
+    OPERATIONAL_CLUSTER_MAP_HTML,
 )
 from france_connector import (
     DIM_INTERCONNECTOR_CABLE_TABLE,
@@ -1295,6 +1297,20 @@ def main() -> int:
         "--exploratory-map-output-dir",
         default="exploratory_cluster_map",
         help="Output directory for exploratory cluster-map CSVs and HTML",
+    )
+    parser.add_argument(
+        "--materialize-operational-cluster-map",
+        action="store_true",
+        help="Build a readiness-gated internal operational cluster map from an existing opportunity export plus readiness output",
+    )
+    parser.add_argument(
+        "--operational-map-readiness-path",
+        help="Directory or CSV path containing fact_model_readiness_daily for the operational map",
+    )
+    parser.add_argument(
+        "--operational-map-output-dir",
+        default="operational_cluster_map",
+        help="Output directory for operational cluster-map CSVs and HTML",
     )
     parser.add_argument(
         "--capacity-audit-start",
@@ -3274,6 +3290,51 @@ def main() -> int:
             if not hourly_frame.empty:
                 print()
                 print("Exploratory Cluster Map Hourly")
+                print(
+                    hourly_frame[
+                        [
+                            "interval_start_utc",
+                            "cluster_key",
+                            "opportunity_deliverable_mwh_sum",
+                            "opportunity_gross_value_eur_sum",
+                            "reviewed_internal_route_count",
+                            "proxy_internal_route_count",
+                            "model_readiness_state",
+                        ]
+                    ].head(24).to_string(index=False)
+                )
+            return 0
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
+    if args.materialize_operational_cluster_map:
+        if not args.operational_map_readiness_path:
+            raise SystemExit("--materialize-operational-cluster-map requires --operational-map-readiness-path")
+        try:
+            frames = materialize_operational_cluster_map(
+                opportunity_input_path=args.opportunity_input_path,
+                readiness_input_path=args.operational_map_readiness_path,
+                output_dir=args.operational_map_output_dir,
+            )
+            print(
+                f"[source={CURTAILMENT_OPPORTUNITY_TABLE}+{MODEL_READINESS_TABLE}] Materialized {len(frames)} tables from "
+                f"{args.opportunity_input_path} using readiness={args.operational_map_readiness_path}"
+            )
+            for table_name, frame in frames.items():
+                output_path = os.path.join(args.operational_map_output_dir, f"{table_name}.csv")
+                print(f"{table_name}: rows={len(frame)} path={output_path}")
+            html_path = os.path.join(args.operational_map_output_dir, OPERATIONAL_CLUSTER_MAP_HTML)
+            print(f"{OPERATIONAL_CLUSTER_MAP_HTML}: path={html_path}")
+            point_frame = frames[EXPLORATORY_CLUSTER_MAP_POINT_TABLE]
+            hourly_frame = frames[EXPLORATORY_CLUSTER_MAP_HOURLY_TABLE]
+            if not point_frame.empty:
+                print()
+                print("Operational Cluster Map Points")
+                print(point_frame.to_string(index=False))
+            if not hourly_frame.empty:
+                print()
+                print("Operational Cluster Map Hourly")
                 print(
                     hourly_frame[
                         [

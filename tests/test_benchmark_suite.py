@@ -572,6 +572,116 @@ class BenchmarkSuiteTests(unittest.TestCase):
         self.assertTrue(bool(row["informative_window_flag"]))
         self.assertEqual(row["informative_signal_basis"], "reviewed_actual_deliverable_mwh_sum")
 
+    def test_build_fact_model_benchmark_window_scout_falls_back_to_proxy_route_hub_scope_when_reviewed_scope_missing(
+        self,
+    ) -> None:
+        opportunity = pd.DataFrame(
+            [
+                {
+                    "date": pd.Timestamp("2024-03-01"),
+                    "interval_start_utc": pd.Timestamp("2024-03-01T00:00:00Z"),
+                    "route_name": "R2_netback_GB_NL_DE_PL",
+                    "hub_key": "britned",
+                    "internal_transfer_evidence_tier": "gb_topology_transfer_gate_proxy",
+                    "opportunity_deliverable_mwh": 0.0,
+                    "route_price_score_eur_per_mwh": 70.0,
+                    "deliverable_mw_proxy": 55.0,
+                }
+            ]
+        )
+        predictions = pd.DataFrame(
+            [
+                {
+                    "model_key": "opportunity_potential_ratio_v2",
+                    "forecast_horizon_hours": 1,
+                    "prediction_eligible_flag": True,
+                    "route_name": "R2_netback_GB_NL_DE_PL",
+                    "hub_key": "britned",
+                    "internal_transfer_evidence_tier": "gb_topology_transfer_gate_proxy",
+                    "opportunity_deliverable_abs_error_mwh": 2.25,
+                }
+            ]
+        )
+
+        scout = build_fact_model_benchmark_window_scout(
+            fact_curtailment_opportunity_hourly=opportunity,
+            fact_backtest_prediction_hourly=predictions,
+            benchmark_window_key="mar_window",
+            benchmark_window_label="March Window",
+            benchmark_window_start_date="2024-03-01",
+            benchmark_window_end_date="2024-03-01",
+            opportunity_input_path="input_dir",
+        )
+
+        row = scout.iloc[0]
+        self.assertEqual(int(row["specialist_scope_row_count"]), 0)
+        self.assertTrue(bool(row["informative_window_flag"]))
+        self.assertEqual(row["informative_signal_basis"], "proxy_route_hub_baseline_abs_error_mwh_sum")
+
+    def test_build_fact_model_benchmark_window_scout_preserves_reviewed_priority_over_proxy_fallback(self) -> None:
+        opportunity = pd.DataFrame(
+            [
+                {
+                    "date": pd.Timestamp("2024-12-09"),
+                    "interval_start_utc": pd.Timestamp("2024-12-09T06:00:00Z"),
+                    "route_name": "R2_netback_GB_NL_DE_PL",
+                    "hub_key": "britned",
+                    "internal_transfer_evidence_tier": "reviewed_internal_constraint_boundary",
+                    "opportunity_deliverable_mwh": 42.0,
+                    "route_price_score_eur_per_mwh": 80.0,
+                    "deliverable_mw_proxy": 120.0,
+                },
+                {
+                    "date": pd.Timestamp("2024-12-09"),
+                    "interval_start_utc": pd.Timestamp("2024-12-09T07:00:00Z"),
+                    "route_name": "R2_netback_GB_NL_DE_PL",
+                    "hub_key": "britned",
+                    "internal_transfer_evidence_tier": "gb_topology_transfer_gate_proxy",
+                    "opportunity_deliverable_mwh": 99.0,
+                    "route_price_score_eur_per_mwh": 5.0,
+                    "deliverable_mw_proxy": 15.0,
+                },
+            ]
+        )
+        predictions = pd.DataFrame(
+            [
+                {
+                    "model_key": "opportunity_potential_ratio_v2",
+                    "forecast_horizon_hours": 1,
+                    "prediction_eligible_flag": True,
+                    "route_name": "R2_netback_GB_NL_DE_PL",
+                    "hub_key": "britned",
+                    "internal_transfer_evidence_tier": "reviewed_internal_constraint_boundary",
+                    "opportunity_deliverable_abs_error_mwh": 3.5,
+                },
+                {
+                    "model_key": "opportunity_potential_ratio_v2",
+                    "forecast_horizon_hours": 1,
+                    "prediction_eligible_flag": True,
+                    "route_name": "R2_netback_GB_NL_DE_PL",
+                    "hub_key": "britned",
+                    "internal_transfer_evidence_tier": "gb_topology_transfer_gate_proxy",
+                    "opportunity_deliverable_abs_error_mwh": 9.0,
+                },
+            ]
+        )
+
+        scout = build_fact_model_benchmark_window_scout(
+            fact_curtailment_opportunity_hourly=opportunity,
+            fact_backtest_prediction_hourly=predictions,
+            benchmark_window_key="dec_window",
+            benchmark_window_label="December Window",
+            benchmark_window_start_date="2024-12-09",
+            benchmark_window_end_date="2024-12-09",
+            opportunity_input_path="input_dir",
+        )
+
+        row = scout.iloc[0]
+        self.assertEqual(int(row["specialist_scope_row_count"]), 1)
+        self.assertAlmostEqual(float(row["specialist_scope_actual_opportunity_deliverable_mwh_sum"]), 42.0)
+        self.assertTrue(bool(row["informative_window_flag"]))
+        self.assertEqual(row["informative_signal_basis"], "reviewed_actual_deliverable_mwh_sum")
+
 
 if __name__ == "__main__":
     unittest.main()

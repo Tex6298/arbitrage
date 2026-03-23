@@ -80,12 +80,23 @@ R2_REVIEWED_EVENT_LATE_REOPEN_CLUSTERS = {
     "east_anglia_offshore",
     "humber_offshore",
 }
+R2_REVIEWED_EVENT_LATE_REOPEN_BASIS_PREFIXES = (
+    "ratio_route_notice_state",
+    "ratio_exact_notice_hour",
+)
 R2_REVIEWED_EVENT_LATE_REOPEN_CURTAILMENT_RATIO = 1.05
 R2_REVIEWED_EVENT_LATE_REOPEN_CLUSTER_CAP_MWH = {
     "dogger_hornsea_offshore": 170.0,
 }
 R2_2025_REGIME_WORK_START_UTC = pd.Timestamp("2025-03-01T00:00:00Z")
 R2_NO_PUBLIC_APRIL_OPEN_DATE_UTC = pd.Timestamp("2025-04-15T00:00:00Z")
+R2_NO_PUBLIC_APRIL_CLOSE_REOPEN_CLUSTERS = {
+    "dogger_hornsea_offshore",
+    "east_anglia_offshore",
+    "east_coast_scotland_offshore",
+    "humber_offshore",
+    "moray_firth_offshore",
+}
 SHARED_PUBLISHED_LATE_OPEN_ROUTE_NAMES = {
     "R1_netback_GB_FR_DE_PL",
     "R2_netback_GB_NL_DE_PL",
@@ -137,6 +148,17 @@ R2_NO_PUBLIC_LATE_OPEN_OPENABLE_EVENT_SPECS = (
         "route_delivery_tier": "no_price_signal",
         "prediction_ratio": 0.95,
         "basis_suffix": "r2_no_public_late_open_notice",
+    },
+    {
+        "basis_prefix": "ratio_route_notice_state",
+        "origin_hour": 18.0,
+        "transition_state": "price_low_positive->price_non_positive",
+        "upstream_state": "day_ahead_much_stronger_than_forward",
+        "route_delivery_tier": "no_price_signal",
+        "forecast_date_utc": R2_NO_PUBLIC_APRIL_OPEN_DATE_UTC,
+        "cluster_keys": R2_NO_PUBLIC_APRIL_CLOSE_REOPEN_CLUSTERS,
+        "prediction_ratio": 1.10,
+        "basis_suffix": "r2_no_public_late_open_close_reopen",
     },
     {
         "basis_prefix": "ratio_route_notice_state",
@@ -1202,6 +1224,20 @@ def _prepare_specialist_feature_frame(frame: pd.DataFrame) -> pd.DataFrame:
     return features[[*SPECIALIST_NUMERIC_FEATURE_COLUMNS, *SPECIALIST_CATEGORICAL_FEATURE_COLUMNS]]
 
 
+def _parse_london_local_timestamp_series(values: pd.Series) -> pd.Series:
+    if isinstance(values.dtype, pd.DatetimeTZDtype):
+        return values.dt.tz_convert("Europe/London")
+    if pd.api.types.is_datetime64_dtype(values.dtype):
+        return values
+    non_missing = values.dropna()
+    if non_missing.empty:
+        return pd.to_datetime(values, errors="coerce")
+    has_explicit_offset = non_missing.astype(str).str.contains(r"(?:Z|[+-]\d{2}:\d{2})$", regex=True).any()
+    if has_explicit_offset:
+        return pd.to_datetime(values, errors="coerce", utc=True).dt.tz_convert("Europe/London")
+    return pd.to_datetime(values, errors="coerce")
+
+
 def load_curtailment_opportunity_input(path: str | Path) -> pd.DataFrame:
     input_path = Path(path)
     if input_path.is_dir():
@@ -1211,7 +1247,10 @@ def load_curtailment_opportunity_input(path: str | Path) -> pd.DataFrame:
     frame = pd.read_csv(input_path)
     for column in ("interval_start_utc", "interval_end_utc", "interval_start_local", "interval_end_local"):
         if column in frame.columns:
-            frame[column] = pd.to_datetime(frame[column], errors="coerce", utc=column.endswith("_utc"))
+            if column.endswith("_utc"):
+                frame[column] = pd.to_datetime(frame[column], errors="coerce", utc=True)
+            else:
+                frame[column] = _parse_london_local_timestamp_series(frame[column])
     return frame
 
 
@@ -1234,8 +1273,8 @@ def _prepare_backtest_input(fact_curtailment_opportunity_hourly: pd.DataFrame) -
     frame = fact_curtailment_opportunity_hourly.copy()
     frame["interval_start_utc"] = pd.to_datetime(frame["interval_start_utc"], utc=True, errors="coerce")
     frame["interval_end_utc"] = pd.to_datetime(frame["interval_end_utc"], utc=True, errors="coerce")
-    frame["interval_start_local"] = pd.to_datetime(frame["interval_start_local"], errors="coerce")
-    frame["interval_end_local"] = pd.to_datetime(frame["interval_end_local"], errors="coerce")
+    frame["interval_start_local"] = _parse_london_local_timestamp_series(frame["interval_start_local"])
+    frame["interval_end_local"] = _parse_london_local_timestamp_series(frame["interval_end_local"])
     frame["actual_opportunity_deliverable_mwh"] = pd.to_numeric(
         frame["opportunity_deliverable_mwh"], errors="coerce"
     ).fillna(0.0)
@@ -2436,7 +2475,7 @@ def _apply_potential_ratio_r2_reviewed_event_lifecycle(result: pd.DataFrame) -> 
         & route_delivery_tier.eq("no_price_signal")
         & transition_state.eq("price_non_positive->price_non_positive")
         & connector_itl_state.eq("blocked_zero_or_negative_itl")
-        & prediction_basis.str.startswith("ratio_route_notice_state")
+        & prediction_basis.str.startswith(R2_REVIEWED_EVENT_LATE_REOPEN_BASIS_PREFIXES)
         & origin_hour.eq(R2_REVIEWED_EVENT_LATE_REOPEN_ORIGIN_HOUR)
         & route_score.le(-ROUTE_PRICE_SOFT_MOVE_EUR_PER_MWH)
         & upstream_state.isin(R2_REVIEWED_EVENT_LATE_REOPEN_UPSTREAM_STATES)
@@ -2681,6 +2720,7 @@ def _apply_potential_ratio_r2_no_public_late_open_event_library(result: pd.DataF
     adjusted = result.copy()
     forecast_horizon = pd.to_numeric(adjusted.get("forecast_horizon_hours"), errors="coerce")
     route_name = adjusted.get("route_name", pd.Series(pd.NA, index=adjusted.index)).astype("string")
+    cluster_key = adjusted.get("cluster_key", pd.Series(pd.NA, index=adjusted.index)).astype("string")
     source_family = adjusted.get(
         "feature_internal_transfer_source_family_asof",
         pd.Series(pd.NA, index=adjusted.index),
@@ -2758,6 +2798,9 @@ def _apply_potential_ratio_r2_no_public_late_open_event_library(result: pd.DataF
         event_date_utc = event_spec.get("forecast_date_utc")
         if event_date_utc is not None:
             event_mask &= forecast_date_utc.eq(event_date_utc)
+        event_clusters = event_spec.get("cluster_keys")
+        if event_clusters is not None:
+            event_mask &= cluster_key.isin(event_clusters)
         if not event_mask.any():
             continue
         adjusted.loc[event_mask, "predicted_opportunity_deliverable_mwh"] = (
